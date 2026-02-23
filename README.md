@@ -54,7 +54,11 @@ TorrentX is a native desktop GUI that connects to your local [Jackett](https://g
 
 ## Screenshots
 
-*Add your screenshots here*
+![TorrentX search results](assets/Screenshot_20260223_212351.png)
+
+![TorrentX detail panel](assets/Screenshot_20260223_212509.png)
+
+> 🎬 **[Watch demo video](assets/Screencast_20260223_212551.webm)**
 
 ---
 
