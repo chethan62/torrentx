@@ -1,167 +1,193 @@
-```markdown
-# TorrentX — Rust + egui Torrent Search GUI
+<div align="center">
 
-A fast, native torrent search GUI powered by your local Jackett instance.
+```
+████████╗ ██████╗ ██████╗ ██████╗ ███████╗███╗   ██╗████████╗██╗  ██╗
+╚══██╔══╝██╔═══██╗██╔══██╗██╔══██╗██╔════╝████╗  ██║╚══██╔══╝╚██╗██╔╝
+   ██║   ██║   ██║██████╔╝██████╔╝█████╗  ██╔██╗ ██║   ██║    ╚███╔╝ 
+   ██║   ██║   ██║██╔══██╗██╔══██╗██╔══╝  ██║╚██╗██║   ██║    ██╔██╗ 
+   ██║   ╚██████╔╝██║  ██║██║  ██║███████╗██║ ╚████║   ██║   ██╔╝ ██╗
+   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝
+```
 
----
+**Native Rust · egui · Jackett-powered**
 
-## ✨ Features
+[![Rust](https://img.shields.io/badge/Rust-2021-f74c00?style=flat-square&logo=rust)](https://www.rust-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?style=flat-square)]()
+[![egui](https://img.shields.io/badge/GUI-egui-5e81f4?style=flat-square)](https://github.com/emilk/egui)
 
-- Native Rust GUI (no browser, no Electron) — runs as a single executable
-- Connects directly to Jackett API
-- Real results from all your configured indexers
-- Sort by Seeders / Size / Date
-- Filter by category, health, tracker, and more
-- Clickable category chips
-- Magnet links open in your torrent client automatically
-- Health indicator (HOT / GOOD / SLOW / DEAD)
-- 19 built‑in themes (16 dark, 3 light)
-- Keyboard navigation (↑↓ Enter D F M Ctrl+F Ctrl+R Esc)
-- Favorites list with search & timestamps
-- Export results to CSV
-- Pagination, adjustable row height, font size
-- History dropdown with per‑item delete
-- Detail side panel with seeder/leecher ratio bar
-- Deduplication across trackers
-- Cross‑platform: **Linux**, **Windows**, **macOS** (tested on Linux & Windows)
+*A blazing-fast, native torrent search interface — no Electron, no browser, no bloat.*
+
+</div>
 
 ---
 
-## 🖼️ Screenshots
+## What is TorrentX?
 
-*[Add your screenshots here]*
-
----
-
-## 📦 Download Pre‑built Binaries
-
-You can download ready‑to‑run executables for:
-
-| Platform | Format | How to run |
-|----------|--------|------------|
-| **Linux** | `.AppImage` | `chmod +x TorrentX-*.AppImage && ./TorrentX-*.AppImage` |
-| **Linux** | plain binary | `./torrentx` |
-| **Windows** | `.exe` | double‑click or run from terminal |
-| **Windows** | portable `.exe` | same as above |
-| **macOS** | `.dmg` / `.app` | *(coming soon)* |
-
-Pre‑built binaries are available from the [Releases](https://github.com/chethan62/torrentx/releases) page.  
-If you prefer to build from source, see instructions below.
+TorrentX is a native desktop GUI that connects to your local [Jackett](https://github.com/Jackett/Jackett) instance and searches all your configured indexers simultaneously. It compiles to a **single ~11 MB binary** with no runtime dependencies, starts instantly, and stays out of your way.
 
 ---
 
-## 🛠️ Build from Source
+## Features
+
+| Category | Details |
+|----------|---------|
+| **Search** | All Jackett indexers at once · Deduplication across trackers · Category filter · Search history with per-item delete |
+| **Results** | Sort by Seeders / Size / Date · Filter by text, seeds, size, year, tracker, health · Pagination (25 / 50 / 100 / All) |
+| **Actions** | Open magnet · Copy magnet · Download `.torrent` · Save to Favorites · Open details in browser |
+| **UI** | 19 themes (16 dark, 3 light) · Adjustable row density · Adjustable font size · Detail side panel with ratio bar |
+| **Extras** | Favorites with search & timestamps · Export to CSV · Animated search spinner · Keyboard navigation |
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Navigate rows |
+| `Enter` / `M` | Open magnet for selected row |
+| `D` | Toggle detail panel |
+| `F` | Add selected to Favorites |
+| `Esc` | Clear search input |
+| `Ctrl+F` | Focus search bar |
+| `Ctrl+R` | Re-run last search |
+
+---
+
+## Screenshots
+
+*Add your screenshots here*
+
+---
+
+## Download
+
+Pre-built binaries are on the [**Releases**](https://github.com/chethan62/torrentx/releases) page.
+
+| Platform | Format | Run |
+|----------|--------|-----|
+| Linux | `.AppImage` | `chmod +x TorrentX-*.AppImage && ./TorrentX-*.AppImage` |
+| Linux | plain binary | `./torrentx` |
+| Windows | `.exe` | Double-click or run from terminal |
+| macOS | `.dmg` / `.app` | *(coming soon)* |
+
+---
+
+## Build from Source
 
 ### Requirements
 
-- Rust (install via [rustup](https://rustup.rs/))
+- [Rust](https://rustup.rs/) (stable)
 - Jackett running locally
-- Internet connection for dependencies
 
-### Install Rust (if not installed)
+### Install Rust
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 ```
 
-### Install system dependencies
+### System Dependencies
 
-**Arch Linux**
+<details>
+<summary><b>Arch Linux</b></summary>
+
 ```bash
 sudo pacman -S base-devel pkg-config openssl gtk3
 ```
+</details>
 
-**Ubuntu / Debian**
+<details>
+<summary><b>Ubuntu / Debian</b></summary>
+
 ```bash
 sudo apt install build-essential pkg-config libssl-dev libgtk-3-dev
 ```
+</details>
 
-**Fedora**
+<details>
+<summary><b>Fedora</b></summary>
+
 ```bash
 sudo dnf install gcc pkg-config openssl-devel gtk3-devel
 ```
+</details>
 
-**Windows**  
-- Install [Rust for Windows](https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe)  
-- Visual Studio C++ build tools are required – see [Rust setup guide](https://rust-lang.github.io/rustup/installation/windows-msvc.html)
+<details>
+<summary><b>Windows</b></summary>
+
+Install [Rust for Windows](https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe) — Visual Studio C++ build tools are required ([setup guide](https://rust-lang.github.io/rustup/installation/windows-msvc.html)).
+</details>
 
 ### Build & Run
 
 ```bash
-# Clone or copy the project folder
+git clone https://github.com/chethan62/torrentx
 cd torrentx
 
-# Debug build (faster compile, slower runtime)
+# Development build
 cargo run
 
-# Release build (optimized, ~13MB binary)
+# Optimized release build (~11 MB binary)
 cargo build --release
 
-# Run the release binary
-./target/release/torrentx        # Linux / macOS
-.\target\release\torrentx.exe    # Windows
+# Run
+./target/release/torrentx          # Linux / macOS
+.\target\release\torrentx.exe      # Windows
 ```
 
-First build downloads dependencies and compiles — takes 1‑3 minutes.  
-After that, rebuilds are fast.
+> First build downloads and compiles dependencies — expect 2–4 minutes. Subsequent builds are fast.
 
 ---
 
-## 🚀 Usage
+## Usage
 
-1. **Start Jackett**  
-   - If installed as a service:  
-     `systemctl start jackett --user` (Linux)  
-   - Or run Jackett manually from its installation folder.
+1. **Start Jackett** — [http://localhost:9117](http://localhost:9117)
 
-2. **Open TorrentX** — a native window appears.
+2. **Open TorrentX** — a native window appears immediately.
 
-3. **Enter your Jackett API key**  
-   - Click the ⚙ **Settings** bar at the top.  
-   - Paste your API key (you can find it at [http://localhost:9117](http://localhost:9117) in the top‑right corner).  
-   - Adjust any other settings (timeout, columns, etc.) – they are saved automatically.
+3. **Configure** — click the ⚙ Settings bar, paste your Jackett API key, adjust columns and timeout. Settings are saved automatically.
 
-4. **Search**  
-   - Type a query, pick a category, and press **Enter** or click **Search**.  
-   - Results appear in a sortable, filterable table.
+4. **Search** — type a query, pick a category, hit `Enter`. Results populate a sortable, filterable table.
 
-5. **Interact with results**  
-   - Click any row to select it, then:  
-     - **Enter** / **M** → open magnet  
-     - **F** → add to Favorites  
-     - **D** → toggle detail panel  
-   - Use the action buttons in each row:  
-     - 🧲 **Mag** – open magnet in your torrent client  
-     - 📋 **Copy** – copy magnet link to clipboard  
-     - ↓ **DL** – download `.torrent` file  
-     - ★ **Fav** – save to favorites  
-     - ℹ **Info** – show/hide detail panel  
-     - 🌐 **Web** – open details page in browser
+5. **Act on results** — select a row and use keyboard shortcuts or the inline action buttons (`Mag` · `Copy` · `DL` · `Fav` · `Info` · `Web`).
 
 ---
 
-## 🤖 Acknowledgements
+## Themes
 
-TorrentX was built with the assistance of **Claude AI** and **DeepSeek AI** – they helped shape the UI, fix bugs, and polish the final product.  
+19 built-in themes — switch instantly, no restart needed.
 
-Many thanks to the open‑source community behind:
-- [egui](https://github.com/emilk/egui) – immediate mode GUI library
-- [reqwest](https://github.com/seanmonstar/reqwest) – HTTP client
-- [Jackett](https://github.com/Jackett/Jackett) – API provider
+**Dark:** Tokyo Night · Cyberpunk · Midnight · One Dark · Catppuccin Mocha · Dracula · Rose Pine · Monokai · Kanagawa · Everforest · Material Ocean · Oxocarbon · Ayu · Nord · Gruvbox · Solarized Dark
 
----
-
-## 📄 License
-
-MIT – do whatever you want with it, but please give credit where it's due.
+**Light:** Light · Gruvbox Light · Catppuccin Latte
 
 ---
 
-## 💬 Support / Feedback
+## Tech Stack
 
-Open an issue on [GitHub](https://github.com/chethan62/torrentx) or reach out directly.  
-Pull requests are welcome!
-```
+| | |
+|---|---|
+| Language | Rust 2021 |
+| GUI | [egui](https://github.com/emilk/egui) 0.27 + egui_extras |
+| Rendering | GPU via wgpu / OpenGL (eframe) |
+| HTTP | [reqwest](https://github.com/seanmonstar/reqwest) (blocking) |
+| Config | `~/.config/torrentx/config.json` |
 
-Save this content as `README.md` in your project root.
+---
+
+## Acknowledgements
+
+Built with the assistance of [Claude AI](https://claude.ai) and [DeepSeek AI](https://deepseek.com).
+
+Thanks to the open-source projects that made this possible: **egui**, **reqwest**, and **Jackett**.
+
+---
+
+## License
+
+[MIT](LICENSE) — use freely, credit appreciated.
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome on [GitHub](https://github.com/chethan62/torrentx).
