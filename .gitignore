@@ -1,0 +1,6 @@
+/target
+/dist
+/AppDir
+*.AppImage
+.cargo/
+Cargo.lock

@@ -1,0 +1,26 @@
+[package]
+name = "torrentx"
+version = "8.0.0"
+edition = "2021"
+
+[[bin]]
+name = "torrentx"
+path = "src/main.rs"
+
+[dependencies]
+eframe        = { version = "0.34", default-features = false, features = ["glow", "x11", "wayland"] }
+egui_extras   = { version = "0.34", features = ["all_loaders"] }
+serde         = { version = "1", features = ["derive"] }
+serde_json    = "1"
+reqwest       = { version = "0.11", features = ["blocking", "json"] }
+chrono        = { version = "0.4", features = ["serde"] }
+dirs-next     = "2"
+open          = "5"
+rfd           = "0.14"
+quick-xml     = "0.31"
+
+[profile.release]
+opt-level     = 3
+lto           = true
+strip         = true
+codegen-units = 1
