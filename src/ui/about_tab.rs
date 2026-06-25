@@ -7,7 +7,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui) {
     let pal = app.pal.clone();
     let fs  = app.cfg.font_size;
 
-    egui::ScrollArea::vertical().id_salt("about_scroll").show(ui, |ui| {
+    egui::ScrollArea::vertical().id_source("about_scroll").show(ui, |ui| {
         ui.add_space(30.0);
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("TorrentX")
@@ -88,10 +88,10 @@ fn card(
     title: &str,
     items: &[(&str, &str, &str)],
 ) {
-    egui::Frame::NONE
-        .fill(pal.surface).corner_radius(12.0)
+    egui::Frame::none()
+        .fill(pal.surface).rounding(12.0)
         .stroke(Stroke::new(1.0, pal.border))
-        .inner_margin(egui::Margin::same(18))
+        .inner_margin(egui::Margin::same(18.0))
         .show(ui, |ui| {
             ui.label(RichText::new(title)
                 .font(egui::FontId::proportional(fs + 2.0)).strong().color(pal.accent));
@@ -117,10 +117,10 @@ fn card_table(
     title: &str,
     rows: &[(&str, &str)],
 ) {
-    egui::Frame::NONE
-        .fill(pal.surface).corner_radius(12.0)
+    egui::Frame::none()
+        .fill(pal.surface).rounding(12.0)
         .stroke(Stroke::new(1.0, pal.border))
-        .inner_margin(egui::Margin::same(18))
+        .inner_margin(egui::Margin::same(18.0))
         .show(ui, |ui| {
             ui.label(RichText::new(title)
                 .font(egui::FontId::proportional(fs + 2.0)).strong().color(pal.accent));
@@ -130,11 +130,11 @@ fn card_table(
                 .spacing([20.0, 8.0])
                 .show(ui, |ui| {
                     for (key, desc) in rows {
-                        egui::Frame::NONE
+                        egui::Frame::none()
                             .fill(tint(pal.accent, 18))
-                            .corner_radius(5.0)
+                            .rounding(5.0)
                             .stroke(Stroke::new(1.0, tint(pal.accent, 60)))
-                            .inner_margin(egui::Margin::symmetric(8, 2))
+                            .inner_margin(egui::Margin::symmetric(8.0, 2.0))
                             .show(ui, |ui| {
                                 ui.label(RichText::new(*key)
                                     .font(egui::FontId::monospace(fs - 1.0))
@@ -155,10 +155,10 @@ fn card_prose(
     title: &str,
     lines: &[&str],
 ) {
-    egui::Frame::NONE
-        .fill(pal.surface).corner_radius(12.0)
+    egui::Frame::none()
+        .fill(pal.surface).rounding(12.0)
         .stroke(Stroke::new(1.0, pal.border))
-        .inner_margin(egui::Margin::same(18))
+        .inner_margin(egui::Margin::same(18.0))
         .show(ui, |ui| {
             ui.label(RichText::new(title)
                 .font(egui::FontId::proportional(fs + 2.0)).strong().color(pal.accent));

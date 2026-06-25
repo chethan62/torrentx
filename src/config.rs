@@ -37,10 +37,6 @@ pub struct Config {
     pub font_size:       f32,
     pub show_cat_bar:    bool,
     pub rss_refresh_min: u64,
-    pub qbit_url:       String,
-    pub qbit_user:      String,
-    pub qbit_pass:      String,
-    pub qbit_enabled:   bool,
     // column toggles
     pub col_tracker: bool,
     pub col_size:    bool,
@@ -53,7 +49,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            jackett_url:     "http://[::1]:9117".into(),
+            jackett_url:     "http://localhost:9117".into(),
             api_key:         String::new(),
             history:         vec![],
             favorites:       vec![],
@@ -66,10 +62,6 @@ impl Default for Config {
             font_size:       14.0,
             show_cat_bar:    true,
             rss_refresh_min: 30,
-            qbit_url:       String::new(),
-            qbit_user:      String::new(),
-            qbit_pass:      String::new(),
-            qbit_enabled:   false,
             col_tracker: true,
             col_size:    true,
             col_leech:   true,

@@ -5,7 +5,7 @@ use crate::theme::tint;
 pub fn draw(app: &mut App, ctx: &egui::Context) {
     if app.toasts.is_empty() { return; }
 
-    let screen = ctx.content_rect();
+    let screen = ctx.screen_rect();
     let mut y   = screen.max.y - 16.0;
 
     // Render newest toast on top (reversed)
@@ -30,17 +30,15 @@ pub fn draw(app: &mut App, ctx: &egui::Context) {
             .fixed_pos(pos)
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                egui::Frame::NONE
+                egui::Frame::none()
                     .fill(bg)
-                    .corner_radius(8.0)
+                    .rounding(8.0)
                     .stroke(egui::Stroke::new(1.0, border))
                     .shadow(egui::epaint::Shadow {
-                        offset: [0, 3],
-                        blur: 12,
-                        spread: 0,
-                        color: crate::theme::rgba(0, 0, 0, 70),
+                        offset: [0.0, 3.0].into(), blur: 8.0, spread: 0.0,
+                        color: crate::theme::rgba(0, 0, 0, 60),
                     })
-                    .inner_margin(egui::Margin::symmetric(14, 9))
+                    .inner_margin(egui::Margin::symmetric(14.0, 9.0))
                     .show(ui, |ui| {
                         ui.set_min_width(w);
                         ui.label(RichText::new(&toast.msg)

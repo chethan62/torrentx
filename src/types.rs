@@ -29,7 +29,7 @@ pub struct TorrentResult {
 // ─── UI State Enums ────────────────────────────────────────────────────────
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum SortCol { Name, Tracker, Size, Seeds, Leech, Ratio, Date }
+pub enum SortCol { Name, Tracker, Size, Seeds, Leech, Date }
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum SortDir { Asc, Desc }
@@ -68,19 +68,17 @@ impl HealthFilter {
 
 #[derive(Clone, Debug, Default)]
 pub struct FilterState {
-    pub text:       String,
-    pub cat_filter: String,   // filter by category_desc (set by chip clicks)
-    pub min_seeds:  String,
-    pub max_gb:     String,
-    pub min_year:   String,
-    pub tracker:    String,
-    pub health:     HealthFilter,
+    pub text:     String,
+    pub min_seeds: String,
+    pub max_gb:   String,
+    pub min_year: String,
+    pub tracker:  String,
+    pub health:   HealthFilter,
 }
 
 impl FilterState {
     pub fn is_dirty(&self) -> bool {
         !self.text.is_empty()
-            || !self.cat_filter.is_empty()
             || !self.min_seeds.is_empty()
             || !self.max_gb.is_empty()
             || !self.min_year.is_empty()

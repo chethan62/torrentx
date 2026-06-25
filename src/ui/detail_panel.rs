@@ -6,37 +6,29 @@ use crate::ui::components::{grid_row, wide_btn};
 use crate::theme::tint;
 
 pub fn draw(app: &mut App, ui: &mut egui::Ui, r: &TorrentResult) {
-    // Paint full background including drag handle area
-    let surface = app.pal.surface;
-    ui.painter().rect_filled(ui.max_rect().expand(4.0), 0.0, surface);
     let pal = app.pal.clone();
     let fs  = app.cfg.font_size;
     let seed  = r.seeders.unwrap_or(0);
     let leech = r.peers.unwrap_or(0);
 
-    egui::ScrollArea::vertical()
-        .id_salt("detail_scroll")
-        .auto_shrink([false; 2])
-        .show(ui, |ui| {
-
     ui.add_space(10.0);
 
     // ── Title ──────────────────────────────────────────────────────────────
-    egui::Frame::NONE
-        .inner_margin(egui::Margin::symmetric(12, 0))
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(12.0, 0.0))
         .show(ui, |ui| {
             ui.add(egui::Label::new(
                 RichText::new(&r.title)
                     .font(FontId::proportional(fs - 0.5))
                     .color(pal.text).strong()
-            ).wrap());
+            ).wrap(true));
         });
 
     ui.add_space(10.0);
 
     // ── Seed/leech ratio bar ───────────────────────────────────────────────
-    egui::Frame::NONE
-        .inner_margin(egui::Margin::symmetric(12, 0))
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(12.0, 0.0))
         .show(ui, |ui| {
             let tot = (seed + leech) as f32;
             if tot > 0.0 {
@@ -60,9 +52,9 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, r: &TorrentResult) {
                     .font(FontId::proportional(fs)).color(pal.red));
                 ui.add_space(8.0);
                 // health pill
-                egui::Frame::NONE
-                    .fill(tint(seed_color(seed), 25)).corner_radius(10.0)
-                    .inner_margin(egui::Margin::symmetric(6, 2))
+                egui::Frame::none()
+                    .fill(tint(seed_color(seed), 25)).rounding(10.0)
+                    .inner_margin(egui::Margin::symmetric(6.0, 2.0))
                     .show(ui, |ui| {
                         ui.label(RichText::new(health_label(seed))
                             .font(FontId::proportional(fs - 2.0))
@@ -76,8 +68,8 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, r: &TorrentResult) {
     ui.add_space(8.0);
 
     // ── Metadata grid ─────────────────────────────────────────────────────
-    egui::Frame::NONE
-        .inner_margin(egui::Margin::symmetric(12, 0))
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(12.0, 0.0))
         .show(ui, |ui| {
             egui::Grid::new("detail_grid")
                 .num_columns(2)
@@ -112,8 +104,8 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, r: &TorrentResult) {
     ui.add_space(10.0);
 
     // ── Actions ───────────────────────────────────────────────────────────
-    egui::Frame::NONE
-        .inner_margin(egui::Margin::symmetric(12, 0))
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(12.0, 0.0))
         .show(ui, |ui| {
             if r.magnet_uri.is_some() {
                 let accent = pal.accent;
@@ -128,7 +120,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, r: &TorrentResult) {
                 let sub = pal.sub;
                 if wide_btn(ui, "⎘  Copy Magnet Link", sub) {
                     if let Some(m) = &r.magnet_uri {
-                        ui.ctx().output_mut(|o| o.commands.push(egui::OutputCommand::CopyText(m.clone().to_string())));
+                        ui.output_mut(|o| o.copied_text = m.clone());
                         let g = app.pal.green;
                         app.toast("Magnet link copied ✓", g);
                     }
@@ -151,19 +143,6 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, r: &TorrentResult) {
             }
             ui.add_space(5.0);
 
-            if app.cfg.qbit_enabled && r.magnet_uri.is_some() {
-                if wide_btn(ui, "📥  Send to qBittorrent", pal.accent) {
-                    if let Some(m) = &r.magnet_uri {
-                        if app.send_to_qbit(m) {
-                            app.toast("Sent to qBittorrent ✓", pal.green);
-                        } else {
-                            app.toast("Failed to send — is qBit running?", pal.red);
-                        }
-                    }
-                }
-                ui.add_space(5.0);
-            }
-
             if r.details.is_some() {
                 let dim = pal.dim;
                 if wide_btn(ui, "⊙  Open Detail Page", dim) {
@@ -178,27 +157,25 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, r: &TorrentResult) {
     if let Some(mag) = &r.magnet_uri {
         ui.separator();
         ui.add_space(6.0);
-        egui::Frame::NONE
-            .inner_margin(egui::Margin::symmetric(12, 0))
+        egui::Frame::none()
+            .inner_margin(egui::Margin::symmetric(12.0, 0.0))
             .show(ui, |ui| {
                 ui.label(RichText::new("Magnet URI").font(FontId::proportional(fs - 2.5)).color(pal.dim));
                 ui.add_space(3.0);
                 let preview = if mag.len() > 200 { format!("{}…", &mag[..200]) } else { mag.clone() };
-                egui::Frame::NONE
-                    .fill(pal.hdr).corner_radius(6.0)
+                egui::Frame::none()
+                    .fill(pal.hdr).rounding(6.0)
                     .stroke(Stroke::new(1.0, pal.border))
-                    .inner_margin(egui::Margin::symmetric(8, 6))
+                    .inner_margin(egui::Margin::symmetric(8.0, 6.0))
                     .show(ui, |ui| {
                         ui.add(egui::Label::new(
                             RichText::new(&preview)
                                 .font(FontId::monospace(fs - 3.5))
                                 .color(pal.dim)
-                        ).wrap());
+                        ).wrap(true));
                     });
             });
     }
-
-    }); // end ScrollArea
 }
 
 fn tot_nonzero(seed: u32, leech: u32) -> bool { seed + leech > 0 }

@@ -4,9 +4,9 @@ use crate::theme::{Theme, tint};
 use crate::types::Tab;
 
 pub fn draw(app: &mut App, ctx: &egui::Context) {
-    egui::Panel::top("header")
-        .exact_size(52.0)
-        .frame(egui::Frame::NONE
+    egui::TopBottomPanel::top("header")
+        .exact_height(52.0)
+        .frame(egui::Frame::none()
             .fill(app.pal.surface)
             .stroke(Stroke::new(1.0, app.pal.border)))
         .show(ctx, |ui| {
@@ -18,11 +18,11 @@ pub fn draw(app: &mut App, ctx: &egui::Context) {
                     .font(FontId::monospace(16.0)).strong().color(app.pal.text));
                 ui.label(RichText::new("X")
                     .font(FontId::monospace(16.0)).strong().color(app.pal.accent));
-                egui::Frame::NONE
-                    .fill(tint(app.pal.accent, 28)).corner_radius(10.0)
-                    .inner_margin(egui::Margin::symmetric(5, 1))
+                egui::Frame::none()
+                    .fill(tint(app.pal.accent, 28)).rounding(10.0)
+                    .inner_margin(egui::Margin::symmetric(5.0, 1.0))
                     .show(ui, |ui| {
-                        ui.label(RichText::new("v8").size(10.0).color(app.pal.accent));
+                        ui.label(RichText::new("v7").size(10.0).color(app.pal.accent));
                     });
 
                 ui.add_space(14.0);
@@ -51,7 +51,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context) {
                             .color(if active { app.pal.accent } else { app.pal.sub }))
                         .fill(if active { tint(app.pal.accent, 22) } else { Color32::TRANSPARENT })
                         .stroke(Stroke::new(if active { 1.0 } else { 0.0 }, app.pal.accent))
-                        .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
+                        .rounding(6.0).min_size(Vec2::new(0.0, 30.0))
                     ).clicked() {
                         app.tab = tab.clone();
                         app.detail_open  = false;
@@ -73,13 +73,13 @@ pub fn draw(app: &mut App, ctx: &egui::Context) {
                             .color(if sa { app.pal.accent } else { app.pal.sub }))
                         .fill(if sa { tint(app.pal.accent, 22) } else { Color32::TRANSPARENT })
                         .stroke(Stroke::new(1.0, if sa { app.pal.accent } else { app.pal.border }))
-                        .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
+                        .rounding(6.0).min_size(Vec2::new(0.0, 30.0))
                     ).clicked() { app.show_settings = !app.show_settings; }
                     ui.add_space(10.0);
 
                     // Theme picker
                     let ac = app.cfg.theme.accent();
-                    egui::ComboBox::from_id_salt("theme_picker")
+                    egui::ComboBox::from_id_source("theme_picker")
                         .selected_text(RichText::new(app.cfg.theme.name())
                             .font(FontId::proportional(13.0)).color(ac))
                         .width(158.0)
@@ -88,7 +88,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context) {
                             for t in Theme::all().iter().filter(|t| !t.is_light()) {
                                 let col = t.accent();
                                 let on  = &app.cfg.theme == t;
-                                if ui.add(egui::Button::selectable(on,
+                                if ui.add(egui::SelectableLabel::new(on,
                                     RichText::new(format!("  {}", t.name()))
                                         .font(FontId::proportional(13.0)).color(col)
                                 )).clicked() { app.set_theme(t.clone()); }
@@ -98,7 +98,7 @@ pub fn draw(app: &mut App, ctx: &egui::Context) {
                             for t in Theme::all().iter().filter(|t| t.is_light()) {
                                 let col = t.accent();
                                 let on  = &app.cfg.theme == t;
-                                if ui.add(egui::Button::selectable(on,
+                                if ui.add(egui::SelectableLabel::new(on,
                                     RichText::new(format!("  {}", t.name()))
                                         .font(FontId::proportional(13.0)).color(col)
                                 )).clicked() { app.set_theme(t.clone()); }

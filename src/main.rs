@@ -22,17 +22,6 @@ fn main() -> eframe::Result<()> {
                 .with_min_inner_size([960.0, 580.0]),
             ..Default::default()
         },
-        Box::new(|cc| {
-            // Force font setup
-            let mut fonts = egui::FontDefinitions::default();
-            cc.egui_ctx.set_fonts(fonts);
-            
-            // Force visuals
-            let mut vis = egui::Visuals::dark();
-            vis.override_text_color = Some(egui::Color32::WHITE);
-            cc.egui_ctx.set_visuals(vis);
-            
-            Ok(Box::new(app::App::default()))
-        }),
+        Box::new(|_cc| Box::new(app::App::default())),
     )
 }

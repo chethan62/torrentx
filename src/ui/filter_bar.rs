@@ -6,12 +6,12 @@ use crate::ui::components::{lbl, outline_btn};
 pub fn draw(app: &mut App, ui: &mut egui::Ui) {
     let fs = app.cfg.font_size;
 
-    egui::Frame::NONE
+    egui::Frame::none()
         .fill(app.pal.surface)
-        .corner_radius(8.0)
+        .rounding(8.0)
         .stroke(Stroke::new(1.0, app.pal.border))
-        .inner_margin(egui::Margin::symmetric(12, 7))
-        .outer_margin(egui::Margin::symmetric(12, 0))
+        .inner_margin(egui::Margin::symmetric(12.0, 7.0))
+        .outer_margin(egui::Margin::symmetric(12.0, 0.0))
         .show(ui, |ui| {
             // ── Row 1: text filters ────────────────────────────────────
             ui.horizontal(|ui| {
@@ -59,7 +59,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui) {
                 for hf in [HealthFilter::All, HealthFilter::Hot, HealthFilter::Good,
                            HealthFilter::Slow, HealthFilter::Dead] {
                     let on = app.filters.health == hf;
-                    if ui.add(egui::Button::selectable(on,
+                    if ui.add(egui::SelectableLabel::new(on,
                         RichText::new(hf.label()).font(FontId::proportional(fs - 1.0))
                             .color(if on { app.pal.accent } else { app.pal.sub })
                     )).clicked() { app.filters.health = hf; app.page = 0; }
@@ -74,7 +74,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui) {
                         RichText::new(d_lbl).font(FontId::proportional(fs - 1.0)).color(accent))
                         .fill(crate::theme::tint(accent, 18))
                         .stroke(Stroke::new(1.0, crate::theme::tint(accent, 60)))
-                        .corner_radius(4.0)
+                        .rounding(4.0)
                     ).on_hover_text("Toggle sort direction").clicked() {
                         app.sort_dir = if app.sort_dir == SortDir::Desc { SortDir::Asc } else { SortDir::Desc };
                         app.page = 0;
@@ -86,7 +86,6 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui) {
                     for (l, col) in [
                         ("Date",    SortCol::Date),
                         ("Size",    SortCol::Size),
-                        ("Ratio",   SortCol::Ratio),
                         ("Leech",   SortCol::Leech),
                         ("Seeds",   SortCol::Seeds),
                         ("Tracker", SortCol::Tracker),
@@ -96,7 +95,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui) {
                         let txt = if on {
                             if app.sort_dir == SortDir::Desc { format!("{l}▼") } else { format!("{l}▲") }
                         } else { l.to_string() };
-                        if ui.add(egui::Button::selectable(on,
+                        if ui.add(egui::SelectableLabel::new(on,
                             RichText::new(&txt).font(FontId::proportional(fs - 1.0))
                                 .color(if on { app.pal.accent } else { app.pal.sub })
                         )).clicked() {

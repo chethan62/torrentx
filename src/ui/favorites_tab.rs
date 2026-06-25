@@ -23,10 +23,10 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui) {
     }
 
     // ── Header ────────────────────────────────────────────────────────────
-    egui::Frame::NONE
+    egui::Frame::none()
         .fill(pal.surface)
         .stroke(Stroke::new(1.0, pal.border))
-        .inner_margin(egui::Margin::symmetric(14, 8))
+        .inner_margin(egui::Margin::symmetric(14.0, 8.0))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 lbl(ui, &format!("Favorites  ({})", app.cfg.favorites.len()), pal.accent, fs + 1.0);
@@ -99,12 +99,12 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui) {
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, row_bg);
                         ui.add(egui::Label::new(RichText::new(&fav.title)
-                            .font(FontId::proportional(fs)).color(pal.text)).truncate());
+                            .font(FontId::proportional(fs)).color(pal.text)).truncate(true));
                     });
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, row_bg);
                         ui.add(egui::Label::new(RichText::new(fav.tracker.as_deref().unwrap_or("—"))
-                            .font(FontId::proportional(fs - 1.0)).color(pal.sub)).truncate());
+                            .font(FontId::proportional(fs - 1.0)).color(pal.sub)).truncate(true));
                     });
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, row_bg);
@@ -148,7 +148,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui) {
     }
     if let Some(i) = cpy_action {
         if let Some(f) = app.cfg.favorites.get(i) {
-            if let Some(m) = &f.magnet { ui.ctx().output_mut(|o| o.commands.push(egui::OutputCommand::CopyText(m.clone().to_string()))); let g = app.pal.green; app.toast("Magnet copied ✓", g); }
+            if let Some(m) = &f.magnet { ui.output_mut(|o| o.copied_text = m.clone()); let g = app.pal.green; app.toast("Magnet copied ✓", g); }
         }
     }
     if let Some(i) = dl_action {

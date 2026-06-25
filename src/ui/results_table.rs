@@ -68,9 +68,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, page_s: &[TorrentResult]) {
                 }
             }); }
             if cfg.col_ratio { hdr.col(|ui| {
-                if ui.add(egui::Label::new(hdr_lbl("Ratio", &SortCol::Ratio)).sense(egui::Sense::click())).clicked() {
-                    new_sort = Some((SortCol::Ratio, s_col == SortCol::Ratio));
-                }
+                ui.label(RichText::new("Ratio").font(FontId::proportional(fsz)).color(pal.sub).strong());
             }); }
             if cfg.col_health { hdr.col(|ui| {
                 ui.label(RichText::new("Health").font(FontId::proportional(fsz)).color(pal.sub).strong());
@@ -95,15 +93,14 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, page_s: &[TorrentResult]) {
                          else if i % 2 == 0 { pal.row_odd }
                          else             { pal.row_even };
 
-                body.row(rh.max(34.0), |mut row| {
+                body.row(rh, |mut row| {
                     // Name
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                        ui.add_space(4.0);
                         let resp = ui.add(egui::Label::new(
                             RichText::new(&r.title).font(FontId::proportional(fsz))
                                 .color(if is_sel { pal.accent } else { pal.text })
-                        ).truncate().sense(egui::Sense::click()));
+                        ).truncate(true).sense(egui::Sense::click()));
                         if resp.clicked() { actions.push((i, "select")); }
                         if resp.hovered() {
                             app.hovered = Some(i);
@@ -113,7 +110,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, page_s: &[TorrentResult]) {
                             let cat = r.category_desc.as_deref().unwrap_or("Other");
                             ui.add(egui::Label::new(RichText::new(cat)
                                 .font(FontId::proportional(fsz - 2.5))
-                                .color(cat_color(cat))).truncate());
+                                .color(cat_color(cat))).truncate(true));
                         }
                     });
 
@@ -121,27 +118,21 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, page_s: &[TorrentResult]) {
                     if cfg.col_tracker { row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                         ui.add(egui::Label::new(RichText::new(r.tracker.as_deref().unwrap_or("—"))
-                            .font(FontId::proportional(fsz - 1.0)).color(pal.sub)).truncate());
+                            .font(FontId::proportional(fsz - 1.0)).color(pal.sub)).truncate(true));
                     }); }
 
                     // Size
                     if cfg.col_size { row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(6.0);
-                            ui.label(RichText::new(r.size.map(fmt_size).unwrap_or_else(|| "—".into()))
-                                .font(FontId::proportional(fsz)).color(pal.sub));
-                        });
+                        ui.label(RichText::new(r.size.map(fmt_size).unwrap_or_else(|| "—".into()))
+                            .font(FontId::proportional(fsz)).color(pal.sub));
                     }); }
 
                     // Seeds
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(6.0);
-                            ui.label(RichText::new(seed.to_string())
-                                .font(FontId::proportional(fsz)).color(seed_color(seed)).strong());
-                        });
+                        ui.label(RichText::new(seed.to_string())
+                            .font(FontId::proportional(fsz)).color(seed_color(seed)).strong());
                     });
 
                     // Leechers
@@ -191,24 +182,19 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, page_s: &[TorrentResult]) {
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                         ui.horizontal(|ui| {
-                            ui.add_space(3.0);
+                            ui.add_space(2.0);
                             if r.magnet_uri.is_some() {
-                                if act_btn(ui, "⚡", "Open magnet in client", pal.accent) { actions.push((i, "mag")); }
-                                ui.add_space(2.0);
-                                if act_btn(ui, "⎘",  "Copy magnet link",      pal.sub)   { actions.push((i, "copy")); }
-                                ui.add_space(2.0);
+                                if act_btn(ui, "Mag",  "Open in torrent client", pal.accent) { actions.push((i, "mag")); }
+                                if act_btn(ui, "Copy", "Copy magnet link",       pal.sub)    { actions.push((i, "copy")); }
                             }
                             if r.link.is_some() {
-                                if act_btn(ui, "↓",  "Download .torrent",     pal.green) { actions.push((i, "dl")); }
-                                ui.add_space(2.0);
+                                if act_btn(ui, "DL",  "Download .torrent",      pal.green)  { actions.push((i, "dl")); }
                             }
-                            if act_btn(ui, "★", "Save to Favorites",      pal.yellow) { actions.push((i, "fav")); }
-                            ui.add_space(2.0);
-                            if act_btn(ui, "☰", "Detail panel",
+                            if act_btn(ui, "Fav",  "Add to Favorites (F)",  pal.yellow) { actions.push((i, "fav")); }
+                            if act_btn(ui, "Info", "Detail panel (D)",
                                 if is_sel && det { pal.accent } else { pal.dim }) { actions.push((i, "info")); }
                             if r.details.is_some() {
-                                ui.add_space(2.0);
-                                if act_btn(ui, "🌐", "Open in browser", pal.dim) { actions.push((i, "web")); }
+                                if act_btn(ui, "Web", "Open in browser", pal.dim) { actions.push((i, "web")); }
                             }
                         });
                     });
@@ -239,7 +225,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, page_s: &[TorrentResult]) {
                     }
                 }
                 "mag"  => { if let Some(m) = &r.magnet_uri { let _ = open::that(m); let ac = app.pal.accent; app.toast("Opening magnet…", ac); } }
-                "copy" => { if let Some(m) = &r.magnet_uri { ui.ctx().output_mut(|o| o.commands.push(egui::OutputCommand::CopyText(m.clone().to_string()))); let g = app.pal.green; app.toast("Magnet copied ✓", g); } }
+                "copy" => { if let Some(m) = &r.magnet_uri { ui.output_mut(|o| o.copied_text = m.clone()); let g = app.pal.green; app.toast("Magnet copied ✓", g); } }
                 "dl"   => { if let Some(l) = &r.link        { let _ = open::that(l); let g = app.pal.green; app.toast("Downloading…", g); } }
                 "fav"  => { app.add_fav(&r); }
                 "info" => {

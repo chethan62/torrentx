@@ -1,7 +1,7 @@
 use eframe::egui::{self, Color32, FontId, RichText, Stroke};
 use crate::app::App;
 use crate::types::{SearchState, CATS};
-use crate::ui::{components::{lbl, outline_btn}, filter_bar, results_table};
+use crate::ui::{components::{lbl, outline_btn}, filter_bar, results_table, detail_panel};
 
 pub fn draw(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context, state: &SearchState) {
     let fs = app.cfg.font_size;
@@ -26,7 +26,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context, state: &Searc
         if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) { app.do_search(); }
 
         ui.add_space(6.0);
-        egui::ComboBox::from_id_salt("cat_combo")
+        egui::ComboBox::from_id_source("cat_combo")
             .selected_text(RichText::new(&app.search_cat).font(FontId::proportional(fs)))
             .width(115.0)
             .show_ui(ui, |ui| {
@@ -42,13 +42,13 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context, state: &Searc
                 RichText::new(if busy { "  Scanning…  " } else { "    Search    " })
                     .font(FontId::proportional(fs)).strong().color(Color32::WHITE))
                 .fill(if busy { crate::theme::rgb(6,100,130) } else { app.pal.accent })
-                .corner_radius(6.0)
+                .rounding(6.0)
                 .min_size(egui::Vec2::new(0.0, 36.0))
         ).clicked() { app.do_search(); }
 
         if !app.query.is_empty() {
             if ui.add(egui::Button::new(RichText::new("✕").size(13.0).color(app.pal.sub))
-                .fill(Color32::TRANSPARENT).corner_radius(4.0)).on_hover_text("Clear").clicked() {
+                .fill(Color32::TRANSPARENT).rounding(4.0)).on_hover_text("Clear").clicked() {
                 app.query.clear();
                 app.show_hist = false;
             }
@@ -78,12 +78,12 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context, state: &Searc
         SearchState::Error(err) => {
             ui.add_space(10.0);
             let err = err.clone();
-            egui::Frame::NONE
+            egui::Frame::none()
                 .fill(crate::theme::tint(app.pal.red, 10))
                 .stroke(Stroke::new(1.0, crate::theme::tint(app.pal.red, 70)))
-                .corner_radius(8.0)
-                .inner_margin(egui::Margin::symmetric(20, 14))
-                .outer_margin(egui::Margin::symmetric(12, 0))
+                .rounding(8.0)
+                .inner_margin(egui::Margin::symmetric(20.0, 14.0))
+                .outer_margin(egui::Margin::symmetric(12.0, 0.0))
                 .show(ui, |ui| {
                     for line in err.lines() {
                         lbl(ui, line, app.pal.red, fs);
@@ -126,7 +126,7 @@ fn draw_idle(app: &mut App, ui: &mut egui::Ui) {
                         RichText::new(h.as_str()).font(FontId::proportional(fs)).color(app.pal.sub))
                         .fill(app.pal.surface)
                         .stroke(Stroke::new(1.0, app.pal.border))
-                        .corner_radius(14.0).min_size(egui::vec2(0.0, 28.0))
+                        .rounding(14.0).min_size(egui::vec2(0.0, 28.0))
                     ).clicked() { clicked = Some(h.clone()); }
                 }
             });
@@ -134,10 +134,10 @@ fn draw_idle(app: &mut App, ui: &mut egui::Ui) {
         } else {
             // First-time help box
             ui.add_space(24.0);
-            egui::Frame::NONE
-                .fill(crate::theme::tint(app.pal.accent, 12)).corner_radius(10.0)
+            egui::Frame::none()
+                .fill(crate::theme::tint(app.pal.accent, 12)).rounding(10.0)
                 .stroke(Stroke::new(1.0, crate::theme::tint(app.pal.accent, 50)))
-                .inner_margin(egui::Margin::symmetric(24, 16))
+                .inner_margin(egui::Margin::symmetric(24.0, 16.0))
                 .show(ui, |ui| {
                     ui.set_max_width(480.0);
                     ui.label(RichText::new("Getting started")
@@ -197,24 +197,10 @@ fn draw_results(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(12.0);
             let sc = sorted.clone();
-            let magnets = app.copy_all_magnets(&sc);
-            let mag_count = sc.iter().filter(|r| r.magnet_uri.is_some()).count();
-            if outline_btn(ui, &format!("Copy {mag_count} 🧲"), app.pal.accent) {
-                ui.ctx().output_mut(|o| o.commands.push(egui::OutputCommand::CopyText(magnets.to_string())));
-                let green = app.pal.green;
-                app.toast(&format!("{mag_count} magnets copied ✓"), green);
-            }
-            ui.add_space(4.0);
             if outline_btn(ui, "Export CSV", app.pal.sub) {
                 app.export_csv(&sc);
                 let green = app.pal.green;
                 app.toast("Exported to Downloads ✓", green);
-            }
-            ui.add_space(4.0);
-            if outline_btn(ui, "JSON", app.pal.dim) {
-                app.export_json(&sc);
-                let green = app.pal.green;
-                app.toast("JSON exported to Downloads ✓", green);
             }
         });
     });
@@ -227,20 +213,20 @@ fn draw_results(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.add_space(12.0);
                 for (cat, count, col) in &chips {
-                    let sel = app.filters.cat_filter == *cat;
-                    egui::Frame::NONE
-                        .fill(crate::theme::tint(*col, if sel { 50 } else { 20 })).corner_radius(10.0)
+                    let sel = app.filters.text == *cat;
+                    egui::Frame::none()
+                        .fill(crate::theme::tint(*col, if sel { 50 } else { 20 })).rounding(10.0)
                         .stroke(Stroke::new(if sel { 1.5 } else { 1.0 },
                             crate::theme::tint(*col, if sel { 200 } else { 80 })))
-                        .inner_margin(egui::Margin::symmetric(7, 2))
+                        .inner_margin(egui::Margin::symmetric(7.0, 2.0))
                         .show(ui, |ui| {
                             if ui.add(egui::Label::new(
                                 RichText::new(format!("{cat}  {count}"))
                                     .font(FontId::proportional(11.0)).color(*col)
                             ).sense(egui::Sense::click()))
                                 .on_hover_text("Click to filter by category").clicked() {
-                                if app.filters.cat_filter == *cat { app.filters.cat_filter.clear(); }
-                                else { app.filters.cat_filter = cat.clone(); }
+                                if app.filters.text == *cat { app.filters.text.clear(); }
+                                else { app.filters.text = cat.clone(); }
                             }
                         });
                     ui.add_space(3.0);
@@ -293,7 +279,7 @@ fn draw_results(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context) {
         if let Some(i) = app.selected {
             if let Some(r) = page_s.get(i) {
                 if let Some(m) = &r.magnet_uri {
-                    ctx.output_mut(|o| o.commands.push(egui::OutputCommand::CopyText(m.clone().to_string())));
+                    ctx.output_mut(|o| o.copied_text = m.clone());
                     let green = app.pal.green;
                     app.toast("Magnet copied ✓", green);
                 }
@@ -301,41 +287,60 @@ fn draw_results(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context) {
         }
     }
 
-    // ── Pagination (inline, not a nested panel) ───────────────────────────
+    // ── Pagination ────────────────────────────────────────────────────────
     if max_p > 1 {
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            ui.add_space(12.0);
-            let pg = app.page;
-            if ui.add_enabled(pg > 0, egui::Button::new(
-                RichText::new("← Prev").font(FontId::proportional(fs - 1.0)).color(app.pal.sub))
-                .fill(Color32::TRANSPARENT)
-                .stroke(Stroke::new(1.0, app.pal.border)).corner_radius(4.0)
-            ).clicked() { app.page -= 1; app.selected = None; }
-            ui.add_space(6.0);
-            for p in 0..max_p {
-                let near = p == 0 || p == max_p - 1 || p.abs_diff(pg) <= 2;
-                if !near {
-                    if p == 1 || p == max_p - 2 {
-                        lbl(ui, "…", app.pal.dim, fs - 1.0);
+        egui::TopBottomPanel::bottom("pages")
+            .exact_height(34.0)
+            .frame(egui::Frame::none().fill(app.pal.bg)
+                .stroke(Stroke::new(1.0, app.pal.border))
+                .inner_margin(egui::Margin::symmetric(12.0, 5.0)))
+            .show_inside(ui, |ui| {
+                ui.horizontal(|ui| {
+                    let pg = app.page;
+                    if ui.add_enabled(pg > 0, egui::Button::new(
+                        RichText::new("← Prev").font(FontId::proportional(fs - 1.0)).color(app.pal.sub))
+                        .fill(Color32::TRANSPARENT)
+                        .stroke(Stroke::new(1.0, app.pal.border)).rounding(4.0)
+                    ).clicked() { app.page -= 1; app.selected = None; }
+                    ui.add_space(6.0);
+                    for p in 0..max_p {
+                        let near = p == 0 || p == max_p - 1 || p.abs_diff(pg) <= 2;
+                        if !near {
+                            if p == 1 || p == max_p - 2 {
+                                lbl(ui, "…", app.pal.dim, fs - 1.0);
+                            }
+                            continue;
+                        }
+                        let on = p == pg;
+                        if ui.add(egui::SelectableLabel::new(on,
+                            RichText::new(format!("{}", p + 1))
+                                .font(FontId::proportional(fs - 1.0))
+                                .color(if on { app.pal.accent } else { app.pal.sub })
+                        )).clicked() { app.page = p; app.selected = None; }
                     }
-                    continue;
-                }
-                let on = p == pg;
-                if ui.add(egui::Button::selectable(on,
-                    RichText::new(format!("{}", p + 1))
-                        .font(FontId::proportional(fs - 1.0))
-                        .color(if on { app.pal.accent } else { app.pal.sub })
-                )).clicked() { app.page = p; app.selected = None; }
+                    ui.add_space(6.0);
+                    if ui.add_enabled(pg + 1 < max_p, egui::Button::new(
+                        RichText::new("Next →").font(FontId::proportional(fs - 1.0)).color(app.pal.sub))
+                        .fill(Color32::TRANSPARENT)
+                        .stroke(Stroke::new(1.0, app.pal.border)).rounding(4.0)
+                    ).clicked() { app.page += 1; app.selected = None; }
+                    lbl(ui, &format!("  Page {} of {max_p}", pg + 1), app.pal.dim, fs - 1.0);
+                });
+            });
+    }
+
+    // ── Detail panel ──────────────────────────────────────────────────────
+    if app.detail_open {
+        if let Some(idx) = app.selected {
+            if let Some(r) = page_s.get(idx).cloned() {
+                egui::SidePanel::right("detail_panel")
+                    .resizable(true).default_width(295.0).min_width(240.0)
+                    .frame(egui::Frame::none()
+                        .fill(app.pal.surface)
+                        .stroke(Stroke::new(1.0, app.pal.border)))
+                    .show_inside(ui, |ui| { detail_panel::draw(app, ui, &r); });
             }
-            ui.add_space(6.0);
-            if ui.add_enabled(pg + 1 < max_p, egui::Button::new(
-                RichText::new("Next →").font(FontId::proportional(fs - 1.0)).color(app.pal.sub))
-                .fill(Color32::TRANSPARENT)
-                .stroke(Stroke::new(1.0, app.pal.border)).corner_radius(4.0)
-            ).clicked() { app.page += 1; app.selected = None; }
-            lbl(ui, &format!("  Page {} of {max_p}", pg + 1), app.pal.dim, fs - 1.0);
-        });
+        }
     }
 
     results_table::draw(app, ui, &page_s);
@@ -358,12 +363,12 @@ fn draw_history_dropdown(
         .fixed_pos(pos)
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
-            egui::Frame::NONE
-                .fill(app.pal.surface).corner_radius(8.0)
+            egui::Frame::none()
+                .fill(app.pal.surface).rounding(8.0)
                 .stroke(Stroke::new(1.0, app.pal.accent))
-                .shadow(egui::epaint::Shadow { offset: [0, 4], blur: 12, spread: 0,
+                .shadow(egui::epaint::Shadow { offset: [0.0,4.0].into(), blur:12.0, spread:0.0,
                     color: crate::theme::rgba(0,0,0,70) })
-                .inner_margin(egui::Margin::symmetric(10, 8))
+                .inner_margin(egui::Margin::symmetric(10.0, 8.0))
                 .show(ui, |ui| {
                     ui.set_width(w.max(280.0));
                     ui.horizontal(|ui| {

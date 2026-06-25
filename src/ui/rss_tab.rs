@@ -7,6 +7,7 @@ use crate::utils::{fmt_size, seed_color, time_ago};
 
 pub fn draw(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context) {
     let pal = app.pal.clone();
+    let fs  = app.cfg.font_size;
 
     if app.rss_feeds.is_empty() && !app.rss_add_mode {
         draw_empty(app, ui);
@@ -15,21 +16,20 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context) {
 
     ui.horizontal_top(|ui| {
         // ── Left sidebar ──────────────────────────────────────────────────
-        egui::Panel::left("rss_sidebar")
+        egui::SidePanel::left("rss_sidebar")
             .resizable(true)
-            .default_size(220.0)
-            .min_size(160.0)
-            .frame(egui::Frame::side_top_panel(ui.style())
+            .default_width(220.0)
+            .min_width(160.0)
+            .frame(egui::Frame::none()
                 .fill(pal.surface)
                 .stroke(Stroke::new(1.0, pal.border)))
             .show_inside(ui, |ui| {
-                ui.painter().rect_filled(ui.max_rect().expand(4.0), 0.0, pal.surface);
                 draw_sidebar(app, ui, ctx);
             });
 
         // ── Right pane ────────────────────────────────────────────────────
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(pal.bg))
+            .frame(egui::Frame::none().fill(pal.bg))
             .show_inside(ui, |ui| {
                 if app.rss_add_mode {
                     draw_add_form(app, ui);
@@ -57,10 +57,10 @@ fn draw_empty(app: &mut App, ui: &mut egui::Ui) {
         lbl(ui, "Add Jackett Torznab feeds to auto-refresh torrents", pal.dim, fs);
         ui.add_space(20.0);
 
-        egui::Frame::NONE
-            .fill(tint(pal.accent, 12)).corner_radius(10.0)
+        egui::Frame::none()
+            .fill(tint(pal.accent, 12)).rounding(10.0)
             .stroke(Stroke::new(1.0, tint(pal.accent, 50)))
-            .inner_margin(egui::Margin::symmetric(24, 16))
+            .inner_margin(egui::Margin::symmetric(24.0, 16.0))
             .show(ui, |ui| {
                 ui.set_max_width(420.0);
                 lbl(ui, "How Torznab RSS works", pal.accent, fs);
@@ -82,10 +82,10 @@ fn draw_sidebar(app: &mut App, ui: &mut egui::Ui, _ctx: &egui::Context) {
     let fs  = app.cfg.font_size;
 
     // Header
-    egui::Frame::NONE
+    egui::Frame::none()
         .fill(pal.hdr)
         .stroke(Stroke::new(1.0, pal.border))
-        .inner_margin(egui::Margin::symmetric(10, 8))
+        .inner_margin(egui::Margin::symmetric(10.0, 8.0))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 lbl(ui, "RSS Feeds", pal.accent, fs);
@@ -93,7 +93,7 @@ fn draw_sidebar(app: &mut App, ui: &mut egui::Ui, _ctx: &egui::Context) {
                     if ui.add(egui::Button::new(
                         RichText::new("⟳ All").font(FontId::proportional(fs - 1.5)).color(pal.sub))
                         .fill(Color32::TRANSPARENT)
-                        .stroke(Stroke::new(1.0, pal.border)).corner_radius(4.0)
+                        .stroke(Stroke::new(1.0, pal.border)).rounding(4.0)
                     ).on_hover_text("Refresh all feeds").clicked() {
                         app.refresh_all_feeds();
                     }
@@ -107,7 +107,7 @@ fn draw_sidebar(app: &mut App, ui: &mut egui::Ui, _ctx: &egui::Context) {
         });
 
     // Feed list
-    egui::ScrollArea::vertical().id_salt("rss_feed_list").show(ui, |ui| {
+    egui::ScrollArea::vertical().id_source("rss_feed_list").show(ui, |ui| {
         let filter = app.rss_filter.to_lowercase();
         let len    = app.rss_feeds.len();
         let mut refresh_idx: Option<usize> = None;
@@ -126,11 +126,10 @@ fn draw_sidebar(app: &mut App, ui: &mut egui::Ui, _ctx: &egui::Context) {
             let is_sel = app.rss_selected == i && !app.rss_add_mode && app.rss_edit_idx.is_none();
             let bg = if is_sel { tint(pal.accent, 22) } else { Color32::TRANSPARENT };
 
-            let row_resp = egui::Frame::NONE
-                .fill(bg).corner_radius(6.0)
-                .inner_margin(egui::Margin::symmetric(10, 7))
+            egui::Frame::none()
+                .fill(bg).rounding(6.0)
+                .inner_margin(egui::Margin::symmetric(10.0, 7.0))
                 .show(ui, |ui| {
-                    ui.set_min_width(ui.available_width());
                     ui.horizontal(|ui| {
                         // Status dot
                         let (dot_col, dot) = match status {
@@ -144,15 +143,17 @@ fn draw_sidebar(app: &mut App, ui: &mut egui::Ui, _ctx: &egui::Context) {
 
                         // Name + count
                         let name_col = if enabled { pal.text } else { pal.dim };
-                        ui.add(egui::Label::new(
+                        if ui.add(egui::Label::new(
                             RichText::new(&name).font(FontId::proportional(fs - 0.5)).color(name_col)
-                        ).truncate());
+                        ).truncate(true).sense(egui::Sense::click())).clicked() {
+                            select_idx = Some(i);
+                        }
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if items > 0 {
-                                egui::Frame::NONE
-                                    .fill(tint(pal.accent, 25)).corner_radius(8.0)
-                                    .inner_margin(egui::Margin::symmetric(5, 1))
+                                egui::Frame::none()
+                                    .fill(tint(pal.accent, 25)).rounding(8.0)
+                                    .inner_margin(egui::Margin::symmetric(5.0, 1.0))
                                     .show(ui, |ui| {
                                         ui.label(RichText::new(items.to_string())
                                             .font(FontId::proportional(fs - 3.0)).color(pal.accent));
@@ -161,13 +162,14 @@ fn draw_sidebar(app: &mut App, ui: &mut egui::Ui, _ctx: &egui::Context) {
                         });
                     });
 
-                    // Action row
+                    // Action row (visible on hover or select)
                     if is_sel {
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
-                            if act_btn(ui, "⟳",   "Refresh",     pal.accent) { refresh_idx = Some(i); }
-                            if act_btn(ui, "Edit", "Edit feed",   pal.sub)    { edit_idx    = Some(i); }
-                            if act_btn(ui, "✕",   "Delete feed", pal.red)    { delete_idx  = Some(i); }
+                            if act_btn(ui, "⟳",    "Refresh",     pal.accent) { refresh_idx = Some(i); }
+                            if act_btn(ui, "Edit",  "Edit feed",   pal.sub)    { edit_idx    = Some(i); }
+                            if act_btn(ui, "✕",    "Delete feed", pal.red)    { delete_idx  = Some(i); }
+                            // Toggle enabled
                             let en_col = if enabled { pal.green } else { pal.dim };
                             let en_lbl = if enabled { "On" } else { "Off" };
                             if act_btn(ui, en_lbl, "Toggle enabled", en_col) {
@@ -177,14 +179,10 @@ fn draw_sidebar(app: &mut App, ui: &mut egui::Ui, _ctx: &egui::Context) {
                         });
                     }
                 });
+        }
 
-            // ← OUTSIDE the frame, row_resp is now valid
-            if row_resp.response.interact(egui::Sense::click()).clicked() {
-                select_idx = Some(i);
-            }
-        } // end for
         // Apply
-        if let Some(i) = select_idx  { app.rss_selected = i; app.rss_add_mode = false; app.rss_edit_idx = None; app.rss_detail = None; app.rss_detail_item = None; }
+        if let Some(i) = select_idx  { app.rss_selected = i; app.rss_add_mode = false; app.rss_edit_idx = None; app.rss_detail = None; }
         if let Some(i) = refresh_idx { app.refresh_feed(i); }
         if let Some(i) = delete_idx  {
             app.rss_feeds.remove(i);
@@ -201,8 +199,8 @@ fn draw_sidebar(app: &mut App, ui: &mut egui::Ui, _ctx: &egui::Context) {
 
     // Add button
     ui.add_space(8.0);
-    egui::Frame::NONE
-        .inner_margin(egui::Margin::symmetric(10, 6))
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(10.0, 6.0))
         .show(ui, |ui| {
             let accent = pal.accent;
             if wide_btn(ui, "+ Add Feed", accent) {
@@ -230,10 +228,10 @@ fn draw_feed_items(app: &mut App, ui: &mut egui::Ui) {
     let err    = app.rss_feeds[sel].error.clone();
 
     // Header bar
-    egui::Frame::NONE
+    egui::Frame::none()
         .fill(pal.surface)
         .stroke(Stroke::new(1.0, pal.border))
-        .inner_margin(egui::Margin::symmetric(14, 8))
+        .inner_margin(egui::Margin::symmetric(14.0, 8.0))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 lbl(ui, &name, pal.accent, fs + 1.0);
@@ -281,7 +279,19 @@ fn draw_feed_items(app: &mut App, ui: &mut egui::Ui) {
         return;
     }
 
-    // rss_detail_item is kept in sync by the action handler below
+    // Detail panel
+    if let Some(detail_i) = app.rss_detail {
+        if let Some(item) = items.get(detail_i).cloned() {
+            egui::SidePanel::right("rss_detail_panel")
+                .resizable(true).default_width(280.0).min_width(220.0)
+                .frame(egui::Frame::none()
+                    .fill(pal.surface)
+                    .stroke(Stroke::new(1.0, pal.border)))
+                .show_inside(ui, |ui| {
+                    draw_item_detail(app, ui, &item);
+                });
+        }
+    }
 
     // Items table
     ui.add_space(2.0);
@@ -292,18 +302,17 @@ fn draw_feed_items(app: &mut App, ui: &mut egui::Ui) {
         .striped(false)
         .resizable(true)
         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-        .column(Column::remainder().at_least(220.0).clip(true))
-        .column(Column::initial(90.0).at_least(60.0))
-        .column(Column::initial(75.0).at_least(55.0))
-        .column(Column::initial(55.0).at_least(44.0))
-        .column(Column::initial(85.0).at_least(65.0))
-        .column(Column::initial(130.0).at_least(110.0))
-        .header(30.0, |mut hdr| {
+        .column(Column::remainder().at_least(180.0).clip(true))
+        .column(Column::initial(80.0).at_least(50.0))
+        .column(Column::initial(60.0).at_least(44.0))
+        .column(Column::initial(60.0).at_least(44.0))
+        .column(Column::initial(80.0).at_least(60.0))
+        .column(Column::initial(180.0).at_least(120.0))
+        .header(28.0, |mut hdr| {
             for label in ["Title", "Tracker", "Size", "Seeds", "Date", "Actions"] {
                 hdr.col(|ui| {
-                    ui.add_space(4.0);
-                    ui.label(RichText::new(label).font(FontId::proportional(fs - 1.5))
-                        .color(pal.dim).strong());
+                    ui.label(RichText::new(label).font(FontId::proportional(fs - 1.0))
+                        .color(pal.sub).strong());
                 });
             }
         })
@@ -314,15 +323,14 @@ fn draw_feed_items(app: &mut App, ui: &mut egui::Ui) {
                          else if i % 2 == 0 { pal.row_odd }
                          else { pal.row_even };
 
-                body.row(rh.max(32.0), |mut row| {
+                body.row(rh, |mut row| {
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                        ui.add_space(4.0);
                         let resp = ui.add(egui::Label::new(
                             RichText::new(&item.title)
                                 .font(FontId::proportional(fs))
                                 .color(if is_sel { pal.accent } else { pal.text })
-                        ).truncate().sense(egui::Sense::click()));
+                        ).truncate(true).sense(egui::Sense::click()));
                         if resp.clicked() { actions.push((i, "detail")); }
                     });
                     row.col(|ui| {
@@ -330,24 +338,18 @@ fn draw_feed_items(app: &mut App, ui: &mut egui::Ui) {
                         ui.add(egui::Label::new(
                             RichText::new(item.tracker.as_deref().unwrap_or("—"))
                                 .font(FontId::proportional(fs - 1.0)).color(pal.sub)
-                        ).truncate());
+                        ).truncate(true));
                     });
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(8.0);
-                            ui.label(RichText::new(item.size.map(fmt_size).unwrap_or_else(|| "—".into()))
-                                .font(FontId::proportional(fs)).color(pal.sub));
-                        });
+                        ui.label(RichText::new(item.size.map(fmt_size).unwrap_or_else(|| "—".into()))
+                            .font(FontId::proportional(fs)).color(pal.sub));
                     });
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                         let s = item.seeders.unwrap_or(0);
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(8.0);
-                            ui.label(RichText::new(s.to_string())
-                                .font(FontId::proportional(fs)).color(seed_color(s)).strong());
-                        });
+                        ui.label(RichText::new(s.to_string())
+                            .font(FontId::proportional(fs)).color(seed_color(s)).strong());
                     });
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
@@ -357,18 +359,14 @@ fn draw_feed_items(app: &mut App, ui: &mut egui::Ui) {
                     row.col(|ui| {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                         ui.horizontal(|ui| {
-                            ui.add_space(2.0);
                             if item.magnet.is_some() {
-                                if act_btn(ui, "⚡", "Open magnet",      pal.accent) { actions.push((i, "mag")); }
-                                ui.add_space(2.0);
-                                if act_btn(ui, "⎘", "Copy magnet link",  pal.sub)   { actions.push((i, "copy")); }
-                                ui.add_space(2.0);
+                                if act_btn(ui, "Mag",  "Open magnet",     pal.accent) { actions.push((i, "mag")); }
+                                if act_btn(ui, "Copy", "Copy magnet link", pal.sub)   { actions.push((i, "copy")); }
                             }
                             if item.link.is_some() {
-                                if act_btn(ui, "↓", "Download .torrent", pal.green) { actions.push((i, "dl")); }
-                                ui.add_space(2.0);
+                                if act_btn(ui, "DL",  "Download .torrent", pal.green) { actions.push((i, "dl")); }
                             }
-                            if act_btn(ui, "★", "Save to Favorites",   pal.yellow) { actions.push((i, "fav")); }
+                            if act_btn(ui, "★", "Add to Favorites", pal.yellow) { actions.push((i, "fav")); }
                         });
                     });
                 });
@@ -380,16 +378,10 @@ fn draw_feed_items(app: &mut App, ui: &mut egui::Ui) {
         if let Some(item) = items.get(i).cloned() {
             match action {
                 "detail" => {
-                    if app.rss_detail == Some(i) {
-                        app.rss_detail = None;
-                        app.rss_detail_item = None;
-                    } else {
-                        app.rss_detail = Some(i);
-                        app.rss_detail_item = items.get(i).cloned();
-                    }
+                    app.rss_detail = if app.rss_detail == Some(i) { None } else { Some(i) };
                 }
                 "mag"  => { if let Some(m) = &item.magnet { let _ = open::that(m); let a = app.pal.accent; app.toast("Opening magnet…", a); } }
-                "copy" => { if let Some(m) = &item.magnet { ui.ctx().output_mut(|o| o.commands.push(egui::OutputCommand::CopyText(m.clone().to_string()))); let g = app.pal.green; app.toast("Magnet copied ✓", g); } }
+                "copy" => { if let Some(m) = &item.magnet { ui.output_mut(|o| o.copied_text = m.clone()); let g = app.pal.green; app.toast("Magnet copied ✓", g); } }
                 "dl"   => { if let Some(l) = &item.link   { let _ = open::that(l); } }
                 "fav"  => { let it = item.clone(); app.add_fav_from_rss(&it); }
                 _ => {}
@@ -400,17 +392,17 @@ fn draw_feed_items(app: &mut App, ui: &mut egui::Ui) {
 
 // ─── Item detail panel ────────────────────────────────────────────────────
 
-pub fn draw_item_detail_panel(app: &mut App, ui: &mut egui::Ui, item: &crate::rss::RssItem) {
+fn draw_item_detail(app: &mut App, ui: &mut egui::Ui, item: &crate::rss::RssItem) {
     let pal = app.pal.clone();
     let fs  = app.cfg.font_size;
 
     ui.add_space(10.0);
-    egui::Frame::NONE
-        .inner_margin(egui::Margin::symmetric(12, 0))
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(12.0, 0.0))
         .show(ui, |ui| {
             ui.add(egui::Label::new(
                 RichText::new(&item.title).font(FontId::proportional(fs)).color(pal.text).strong()
-            ).wrap());
+            ).wrap(true));
             ui.add_space(12.0);
 
             egui::Grid::new("rss_item_grid")
@@ -445,7 +437,7 @@ pub fn draw_item_detail_panel(app: &mut App, ui: &mut egui::Ui, item: &crate::rs
                 ui.add_space(4.0);
                 let sub = pal.sub;
                 if wide_btn(ui, "⎘  Copy Magnet", sub) {
-                    if let Some(m) = &item.magnet { ui.ctx().output_mut(|o| o.commands.push(egui::OutputCommand::CopyText(m.clone().to_string()))); let g = app.pal.green; app.toast("Copied ✓", g); }
+                    if let Some(m) = &item.magnet { ui.output_mut(|o| o.copied_text = m.clone()); let g = app.pal.green; app.toast("Copied ✓", g); }
                 }
                 ui.add_space(4.0);
             }
@@ -506,10 +498,10 @@ fn draw_feed_form(app: &mut App, ui: &mut egui::Ui, edit_idx: Option<usize>) {
         lbl(ui, "Connects to a Jackett Torznab indexer endpoint", pal.dim, fs - 1.0);
         ui.add_space(20.0);
 
-        egui::Frame::NONE
-            .fill(pal.surface).corner_radius(10.0)
+        egui::Frame::none()
+            .fill(pal.surface).rounding(10.0)
             .stroke(Stroke::new(1.0, pal.border))
-            .inner_margin(egui::Margin::same(18))
+            .inner_margin(egui::Margin::same(18.0))
             .show(ui, |ui| {
                 egui::Grid::new("feed_form_grid")
                     .num_columns(2).spacing([12.0, 10.0])
@@ -567,14 +559,14 @@ fn draw_feed_form(app: &mut App, ui: &mut egui::Ui, edit_idx: Option<usize>) {
                         &app.cfg.jackett_url, "YOUR_KEY", &app.rss_new_cfg);
                     lbl(ui, "Preview URL:", pal.dim, fs - 2.0);
                     ui.add_space(3.0);
-                    egui::Frame::NONE
-                        .fill(pal.hdr).corner_radius(5.0)
+                    egui::Frame::none()
+                        .fill(pal.hdr).rounding(5.0)
                         .stroke(Stroke::new(1.0, pal.border))
-                        .inner_margin(egui::Margin::symmetric(8, 5))
+                        .inner_margin(egui::Margin::symmetric(8.0, 5.0))
                         .show(ui, |ui| {
                             ui.add(egui::Label::new(
                                 RichText::new(&url).font(FontId::monospace(fs - 3.0)).color(pal.dim)
-                            ).wrap());
+                            ).wrap(true));
                         });
                     ui.add_space(10.0);
                 }

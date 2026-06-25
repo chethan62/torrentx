@@ -4,12 +4,12 @@ use crate::types::{SearchState, SPINNER_FRAMES};
 use crate::ui::components::lbl;
 
 pub fn draw(app: &mut App, ctx: &egui::Context, state: &SearchState) {
-    egui::Panel::bottom("status_bar")
-        .exact_size(26.0)
-        .frame(egui::Frame::NONE
+    egui::TopBottomPanel::bottom("status_bar")
+        .exact_height(26.0)
+        .frame(egui::Frame::none()
             .fill(app.pal.hdr)
             .stroke(Stroke::new(1.0, app.pal.border))
-            .inner_margin(egui::Margin::symmetric(12, 4)))
+            .inner_margin(egui::Margin::symmetric(12.0, 4.0)))
         .show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 match state {
@@ -21,16 +21,8 @@ pub fn draw(app: &mut App, ctx: &egui::Context, state: &SearchState) {
                         let elapsed = app.t_start.as_ref()
                             .map(|t| format!("  {:.1}s", t.elapsed().as_secs_f64()))
                             .unwrap_or_default();
-                        let progress = {
-                            let done = app.search_done.lock().map(|d| *d).unwrap_or(0);
-                            let total = app.search_total.lock().map(|t| *t).unwrap_or(0);
-                            if total > 0 {
-                                format!("  [{done}/{total}]")
-                            } else {
-                                String::new()
-                            }
-                        };
-                        lbl(ui, &format!("{sp} Searching \"{}\"{}{}", app.last_query, progress, elapsed), app.pal.accent, 12.0);
+                        lbl(ui, &format!("{sp} Searching \"{}\"{}",
+                            app.last_query, elapsed), app.pal.accent, 12.0);
                     }
                     SearchState::Done => {
                         let n = app.total_count();

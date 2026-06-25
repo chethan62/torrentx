@@ -266,26 +266,28 @@ impl Pal {
     }
 
     pub fn apply_to_ctx(&self, ctx: &eframe::egui::Context) {
+        use eframe::egui::{Visuals, Stroke, Rounding};
         let p = self;
-        ctx.style_mut(|style| {
-            style.visuals.panel_fill = p.bg;
-            style.visuals.window_fill = p.bg;
-            style.visuals.faint_bg_color = p.surface;
-            style.visuals.extreme_bg_color = p.hdr;
-            style.visuals.override_text_color = Some(p.text);
-            style.visuals.widgets.noninteractive.bg_fill = p.surface;
-            style.visuals.widgets.inactive.bg_fill = p.surface;
-            style.visuals.widgets.hovered.bg_fill = p.surface2;
-            style.visuals.widgets.active.bg_fill = p.accent;
-            style.visuals.selection.bg_fill = tint(p.accent, 50);
-            style.visuals.widgets.noninteractive.fg_stroke = eframe::egui::Stroke::new(1.0, p.dim);
-            style.visuals.widgets.inactive.fg_stroke = eframe::egui::Stroke::new(1.0, p.sub);
-            style.visuals.widgets.noninteractive.bg_stroke = eframe::egui::Stroke::new(1.0, p.border);
-            style.visuals.widgets.inactive.bg_stroke = eframe::egui::Stroke::new(1.0, p.border);
-            style.visuals.widgets.noninteractive.corner_radius = eframe::egui::CornerRadius::same(6);
-            style.visuals.widgets.inactive.corner_radius = eframe::egui::CornerRadius::same(6);
-            style.visuals.widgets.hovered.corner_radius = eframe::egui::CornerRadius::same(6);
-            style.visuals.widgets.active.corner_radius = eframe::egui::CornerRadius::same(6);
-        });
+        let mut vis = if p.light { Visuals::light() } else { Visuals::dark() };
+        vis.panel_fill            = p.bg;
+        vis.window_fill           = p.bg;
+        vis.faint_bg_color        = p.surface;
+        vis.extreme_bg_color      = p.hdr;
+        vis.widgets.noninteractive.bg_fill     = p.surface;
+        vis.widgets.inactive.bg_fill           = p.surface;
+        vis.widgets.hovered.bg_fill            = p.surface2;
+        vis.widgets.active.bg_fill             = p.accent;
+        vis.selection.bg_fill                  = tint(p.accent, 50);
+        vis.override_text_color                = Some(p.text);
+        vis.widgets.noninteractive.fg_stroke   = Stroke::new(1.0, p.dim);
+        vis.widgets.inactive.fg_stroke         = Stroke::new(1.0, p.sub);
+        vis.widgets.noninteractive.bg_stroke   = Stroke::new(1.0, p.border);
+        vis.widgets.inactive.bg_stroke         = Stroke::new(1.0, p.border);
+        let rn = Rounding::same(6.0);
+        vis.widgets.noninteractive.rounding = rn;
+        vis.widgets.inactive.rounding        = rn;
+        vis.widgets.hovered.rounding         = rn;
+        vis.widgets.active.rounding          = rn;
+        ctx.set_visuals(vis);
     }
 }

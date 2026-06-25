@@ -99,11 +99,6 @@ pub fn normalize_title(t: &str) -> String {
     s.split_whitespace().take(4).collect::<Vec<_>>().join(" ")
 }
 
-pub fn ratio_f32(seeds: u32, leech: u32) -> f32 {
-    let tot = seeds + leech;
-    if tot == 0 { 0.0 } else { seeds as f32 / tot as f32 }
-}
-
 pub fn now_str() -> String {
     chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string()
 }
