@@ -1,37 +1,63 @@
 # TorrentX
 
-A lightweight Linux torrent search app built with [Rust](https://www.rust-lang.org/), [egui](https://www.egui.rs/) and [Jackett](https://github.com/Jackett/Jackett).
+**Native Rust desktop torrent search app** — query all your [Jackett](https://github.com/Jackett/Jackett) indexers from one blazing-fast GUI.
 
-Search multiple torrent trackers in one place, get download magnet links directly.
+[![Release](https://img.shields.io/github/v/release/chethan62/torrentx?label=latest)](https://github.com/chethan62/torrentx/releases/latest)
+[![License](https://img.shields.io/github/license/chethan62/torrentx)](LICENSE)
+
+## Screenshots
+
+| Dark | Light |
+|------|-------|
+| *Tokyo Night, Cyberpunk, Midnight, One Dark, Dracula, Rose Pine, Monokai, Kanagawa, Everforest, Material Ocean, Oxocarbon, Ayu, Nord, Gruvbox, Solarized Dark* | *Light, Gruvbox Light, Catppuccin Latte* |
 
 ## Features
 
-- Search across 100+ trackers via Jackett
-- Sort by seeders, size, date
-- Copy magnet link to clipboard
-- Open magnet link in default client
-- Rust backend, tiny binary (~5 MB AppImage)
+- **19 themes** — 16 dark + 3 light, instant switching
+- **All Jackett indexers** — search 100+ trackers simultaneously
+- **Multi-column results** — Name, Tracker, Size, Seeds, Leechers, Ratio, Health, Date (toggle any)
+- **Row density** — Compact / Normal / Roomy
+- **Filters** — text search, min seeds, size range, year, tracker, health status, category chips
+- **Sort** — by Name, Tracker, Size, Seeds, Leechers, Date
+- **Favorites** — save torrents with timestamps, search filter, persistent storage
+- **Detail panel** — seeder/leecher ratio bar, magnet copy/open, .torrent download
+- **Keyboard shortcuts** — ↑↓ Enter D F M Ctrl+F Ctrl+R Esc
+- **CSV export** — export filtered results
+- **Pagination** — 25/50/100/All
+- **Deduplication** — across trackers
+- **Search history** — with per-item delete
+- **Toast notifications** — animated, per-theme colored
 
-## Building
+## Download
+
+| Platform | File | Size |
+|----------|------|------|
+| Linux (AppImage) | [TorrentX-17.0.0-x86_64.AppImage](https://github.com/chethan62/torrentx/releases/tag/v17.0.0) | ~8 MB |
+| Linux (binary) | [torrentx-linux-amd64](https://github.com/chethan62/torrentx/releases/tag/v17.0.0) | ~11 MB |
+| Windows | [TorrentX-17.0.0-x86_64.exe](https://github.com/chethan62/torrentx/releases/tag/v17.0.0) | ~6 MB |
+
+## Build from source
 
 ```bash
+# Prerequisites: Rust 1.70+, cargo
 cargo build --release
-# Binary at: target/release/torrentx
+# Binary: target/release/torrentx
 ```
-
-Or use the prebuilt AppImage (see [Releases](https://github.com/chethan62/torrentx/releases)).
 
 ## Setup
 
-1. Run `./torrentx`
-2. Go to Settings → enter your Jackett URL + API Key
-3. Search
+1. Launch TorrentX
+2. Click ⚙ **Settings**
+3. Enter your Jackett URL (default: `http://localhost:9117`) and API Key
+4. Start searching
 
-## Dependencies
+## Tech
 
-- [Rust](https://rustup.rs/) 1.70+
-- [Jackett](https://github.com/Jackett/Jackett) running somewhere
+- **GUI:** egui 0.27 + eframe (GPU-accelerated via wgpu/OpenGL)
+- **HTTP:** reqwest (blocking)
+- **Config:** `~/.config/torrentx/config.json`
+- **Binary size:** ~5 MB (stripped, LTO)
 
 ## License
 
-MIT
+MIT © [chethan62](https://github.com/chethan62)
