@@ -1331,16 +1331,17 @@ impl App {
                 }
                 ui.add_space(4.0);
 
-                // Keyboard navigation
-                if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                // Keyboard navigation (only when no text input is focused)
+                let typing = ui.ctx().wants_keyboard_input();
+                if !typing && ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
                     self.selected = Some(self.selected.map_or(0, |s| (s + 1).min(page_n.saturating_sub(1))));
                     self.detail_open = true;
                 }
-                if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                if !typing && ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
                     self.selected = Some(self.selected.map_or(0, |s| s.saturating_sub(1)));
                     self.detail_open = true;
                 }
-                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                if !typing && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     if let Some(i) = self.selected {
                         if let Some(r) = page_s.get(i) {
                             if let Some(m) = &r.magnet_uri {
@@ -1350,15 +1351,15 @@ impl App {
                         }
                     }
                 }
-                if ui.input(|i| i.key_pressed(egui::Key::D)) {
+                if !typing && ui.input(|i| i.key_pressed(egui::Key::D)) {
                     if self.selected.is_some() { self.detail_open = !self.detail_open; }
                 }
-                if ui.input(|i| i.key_pressed(egui::Key::F)) {
+                if !typing && ui.input(|i| i.key_pressed(egui::Key::F)) {
                     if let Some(i) = self.selected {
                         if let Some(r) = page_s.get(i).cloned() { self.add_fav(&r); }
                     }
                 }
-                if ui.input(|i| i.key_pressed(egui::Key::M)) {
+                if !typing && ui.input(|i| i.key_pressed(egui::Key::M)) {
                     if let Some(i) = self.selected {
                         if let Some(r) = page_s.get(i) {
                             if let Some(m) = &r.magnet_uri {
@@ -2202,7 +2203,7 @@ impl App {
             ui.vertical_centered(|ui| {
                 ui.label(RichText::new("TorrentX")
                     .font(FontId::proportional(30.0)).color(self.pal.text).strong());
-                ui.label(RichText::new("v6.0").font(FontId::proportional(fs)).color(self.pal.accent));
+                ui.label(RichText::new("v17.0").font(FontId::proportional(fs)).color(self.pal.accent));
                 ui.add_space(4.0);
                 lbl(ui, "Native Rust + egui torrent search GUI powered by Jackett",
                     self.pal.sub, fs + 1.0);
