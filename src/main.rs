@@ -948,6 +948,9 @@ impl eframe::App for App {
                 }
             });
 
+        // Detail panel (top-level SidePanel::right, resizable)
+        self.draw_detail_panel(ctx);
+
         self.draw_toasts(ctx);
     }
 }
@@ -1413,65 +1416,31 @@ impl App {
                         });
                 }
 
-                // Detail panel — manual resizable split
-                if self.detail_open {
-                    if let Some(idx) = self.selected {
-                        if let Some(r) = page_s.get(idx).cloned() {
-                            let min_w = 240.0;
-                            let max_w = ui.available_width() * 0.6;
-                            self.detail_width = self.detail_width.clamp(min_w, max_w);
-                            let table_w = (ui.available_width() - self.detail_width - 5.0).max(200.0);
-                            let pal = self.pal.clone();
-                            let ps = page_s.clone(); // ponytail: clone for borrowck
-
-                            ui.horizontal(|ui| {
-                                // Results table
-                                let (tbl_rect, _) = ui.allocate_exact_size(
-                                    egui::vec2(table_w, ui.available_height()),
-                                    egui::Sense::hover(),
-                                );
-                                ui.allocate_ui_at_rect(tbl_rect, |ui| {
-                                    self.draw_results_table(ui, &ps);
-                                });
-
-                                // Drag handle
-                                let (h_rect, resp) = ui.allocate_exact_size(
-                                    egui::vec2(5.0, ui.available_height()),
-                                    egui::Sense::drag(),
-                                );
-                                let hov = resp.hovered() || resp.dragged();
-                                ui.painter().rect_filled(h_rect, 0.0,
-                                    if hov { pal.accent } else { pal.border });
-                                if hov {
-                                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-                                }
-                                self.detail_width = (self.detail_width - resp.drag_delta().x).clamp(min_w, max_w);
-
-                                // Detail panel
-                                let frame = egui::Frame::none()
-                                    .fill(pal.surface)
-                                    .stroke(Stroke::new(1.0, pal.border))
-                                    .inner_margin(egui::Margin::symmetric(12.0, 8.0));
-                                let (det_rect, _) = ui.allocate_exact_size(
-                                    egui::vec2(self.detail_width, ui.available_height()),
-                                    egui::Sense::hover(),
-                                );
-                                ui.allocate_ui_at_rect(det_rect, |ui| {
-                                    frame.show(ui, |ui| { self.draw_detail(ui, &r); });
-                                });
-                            });
-
-                            return;
-                        }
-                    }
-                }
-
-                // No detail panel — full table
+                // Results table
                 self.draw_results_table(ui, &page_s);
             }
         }
     }
 
+    fn draw_detail_panel(&mut self, ctx: &egui::Context) {
+        if !self.detail_open || self.tab != Tab::Search { return; }
+        let state = self.cur_state();
+        if state != SearchState::Done { return; }
+        let raw = self.all_results();
+        let sorted = self.filtered(&raw);
+        let page_s = self.page_slice(&sorted);
+        if let Some(idx) = self.selected {
+            if let Some(r) = page_s.get(idx).cloned() {
+                egui::SidePanel::right("detail_pnl")
+                    .resizable(true).default_width(self.detail_width).min_width(240.0)
+                    .frame(egui::Frame::none()
+                        .fill(self.pal.surface)
+                        .stroke(Stroke::new(1.0, self.pal.border))
+                        .inner_margin(egui::Margin::symmetric(12.0, 8.0)))
+                    .show(ctx, |ui| { self.draw_detail(ui, &r); });
+            }
+        }
+    }
     fn draw_history_dropdown(&mut self, ctx: &egui::Context, bar_rect: egui::Rect, fs: f32) {
         if self.show_hist && !self.cfg.history.is_empty() {
             let pos = egui::pos2(bar_rect.min.x, bar_rect.max.y + 4.0);
