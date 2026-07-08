@@ -503,8 +503,8 @@ fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                     cur_tag = tag;
                 }
             }
-            Ok(Event::Empty(ref e)) => {
-                if in_item {
+            Ok(Event::Empty(ref e))
+                if in_item => {
                     let tag = tag_name(e.name().as_ref());
                     match tag.as_str() {
                         "enclosure" => {
@@ -534,7 +534,7 @@ fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                                     "seeders" => item.seeders = val.parse().ok(),
                                     "peers" | "leechers" => item.leechers = val.parse().ok(),
                                     "magneturl" => item.magnet = Some(val),
-                                    "size" => { if item.size.is_none() { item.size = val.parse().ok(); } }
+                                    "size" if item.size.is_none() => { item.size = val.parse().ok(); }
                                     _ => {}
                                 }
                             }
@@ -542,18 +542,17 @@ fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                         _ => {}
                     }
                 }
-            }
-            Ok(Event::Text(ref e)) => {
-                if in_item {
+            Ok(Event::Text(ref e))
+                if in_item => {
                     if let Ok(text) = e.unescape() {
                         let t = text.trim().to_string();
                         if !t.is_empty() {
                             if let Some(ref mut item) = cur {
                                 match cur_tag.as_str() {
                                     "title" => item.title = t,
-                                    "link" => { if item.link.is_none() { item.link = Some(t); } }
+                                    "link" if item.link.is_none() => { item.link = Some(t); }
                                     "pubdate" | "pubDate" => item.pub_date = Some(t),
-                                    "size" => { if item.size.is_none() { item.size = t.parse().ok(); } }
+                                    "size" if item.size.is_none() => { item.size = t.parse().ok(); }
                                     "jackettindexer" => item.tracker = Some(t),
                                     "category" => item.category = Some(t),
                                     _ => {}
@@ -562,7 +561,6 @@ fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                         }
                     }
                 }
-            }
             Ok(Event::End(ref e)) => {
                 let tag = tag_name(e.name().as_ref());
                 if tag == "item" {
@@ -1071,7 +1069,7 @@ impl App {
 
     fn max_pages(&self, n: usize) -> usize {
         if self.cfg.page_size == 0 || n == 0 { return 1; }
-        (n + self.cfg.page_size - 1) / self.cfg.page_size
+        n.div_ceil(self.cfg.page_size)
     }
     fn page_slice<'a>(&self, v: &'a [TorrentResult]) -> &'a [TorrentResult] {
         if self.cfg.page_size == 0 { return v; }
@@ -1506,12 +1504,11 @@ impl App {
                     .rounding(6.0).min_size(Vec2::new(0.0, 36.0))
             ).clicked() { self.do_search(); }
 
-            if !self.query.is_empty() {
-                if ui.add(egui::Button::new(RichText::new("✕").size(13.0).color(self.pal.sub))
+            if !self.query.is_empty()
+                && ui.add(egui::Button::new(RichText::new("✕").size(13.0).color(self.pal.sub))
                     .fill(Color32::TRANSPARENT).rounding(4.0)).on_hover_text("Clear").clicked() {
                     self.query.clear(); self.show_hist = false;
                 }
-            }
         });
 
         // History dropdown
@@ -1655,9 +1652,8 @@ impl App {
                         }
                     }
                 }
-                if !typing && ui.input(|i| i.key_pressed(egui::Key::D)) {
-                    if self.selected.is_some() { self.detail_open = !self.detail_open; }
-                }
+                if !typing && ui.input(|i| i.key_pressed(egui::Key::D))
+                    && self.selected.is_some() { self.detail_open = !self.detail_open; }
                 if !typing && ui.input(|i| i.key_pressed(egui::Key::F)) {
                     if let Some(i) = self.selected {
                         if let Some(r) = page_s.get(i).cloned() { self.add_fav(&r); }
@@ -2098,15 +2094,13 @@ impl App {
                                     if act_btn(ui, "Mag", "Open in torrent client", pal.accent) { actions.push((i, "mag")); }
                                     if act_btn(ui, "Copy", "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
                                 }
-                                if r.link.is_some() {
-                                    if act_btn(ui, "DL", "Download .torrent", pal.green) { actions.push((i, "dl")); }
-                                }
+                                if r.link.is_some()
+                                    && act_btn(ui, "DL", "Download .torrent", pal.green) { actions.push((i, "dl")); }
                                 if act_btn(ui, "Fav", "Add to Favorites (F)", pal.yellow) { actions.push((i, "fav")); }
                                 if act_btn(ui, "Info", "Detail panel (D)",
                                     if is_sel && det_open { pal.accent } else { pal.dim }) { actions.push((i, "info")); }
-                                if r.details.is_some() {
-                                    if act_btn(ui, "Web", "Open in browser", pal.dim) { actions.push((i, "web")); }
-                                }
+                                if r.details.is_some()
+                                    && act_btn(ui, "Web", "Open in browser", pal.dim) { actions.push((i, "web")); }
                             });
                         });
                     });
@@ -2367,11 +2361,10 @@ impl App {
                 .font(FontId::proportional(18.0)).color(self.pal.text).strong());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(14.0);
-                if !self.cfg.favorites.is_empty() {
-                    if outline_btn(ui, "Clear all", self.pal.red) {
+                if !self.cfg.favorites.is_empty()
+                    && outline_btn(ui, "Clear all", self.pal.red) {
                         self.cfg.favorites.clear(); save_cfg(&self.cfg);
                     }
-                }
             });
         });
 
@@ -2395,12 +2388,11 @@ impl App {
             ui.add(egui::TextEdit::singleline(&mut self.fav_search)
                 .desired_width(220.0).hint_text("filter favorites…")
                 .font(FontId::proportional(fs)));
-            if !self.fav_search.is_empty() {
-                if ui.add(egui::Button::new(RichText::new("✕").size(12.0).color(self.pal.sub))
+            if !self.fav_search.is_empty()
+                && ui.add(egui::Button::new(RichText::new("✕").size(12.0).color(self.pal.sub))
                     .fill(Color32::TRANSPARENT).frame(false)).clicked() {
                     self.fav_search.clear();
                 }
-            }
         });
         ui.add_space(8.0);
 
@@ -2418,7 +2410,7 @@ impl App {
                     && !fav.tracker.as_deref().unwrap_or("").to_lowercase().contains(&fq)
                 { continue; }
                 row_i += 1;
-                let bg = if row_i % 2 == 0 { self.pal.row_odd } else { self.pal.row_even };
+                let bg = if row_i.is_multiple_of(2) { self.pal.row_odd } else { self.pal.row_even };
                 egui::Frame::none()
                     .fill(bg).inner_margin(egui::Margin::symmetric(16.0, 10.0))
                     .show(ui, |ui| {
@@ -2446,12 +2438,10 @@ impl App {
                             });
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if act_btn(ui, "Del", "Remove", self.pal.red) { remove = Some(i); }
-                                if fav.link.is_some() {
-                                    if act_btn(ui, "DL", "Download .torrent", self.pal.green) { open_link = fav.link.clone(); }
-                                }
-                                if fav.magnet.is_some() {
-                                    if act_btn(ui, "Mag", "Open magnet", self.pal.accent) { open_mag = fav.magnet.clone(); }
-                                }
+                                if fav.link.is_some()
+                                    && act_btn(ui, "DL", "Download .torrent", self.pal.green) { open_link = fav.link.clone(); }
+                                if fav.magnet.is_some()
+                                    && act_btn(ui, "Mag", "Open magnet", self.pal.accent) { open_mag = fav.magnet.clone(); }
                             });
                         });
                     });
@@ -2699,7 +2689,7 @@ impl App {
                                     if act_btn(ui, "Mag", "Open magnet", pal.accent) { actions.push((i, "mag")); }
                                     if act_btn(ui, "Copy", "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
                                 }
-                                if item.link.is_some() { if act_btn(ui, "DL", "Download .torrent", pal.green) { actions.push((i, "dl")); } }
+                                if item.link.is_some() && act_btn(ui, "DL", "Download .torrent", pal.green) { actions.push((i, "dl")); }
                                 if act_btn(ui, "★", "Add to Favorites", pal.yellow) { actions.push((i, "fav")); }
                             });
                         });
