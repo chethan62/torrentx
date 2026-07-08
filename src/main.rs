@@ -844,6 +844,7 @@ fn lbl(ui: &mut egui::Ui, text: &str, color: Color32, fs: f32) {
 
 // ─── Search thread ─────────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn start_search(
     url: String, key: String, query: String, cat: String, timeout: u64,
     results: Arc<Mutex<Vec<TorrentResult>>>,
@@ -1087,7 +1088,7 @@ impl App {
             *map.entry(c).or_insert(0) += 1;
         }
         let mut v: Vec<_> = map.into_iter().map(|(k, n)| { let col = cat_col(&k); (k, n, col) }).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(7);
         v
     }
