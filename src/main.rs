@@ -597,7 +597,7 @@ fn fetch_rss(url: &str, timeout: u64) -> Result<Vec<RssItem>, String> {
 fn start_rss_fetch(
     base_url: String, api_key: String, feed_cfg: RssFeedConfig, timeout: u64,
     feed_idx: usize,
-    tx: std::sync::mpsc::SyncSender<(usize, Result<Vec<RssItem>, String>)>,
+    tx: std::sync::mpsc::Sender<(usize, Result<Vec<RssItem>, String>)>,
 ) {
     thread::spawn(move || {
         let url = build_rss_url(&base_url, &api_key, &feed_cfg);
@@ -684,6 +684,8 @@ struct App {
     fav_search: String,
     // RSS
     rss_feeds: Vec<RssFeedState>,
+    rss_tx: std::sync::mpsc::Sender<(usize, Result<Vec<RssItem>, String>)>,
+    rss_rx: std::sync::mpsc::Receiver<(usize, Result<Vec<RssItem>, String>)>,
     rss_selected: usize,
     rss_detail: Option<usize>,
     rss_filter: String,
@@ -702,6 +704,7 @@ impl Default for App {
         let cfg = load_cfg();
         let pal = Pal::from(&cfg.theme);
         let feeds: Vec<RssFeedState> = cfg.rss_feeds.iter().map(|c| RssFeedState::new(c.clone())).collect();
+        let (rss_tx, rss_rx) = std::sync::mpsc::channel();
         Self {
             cfg, pal,
             query: String::new(), cat: "All".into(),
@@ -717,6 +720,7 @@ impl Default for App {
             page: 0, last_query: String::new(), toasts: vec![],
             hovered: None, fav_search: String::new(),
             rss_feeds: feeds,
+            rss_tx, rss_rx,
             rss_selected: 0, rss_detail: None, rss_filter: String::new(),
             rss_add_mode: false, rss_edit_idx: None,
             rss_new_cfg: RssFeedConfig::new_default(),
@@ -806,7 +810,7 @@ fn act_btn(ui: &mut egui::Ui, label: &str, tip: &str, color: Color32) -> bool {
     ui.add(
         egui::Button::new(RichText::new(label).size(11.5).color(color))
             .fill(tint(color, 18))
-            .stroke(Stroke::new(1.0, tint(color, 70)))
+            .stroke(Stroke::new(1.0_f32, tint(color, 70)))
             .rounding(5.0)
             .min_size(Vec2::new(0.0, 25.0))
     ).on_hover_text(tip).clicked()
@@ -823,7 +827,7 @@ fn wide_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> bool {
     ui.add(
         egui::Button::new(RichText::new(label).font(FontId::proportional(13.0)).color(color))
             .fill(tint(color, 18))
-            .stroke(Stroke::new(1.0, tint(color, 80)))
+            .stroke(Stroke::new(1.0_f32, tint(color, 80)))
             .rounding(6.0)
             .min_size(Vec2::new(w, 34.0))
     ).clicked()
@@ -833,7 +837,7 @@ fn outline_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> bool {
     ui.add(
         egui::Button::new(RichText::new(label).font(FontId::proportional(12.0)).color(color))
             .fill(Color32::TRANSPARENT)
-            .stroke(Stroke::new(1.0, tint(color, 80)))
+            .stroke(Stroke::new(1.0_f32, tint(color, 80)))
             .rounding(4.0)
     ).clicked()
 }
@@ -955,22 +959,15 @@ impl App {
 
     fn refresh_feed(&mut self, idx: usize) {
         if idx >= self.rss_feeds.len() { return; }
+        if self.rss_feeds[idx].status == FeedStatus::Loading { return; } // already in flight
         self.rss_feeds[idx].status = FeedStatus::Loading;
         self.rss_feeds[idx].error = None;
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let tx = self.rss_tx.clone();
         let base = self.cfg.jackett_url.clone();
         let key = self.cfg.api_key.clone();
         let cfg = self.rss_feeds[idx].config.clone();
         let to = self.cfg.timeout_secs;
-        start_rss_fetch(base, key, cfg, to, idx, tx.clone());
-        // ponytail: poll in next frame
-        drop(tx); // signal no more sends
-        std::thread::spawn(move || {
-            if let Ok((idx, result)) = rx.recv() {
-                // Results handled in poll_rss()
-                let _ = (idx, result);
-            }
-        });
+        start_rss_fetch(base, key, cfg, to, idx, tx);
     }
 
     fn refresh_all_feeds(&mut self) {
@@ -980,26 +977,18 @@ impl App {
     }
 
     fn poll_rss(&mut self) {
-        // ponytail: simple sync poll — in a real app use channels
-        // Check if any feed is loading and poll results
-        for i in 0..self.rss_feeds.len() {
-            if self.rss_feeds[i].status == FeedStatus::Loading {
-                // Start async fetch
-                let base = self.cfg.jackett_url.clone();
-                let key = self.cfg.api_key.clone();
-                let cfg = self.rss_feeds[i].config.clone();
-                let to = self.cfg.timeout_secs;
-                let url = build_rss_url(&base, &key, &cfg);
-                match fetch_rss(&url, to) {
-                    Ok(items) => {
-                        self.rss_feeds[i].items = items;
-                        self.rss_feeds[i].status = FeedStatus::Ok;
-                        self.rss_feeds[i].error = None;
-                    }
-                    Err(e) => {
-                        self.rss_feeds[i].status = FeedStatus::Error;
-                        self.rss_feeds[i].error = Some(e);
-                    }
+        // Drain completed background fetches (non-blocking; never touch the network on the UI thread)
+        while let Ok((idx, result)) = self.rss_rx.try_recv() {
+            if idx >= self.rss_feeds.len() { continue; }
+            match result {
+                Ok(items) => {
+                    self.rss_feeds[idx].items = items;
+                    self.rss_feeds[idx].status = FeedStatus::Ok;
+                    self.rss_feeds[idx].error = None;
+                }
+                Err(e) => {
+                    self.rss_feeds[idx].status = FeedStatus::Error;
+                    self.rss_feeds[idx].error = Some(e);
                 }
             }
         }
@@ -1126,10 +1115,10 @@ impl App {
         vis.widgets.active.bg_fill = p.accent;
         vis.selection.bg_fill = tint(p.accent, 50);
         vis.override_text_color = Some(p.text);
-        vis.widgets.noninteractive.fg_stroke = Stroke::new(1.0, p.dim);
-        vis.widgets.inactive.fg_stroke = Stroke::new(1.0, p.sub);
-        vis.widgets.noninteractive.bg_stroke = Stroke::new(1.0, p.border);
-        vis.widgets.inactive.bg_stroke = Stroke::new(1.0, p.border);
+        vis.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, p.dim);
+        vis.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, p.sub);
+        vis.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, p.border);
+        vis.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, p.border);
         let rn = egui::Rounding::same(6.0);
         vis.widgets.noninteractive.rounding = rn;
         vis.widgets.inactive.rounding = rn;
@@ -1188,7 +1177,7 @@ impl eframe::App for App {
         egui::TopBottomPanel::bottom("sb")
             .exact_height(26.0)
             .frame(egui::Frame::none()
-                .fill(self.pal.hdr).stroke(Stroke::new(1.0, self.pal.border))
+                .fill(self.pal.hdr).stroke(Stroke::new(1.0_f32, self.pal.border))
                 .inner_margin(egui::Margin::symmetric(12.0, 4.0)))
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
@@ -1229,7 +1218,7 @@ impl eframe::App for App {
         if self.show_settings {
             egui::TopBottomPanel::top("settings")
                 .frame(egui::Frame::none()
-                    .fill(self.pal.hdr).stroke(Stroke::new(1.0, self.pal.border))
+                    .fill(self.pal.hdr).stroke(Stroke::new(1.0_f32, self.pal.border))
                     .inner_margin(egui::Margin::symmetric(14.0, 8.0)))
                 .show(ctx, |ui| {
                     self.draw_settings_panel(ui);
@@ -1262,7 +1251,7 @@ impl App {
         egui::TopBottomPanel::top("hdr")
             .exact_height(52.0)
             .frame(egui::Frame::none()
-                .fill(self.pal.surface).stroke(Stroke::new(1.0, self.pal.border)))
+                .fill(self.pal.surface).stroke(Stroke::new(1.0_f32, self.pal.border)))
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.add_space(MARGIN_DEFAULT + 2.0);
@@ -1273,7 +1262,7 @@ impl App {
                         .fill(tint(self.pal.accent, 28)).rounding(10.0)
                         .inner_margin(egui::Margin::symmetric(5.0, 1.0))
                         .show(ui, |ui| {
-                            ui.label(RichText::new("v6").size(10.0).color(self.pal.accent));
+                            ui.label(RichText::new(env!("CARGO_PKG_VERSION")).size(10.0).color(self.pal.accent));
                         });
                     ui.add_space(14.0);
                     ui.separator();
@@ -1289,7 +1278,7 @@ impl App {
                             RichText::new(format!("{label}{badge}")).font(FontId::proportional(14.0))
                                 .color(if active { self.pal.accent } else { self.pal.sub }))
                             .fill(if active { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
-                            .stroke(Stroke::new(if active { 1.0 } else { 0.0 }, self.pal.accent))
+                            .stroke(Stroke::new(if active { 1.0_f32 } else { 0.0_f32 }, self.pal.accent))
                             .rounding(6.0).min_size(Vec2::new(0.0, 30.0))
                         ).clicked() {
                             self.tab = tab;
@@ -1307,7 +1296,7 @@ impl App {
                             RichText::new("⚙ Settings").size(13.0)
                                 .color(if sa { self.pal.accent } else { self.pal.sub }))
                             .fill(if sa { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
-                            .stroke(Stroke::new(1.0, if sa { self.pal.accent } else { self.pal.border }))
+                            .stroke(Stroke::new(1.0_f32, if sa { self.pal.accent } else { self.pal.border }))
                             .rounding(6.0).min_size(Vec2::new(0.0, 30.0))
                         ).clicked() { self.show_settings = !self.show_settings; }
                         ui.add_space(10.0);
@@ -1449,7 +1438,7 @@ impl App {
                         if ui.add(egui::Button::new(
                             RichText::new("Save").font(FontId::proportional(12.0)).color(self.pal.green))
                             .fill(tint(self.pal.green, 18))
-                            .stroke(Stroke::new(1.0, tint(self.pal.green, 80))).rounding(4.0)
+                            .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 80))).rounding(4.0)
                         ).clicked() {
                             save_cfg(&self.cfg);
                             self.toast("Settings saved ✓", self.pal.green);
@@ -1539,7 +1528,7 @@ impl App {
                 ui.add_space(10.0);
                 egui::Frame::none()
                     .fill(tint(self.pal.red, 10))
-                    .stroke(Stroke::new(1.0, tint(self.pal.red, 70)))
+                    .stroke(Stroke::new(1.0_f32, tint(self.pal.red, 70)))
                     .rounding(8.0)
                     .inner_margin(egui::Margin::symmetric(20.0, 14.0))
                     .outer_margin(egui::Margin::symmetric(12.0, 0.0))
@@ -1613,7 +1602,7 @@ impl App {
                                 egui::Frame::none()
                                     .fill(tint(*col, if sel { 50 } else { 20 })).rounding(10.0)
                                     .stroke(Stroke::new(
-                                        if sel { 1.5 } else { 1.0 },
+                                        if sel { 1.5_f32 } else { 1.0_f32 },
                                         tint(*col, if sel { 200 } else { 80 })))
                                     .inner_margin(egui::Margin::symmetric(7.0, 2.0))
                                     .show(ui, |ui| {
@@ -1676,7 +1665,7 @@ impl App {
                     egui::TopBottomPanel::bottom("pages")
                         .exact_height(34.0)
                         .frame(egui::Frame::none().fill(self.pal.bg)
-                            .stroke(Stroke::new(1.0, self.pal.border))
+                            .stroke(Stroke::new(1.0_f32, self.pal.border))
                             .inner_margin(egui::Margin::symmetric(12.0, 5.0)))
                         .show_inside(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -1684,7 +1673,7 @@ impl App {
                                     egui::Button::new(RichText::new("← Prev")
                                         .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
                                     .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::new(1.0, self.pal.border)).rounding(4.0)
+                                    .stroke(Stroke::new(1.0_f32, self.pal.border)).rounding(4.0)
                                 ).clicked() { self.page -= 1; self.selected = None; }
                                 ui.add_space(6.0);
                                 for p in 0..max_p {
@@ -1707,7 +1696,7 @@ impl App {
                                     egui::Button::new(RichText::new("Next →")
                                         .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
                                     .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::new(1.0, self.pal.border)).rounding(4.0)
+                                    .stroke(Stroke::new(1.0_f32, self.pal.border)).rounding(4.0)
                                 ).clicked() { self.page += 1; self.selected = None; }
                                 lbl(ui, &format!("  Page {} of {max_p}", pg + 1), self.pal.dim, fs - 1.0);
                             });
@@ -1733,7 +1722,7 @@ impl App {
                     .resizable(true).default_width(self.detail_width).min_width(240.0)
                     .frame(egui::Frame::none()
                         .fill(self.pal.surface)
-                        .stroke(Stroke::new(1.0, self.pal.border))
+                        .stroke(Stroke::new(1.0_f32, self.pal.border))
                         .inner_margin(egui::Margin::symmetric(12.0, 8.0)))
                     .show(ctx, |ui| { self.draw_detail(ui, &r); });
             }
@@ -1755,7 +1744,7 @@ impl App {
                     egui::Frame::none()
                         .fill(self.pal.surface)
                         .rounding(8.0)
-                        .stroke(Stroke::new(1.0, self.pal.accent))
+                        .stroke(Stroke::new(1.0_f32, self.pal.accent))
                         .shadow(egui::epaint::Shadow {
                             offset: [0.0, 4.0].into(),
                             blur: 12.0,
@@ -1806,7 +1795,7 @@ impl App {
     fn draw_filter_bar(&mut self, ui: &mut egui::Ui, fs: f32) {
         egui::Frame::none()
             .fill(self.pal.surface).rounding(8.0)
-            .stroke(Stroke::new(1.0, self.pal.border))
+            .stroke(Stroke::new(1.0_f32, self.pal.border))
             .inner_margin(egui::Margin::symmetric(12.0, 7.0))
             .outer_margin(egui::Margin::symmetric(12.0, 0.0))
             .show(ui, |ui| {
@@ -1864,7 +1853,7 @@ impl App {
                         if ui.add(egui::Button::new(
                             RichText::new(d_lbl).font(FontId::proportional(fs - 1.0)).color(self.pal.accent))
                             .fill(tint(self.pal.accent, 18))
-                            .stroke(Stroke::new(1.0, tint(self.pal.accent, 60))).rounding(4.0)
+                            .stroke(Stroke::new(1.0_f32, tint(self.pal.accent, 60))).rounding(4.0)
                         ).on_hover_text("Toggle sort direction").clicked() {
                             self.s_dir = if self.s_dir == SortDir::Desc { SortDir::Asc } else { SortDir::Desc };
                             self.page = 0;
@@ -2176,7 +2165,7 @@ impl App {
                         if ui.add(egui::Button::new(
                             RichText::new(h.as_str()).font(FontId::proportional(fs)).color(self.pal.sub))
                             .fill(self.pal.surface)
-                            .stroke(Stroke::new(1.0, self.pal.border))
+                            .stroke(Stroke::new(1.0_f32, self.pal.border))
                             .rounding(14.0).min_size(egui::vec2(0.0, 28.0))
                         ).clicked() { clicked = Some(h.clone()); }
                     }
@@ -2193,7 +2182,7 @@ impl App {
                         if ui.add(egui::Button::new(
                             RichText::new(*s).font(FontId::proportional(fs)).color(self.pal.dim))
                             .fill(self.pal.surface)
-                            .stroke(Stroke::new(1.0, tint(self.pal.border, 140)))
+                            .stroke(Stroke::new(1.0_f32, tint(self.pal.border, 140)))
                             .rounding(14.0).min_size(egui::vec2(0.0, 28.0))
                         ).clicked() { clicked = Some(s); }
                     }
@@ -2203,7 +2192,7 @@ impl App {
                 ui.add_space(32.0);
                 egui::Frame::none()
                     .fill(tint(self.pal.accent, 12)).rounding(10.0)
-                    .stroke(Stroke::new(1.0, tint(self.pal.accent, 50)))
+                    .stroke(Stroke::new(1.0_f32, tint(self.pal.accent, 50)))
                     .inner_margin(egui::Margin::symmetric(24.0, 16.0))
                     .show(ui, |ui| {
                         ui.set_max_width(480.0);
@@ -2472,7 +2461,7 @@ impl App {
                 ui.add_space(20.0);
                 egui::Frame::none()
                     .fill(tint(pal.accent, 12)).rounding(10.0)
-                    .stroke(Stroke::new(1.0, tint(pal.accent, 50)))
+                    .stroke(Stroke::new(1.0_f32, tint(pal.accent, 50)))
                     .inner_margin(egui::Margin::symmetric(24.0, 16.0))
                     .show(ui, |ui| {
                         ui.set_max_width(420.0);
@@ -2491,7 +2480,7 @@ impl App {
         ui.horizontal_top(|ui| {
             egui::SidePanel::left("rss_sidebar")
                 .resizable(true).default_width(220.0).min_width(160.0)
-                .frame(egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0, pal.border)))
+                .frame(egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)))
                 .show_inside(ui, |ui| { self.draw_rss_sidebar(ui); });
 
             egui::CentralPanel::default()
@@ -2507,7 +2496,7 @@ impl App {
     fn draw_rss_sidebar(&mut self, ui: &mut egui::Ui) {
         let pal = self.pal.clone(); let fs = self.cfg.font_size;
         egui::Frame::none()
-            .fill(pal.hdr).stroke(Stroke::new(1.0, pal.border))
+            .fill(pal.hdr).stroke(Stroke::new(1.0_f32, pal.border))
             .inner_margin(egui::Margin::symmetric(10.0, 8.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -2515,7 +2504,7 @@ impl App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let sub = pal.sub;
                         if ui.add(egui::Button::new(RichText::new("⟳ All").font(FontId::proportional(fs - 1.5)).color(sub))
-                            .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0, pal.border)).rounding(4.0)
+                            .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, pal.border)).rounding(4.0)
                         ).on_hover_text("Refresh all feeds").clicked() { self.refresh_all_feeds(); }
                     });
                 });
@@ -2600,7 +2589,7 @@ impl App {
         let items = self.rss_feeds[sel].items.clone();
         let err = self.rss_feeds[sel].error.clone();
 
-        egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0, pal.border))
+        egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border))
             .inner_margin(egui::Margin::symmetric(14.0, 8.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -2633,7 +2622,7 @@ impl App {
             if let Some(item) = items.get(di).cloned() {
                 egui::SidePanel::right("rss_detail_pnl")
                     .resizable(true).default_width(280.0).min_width(220.0)
-                    .frame(egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0, pal.border)))
+                    .frame(egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)))
                     .show_inside(ui, |ui| { self.draw_rss_item_detail(ui, &item); });
             }
         }
@@ -2809,7 +2798,8 @@ impl App {
             ui.vertical_centered(|ui| {
                 ui.label(RichText::new("TorrentX")
                     .font(FontId::proportional(30.0)).color(self.pal.text).strong());
-                ui.label(RichText::new("v17.0").font(FontId::proportional(fs)).color(self.pal.accent));
+                ui.label(RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
+                    .font(FontId::proportional(fs)).color(self.pal.accent));
                 ui.add_space(4.0);
                 lbl(ui, "Native Rust + egui torrent search GUI powered by Jackett",
                     self.pal.sub, fs + 1.0);
@@ -2843,7 +2833,7 @@ impl App {
                         egui::Frame::none()
                             .fill(tint(col, if active { 45 } else { 20 })).rounding(6.0)
                             .stroke(Stroke::new(
-                                if active { 2.0 } else { 1.0 },
+                                if active { 2.0_f32 } else { 1.0_f32 },
                                 tint(col, if active { 220 } else { 90 })))
                             .inner_margin(egui::Margin::symmetric(9.0, 4.0))
                             .show(ui, |ui| {
@@ -2899,7 +2889,7 @@ impl App {
                         ui.add(egui::Button::new(
                             RichText::new(k).font(FontId::proportional(fs)).color(self.pal.accent))
                             .fill(self.pal.surface)
-                            .stroke(Stroke::new(1.0, self.pal.border)).rounding(4.0));
+                            .stroke(Stroke::new(1.0_f32, self.pal.border)).rounding(4.0));
                         ui.add_space(8.0);
                         lbl(ui, v, self.pal.sub, fs);
                     });
@@ -2926,7 +2916,7 @@ impl App {
                 .show(ctx, |ui| {
                     egui::Frame::none()
                         .fill(tint(self.pal.surface, a))
-                        .stroke(Stroke::new(1.5, tint(toast.col, a)))
+                        .stroke(Stroke::new(1.5_f32, tint(toast.col, a)))
                         .rounding(8.0)
                         .inner_margin(egui::Margin::symmetric(14.0, 9.0))
                         .shadow(egui::epaint::Shadow {
