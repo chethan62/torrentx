@@ -2244,16 +2244,31 @@ fn grid_row(ui: &mut egui::Ui, label: &str, value: &str, color: Color32, p: &Pal
 
 // ─── Entry point ────────────────────────────────────────────────────────────
 
+fn native_options() -> eframe::NativeOptions {
+    eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("TorrentX")
+            .with_inner_size([1300.0, 800.0])
+            .with_min_inner_size([900.0, 560.0]),
+        ..Default::default()
+    }
+}
+
+fn app_creator() -> Box<dyn FnOnce(&eframe::CreationContext) -> Box<dyn eframe::App>> {
+    Box::new(|_cc| Box::new(App::default()) as Box<dyn eframe::App>)
+}
+
 fn main() -> eframe::Result<()> {
-    eframe::run_native(
-        "TorrentX",
-        eframe::NativeOptions {
-            viewport: egui::ViewportBuilder::default()
-                .with_title("TorrentX")
-                .with_inner_size([1300.0, 800.0])
-                .with_min_inner_size([900.0, 560.0]),
-            ..Default::default()
-        },
-        Box::new(|_cc| Box::new(App::default())),
-    )
+    // Try the normal (GPU-accelerated GL) run first.
+    match eframe::run_native("TorrentX", native_options(), app_creator()) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            eprintln!("GPU/GL init failed ({e}); retrying with software rendering…");
+            // Retry with Mesa's software GL — fixes black windows on machines
+            // where the GPU driver/context can't initialize (VMs, NVIDIA+Wayland quirks).
+            std::env::set_var("LIBGL_ALWAYS_SOFTWARE", "1");
+            std::env::set_var("GALLIUM_DRIVER", "llvmpipe");
+            eframe::run_native("TorrentX", native_options(), app_creator())
+        }
+    }
 }
