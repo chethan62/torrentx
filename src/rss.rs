@@ -49,12 +49,6 @@ impl RssFeedState {
     pub(crate) fn new(config: RssFeedConfig) -> Self {
         Self { config, items: vec![], status: FeedStatus::Idle, error: None }
     }
-    fn status_icon(&self) -> &'static str {
-        match self.status {
-            FeedStatus::Idle => "○", FeedStatus::Loading => "⟳",
-            FeedStatus::Ok => "●", FeedStatus::Error => "✕",
-        }
-    }
 }
 
 pub(crate) fn build_rss_url(base: &str, key: &str, cfg: &RssFeedConfig) -> String {

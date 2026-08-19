@@ -143,6 +143,22 @@ pub(crate) fn set_err(st: &Arc<Mutex<SearchState>>, msg: String) {
 
 // ─── Search thread ─────────────────────────────────────────────────────────
 
+/// Map UI category labels to Jackett/Torznab numeric category IDs.
+/// The API expects numbers (2000=Movies, 5000=TV, …), not English labels.
+pub(crate) fn category_id(label: &str) -> Option<&'static str> {
+    Some(match label {
+        "Movies" => "2000",
+        "TV" => "5000",
+        "Music" => "3000",
+        "PC Games" => "4050",
+        "Software" => "4000",
+        "Anime" => "5070",
+        "Books" => "7000",
+        "XXX" => "6000",
+        _ => return None,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_search(
     url: String, key: String, query: String, cat: String, timeout: u64,
@@ -156,7 +172,11 @@ pub(crate) fn start_search(
             "{}/api/v2.0/indexers/all/results?apikey={}&Query={}",
             url.trim_end_matches('/'), urlenc(&key), urlenc(&query)
         );
-        if cat != "All" { ep.push_str(&format!("&Category[]={}", urlenc(&cat))); }
+        if cat != "All" {
+            if let Some(id) = category_id(&cat) {
+                ep.push_str(&format!("&Category[]={}", id));
+            }
+        }
 
         let client = match Client::builder().timeout(Duration::from_secs(timeout)).build() {
             Ok(c) => c,
@@ -196,3 +216,22 @@ pub(crate) fn start_search(
     });
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::category_id;
+
+    #[test]
+    fn category_mapping() {
+        assert_eq!(category_id("Movies"), Some("2000"));
+        assert_eq!(category_id("TV"), Some("5000"));
+        assert_eq!(category_id("Music"), Some("3000"));
+        assert_eq!(category_id("PC Games"), Some("4050"));
+        assert_eq!(category_id("Software"), Some("4000"));
+        assert_eq!(category_id("Anime"), Some("5070"));
+        assert_eq!(category_id("Books"), Some("7000"));
+        assert_eq!(category_id("XXX"), Some("6000"));
+        assert_eq!(category_id("All"), None);
+        assert_eq!(category_id("Nonsense"), None);
+    }
+}
