@@ -54,7 +54,7 @@ cargo build --release
 
 ## Tech
 
-- **GUI:** egui 0.27 + eframe (GPU-accelerated via wgpu/OpenGL)
+- **GUI:** egui 0.36 + eframe (GPU-accelerated via wgpu/OpenGL)
 - **HTTP:** reqwest (blocking)
 - **Config:** `~/.config/torrentx/config.json`
 - **Binary size:** ~5 MB (stripped, LTO)

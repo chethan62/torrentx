@@ -130,14 +130,14 @@ fn act_btn(ui: &mut egui::Ui, label: &str, tip: &str, color: Color32) -> bool {
         egui::Button::new(RichText::new(label).size(11.5).color(color))
             .fill(tint(color, 18))
             .stroke(Stroke::new(1.0_f32, tint(color, 70)))
-            .rounding(5.0)
+            .corner_radius(5.0)
             .min_size(Vec2::new(0.0, 25.0))
     ).on_hover_text(tip).clicked()
 }
 
 fn status_pill(ui: &mut egui::Ui, label: &str, col: Color32) {
-    egui::Frame::none().fill(tint(col, 20)).rounding(6.0)
-        .inner_margin(egui::Margin::symmetric(6.0, 2.0))
+    egui::Frame::NONE.fill(tint(col, 20)).corner_radius(6.0)
+        .inner_margin(egui::Margin::symmetric(6, 2))
         .show(ui, |ui| { ui.label(RichText::new(label).font(FontId::proportional(10.5)).color(col)); });
 }
 
@@ -147,7 +147,7 @@ fn wide_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> bool {
         egui::Button::new(RichText::new(label).font(FontId::proportional(13.0)).color(color))
             .fill(tint(color, 18))
             .stroke(Stroke::new(1.0_f32, tint(color, 80)))
-            .rounding(6.0)
+            .corner_radius(6.0)
             .min_size(Vec2::new(w, 34.0))
     ).clicked()
 }
@@ -157,7 +157,7 @@ fn outline_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> bool {
         egui::Button::new(RichText::new(label).font(FontId::proportional(12.0)).color(color))
             .fill(Color32::TRANSPARENT)
             .stroke(Stroke::new(1.0_f32, tint(color, 80)))
-            .rounding(4.0)
+            .corner_radius(4.0)
     ).clicked()
 }
 
@@ -409,11 +409,11 @@ impl App {
         vis.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, p.sub);
         vis.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, p.border);
         vis.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, p.border);
-        let rn = egui::Rounding::same(6.0);
-        vis.widgets.noninteractive.rounding = rn;
-        vis.widgets.inactive.rounding = rn;
-        vis.widgets.hovered.rounding = rn;
-        vis.widgets.active.rounding = rn;
+        let rn = egui::CornerRadius::same(6);
+        vis.widgets.noninteractive.corner_radius = rn;
+        vis.widgets.inactive.corner_radius = rn;
+        vis.widgets.hovered.corner_radius = rn;
+        vis.widgets.active.corner_radius = rn;
         ctx.set_visuals(vis);
     }
 }
@@ -421,8 +421,9 @@ impl App {
 // ─── eframe::App main loop ─────────────────────────────────────────────────
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.apply_theme(ctx);
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        self.apply_theme(&ctx);
         let state = self.cur_state();
 
         // Spinner tick
@@ -456,7 +457,7 @@ impl eframe::App for App {
                 let page_s = self.page_slice(&sorted);
                 if let Some(r) = page_s.get(idx) {
                     if let Some(m) = &r.magnet_uri {
-                        ctx.output_mut(|o| o.copied_text = m.clone());
+                        ui.ctx().copy_text(m.clone());
                         self.toast("Magnet copied ✓", self.pal.green);
                     }
                 }
@@ -464,12 +465,12 @@ impl eframe::App for App {
         }
 
         // ── Status bar ───────────────────────────────────────────────────
-        egui::TopBottomPanel::bottom("sb")
-            .exact_height(26.0)
-            .frame(egui::Frame::none()
+        egui::Panel::bottom("sb")
+            .default_size(26.0)
+            .frame(egui::Frame::NONE
                 .fill(self.pal.hdr).stroke(Stroke::new(1.0_f32, self.pal.border))
-                .inner_margin(egui::Margin::symmetric(12.0, 4.0)))
-            .show(ctx, |ui| {
+                .inner_margin(egui::Margin::symmetric(12, 4)))
+            .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
                     match &state {
                         SearchState::Idle => {
@@ -499,7 +500,7 @@ impl eframe::App for App {
             });
 
         // ── Header ───────────────────────────────────────────────────────
-        self.draw_header(ctx);
+        self.draw_header(ui);
 
         // ── RSS polling ───────────────────────────────────────────────
         self.poll_rss();
@@ -507,51 +508,51 @@ impl eframe::App for App {
 
         // ── Settings panel ───────────────────────────────────────────────
         if self.show_settings {
-            egui::TopBottomPanel::top("settings")
-                .frame(egui::Frame::none()
+            egui::Panel::top("settings")
+                .frame(egui::Frame::NONE
                     .fill(self.pal.hdr).stroke(Stroke::new(1.0_f32, self.pal.border))
-                    .inner_margin(egui::Margin::symmetric(14.0, 8.0)))
-                .show(ctx, |ui| {
+                    .inner_margin(egui::Margin::symmetric(14, 8)))
+                .show(ui, |ui| {
                     self.draw_settings_panel(ui);
                 });
         }
 
         // ── Central panel ────────────────────────────────────────────────
         egui::CentralPanel::default()
-            .frame(egui::Frame::none().fill(self.pal.bg))
-            .show(ctx, |ui| {
+            .frame(egui::Frame::NONE.fill(self.pal.bg))
+            .show(ui, |ui| {
                 match self.tab.clone() {
-                    Tab::Search => self.draw_search(ui, ctx, &state),
+                    Tab::Search => self.draw_search(ui, &ctx, &state),
                     Tab::Favorites => self.draw_favorites(ui),
-                    Tab::Rss => self.draw_rss(ui, ctx),
+                    Tab::Rss => self.draw_rss(ui, &ctx),
                     Tab::About => self.draw_about(ui),
                 }
             });
 
-        // Detail panel (top-level SidePanel::right, resizable)
-        self.draw_detail_panel(ctx);
+        // Detail panel (top-level Panel::right, resizable)
+        self.draw_detail_panel(ui);
 
-        self.draw_toasts(ctx);
+        self.draw_toasts(&ctx);
     }
 }
 
 // ─── Header ────────────────────────────────────────────────────────────────
 
 impl App {
-    fn draw_header(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("hdr")
-            .exact_height(52.0)
-            .frame(egui::Frame::none()
+    fn draw_header(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::top("hdr")
+            .default_size(52.0)
+            .frame(egui::Frame::NONE
                 .fill(self.pal.surface).stroke(Stroke::new(1.0_f32, self.pal.border)))
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.add_space(MARGIN_DEFAULT + 2.0);
                     // Logo
                     ui.label(RichText::new("Torrent").font(FontId::monospace(16.0)).strong().color(self.pal.text));
                     ui.label(RichText::new("X").font(FontId::monospace(16.0)).strong().color(self.pal.accent));
-                    egui::Frame::none()
-                        .fill(tint(self.pal.accent, 28)).rounding(10.0)
-                        .inner_margin(egui::Margin::symmetric(5.0, 1.0))
+                    egui::Frame::NONE
+                        .fill(tint(self.pal.accent, 28)).corner_radius(10.0)
+                        .inner_margin(egui::Margin::symmetric(5, 1))
                         .show(ui, |ui| {
                             ui.label(RichText::new(env!("CARGO_PKG_VERSION")).size(10.0).color(self.pal.accent));
                         });
@@ -570,7 +571,7 @@ impl App {
                                 .color(if active { self.pal.accent } else { self.pal.sub }))
                             .fill(if active { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
                             .stroke(Stroke::new(if active { 1.0_f32 } else { 0.0_f32 }, self.pal.accent))
-                            .rounding(6.0).min_size(Vec2::new(0.0, 30.0))
+                            .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
                         ).clicked() {
                             self.tab = tab;
                             self.detail_open = false;
@@ -588,13 +589,13 @@ impl App {
                                 .color(if sa { self.pal.accent } else { self.pal.sub }))
                             .fill(if sa { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
                             .stroke(Stroke::new(1.0_f32, if sa { self.pal.accent } else { self.pal.border }))
-                            .rounding(6.0).min_size(Vec2::new(0.0, 30.0))
+                            .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
                         ).clicked() { self.show_settings = !self.show_settings; }
                         ui.add_space(10.0);
 
                         // Theme picker
                         let ac = self.cfg.theme.accent_color();
-                        egui::ComboBox::from_id_source("theme_cb")
+                        egui::ComboBox::from_id_salt("theme_cb")
                             .selected_text(RichText::new(self.cfg.theme.name())
                                 .font(FontId::proportional(13.0)).color(ac))
                             .width(155.0)
@@ -603,7 +604,7 @@ impl App {
                                 for t in Theme::all().iter().filter(|t| !t.is_light()) {
                                     let col = t.accent_color();
                                     let on = &self.cfg.theme == t;
-                                    if ui.add(egui::SelectableLabel::new(on,
+                                    if ui.add(egui::Button::selectable(on,
                                         RichText::new(format!("  {}", t.name()))
                                             .font(FontId::proportional(13.0)).color(col)
                                     )).clicked() { self.set_theme(t.clone()); }
@@ -613,7 +614,7 @@ impl App {
                                 for t in Theme::all().iter().filter(|t| t.is_light()) {
                                     let col = t.accent_color();
                                     let on = &self.cfg.theme == t;
-                                    if ui.add(egui::SelectableLabel::new(on,
+                                    if ui.add(egui::Button::selectable(on,
                                         RichText::new(format!("  {}", t.name()))
                                             .font(FontId::proportional(13.0)).color(col)
                                     )).clicked() { self.set_theme(t.clone()); }
@@ -669,7 +670,7 @@ impl App {
                     lbl(ui, "Rows", self.pal.sub, 12.0);
                     for (l, h) in [("Compact", ROW_HEIGHT_COMPACT), ("Normal", ROW_HEIGHT_NORMAL), ("Roomy", ROW_HEIGHT_ROOMY)] {
                         let on = (self.cfg.row_height - h).abs() < 1.0;
-                        if ui.add(egui::SelectableLabel::new(on,
+                        if ui.add(egui::Button::selectable(on,
                             RichText::new(l).font(FontId::proportional(12.0))
                         )).clicked() { self.cfg.row_height = h; save_cfg(&self.cfg); }
                     }
@@ -677,7 +678,7 @@ impl App {
                     lbl(ui, "Font", self.pal.sub, 12.0);
                     for (l, sz) in [("S", 12.0f32), ("M", 14.0), ("L", 16.0)] {
                         let on = (self.cfg.font_size - sz).abs() < 0.5;
-                        if ui.add(egui::SelectableLabel::new(on,
+                        if ui.add(egui::Button::selectable(on,
                             RichText::new(l).font(FontId::proportional(12.0))
                         )).clicked() { self.cfg.font_size = sz; save_cfg(&self.cfg); }
                     }
@@ -685,18 +686,18 @@ impl App {
                     lbl(ui, "Page", self.pal.sub, 12.0);
                     for (l, ps) in [("25", 25usize), ("50", 50), ("100", 100), ("All", 0)] {
                         let on = self.cfg.page_size == ps;
-                        if ui.add(egui::SelectableLabel::new(on,
+                        if ui.add(egui::Button::selectable(on,
                             RichText::new(l).font(FontId::proportional(12.0))
                         )).clicked() { self.cfg.page_size = ps; self.page = 0; save_cfg(&self.cfg); }
                     }
                     ui.add_space(8.0);
-                    if ui.add(egui::SelectableLabel::new(self.cfg.dedupe,
+                    if ui.add(egui::Button::selectable(self.cfg.dedupe,
                         RichText::new("Dedupe").font(FontId::proportional(12.0))
                     )).on_hover_text("Merge near-duplicate titles across trackers").clicked() {
                         self.cfg.dedupe = !self.cfg.dedupe; save_cfg(&self.cfg);
                     }
                     ui.add_space(4.0);
-                    if ui.add(egui::SelectableLabel::new(self.cfg.show_cat_bar,
+                    if ui.add(egui::Button::selectable(self.cfg.show_cat_bar,
                         RichText::new("Cat bar").font(FontId::proportional(12.0))
                     )).on_hover_text("Show category breakdown chips").clicked() {
                         self.cfg.show_cat_bar = !self.cfg.show_cat_bar; save_cfg(&self.cfg);
@@ -718,7 +719,7 @@ impl App {
                         ("Date", &mut self.cfg.col_date),
                     ] {
                         let on = *val;
-                        if ui.add(egui::SelectableLabel::new(on,
+                        if ui.add(egui::Button::selectable(on,
                             RichText::new(label).font(FontId::proportional(12.0))
                                 .color(if on { self.pal.accent } else { self.pal.dim })
                         )).clicked() { *val = !*val; col_changed = true; }
@@ -729,7 +730,7 @@ impl App {
                         if ui.add(egui::Button::new(
                             RichText::new("Save").font(FontId::proportional(12.0)).color(self.pal.green))
                             .fill(tint(self.pal.green, 18))
-                            .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 80))).rounding(4.0)
+                            .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 80))).corner_radius(4.0)
                         ).clicked() {
                             save_cfg(&self.cfg);
                             self.toast("Settings saved ✓", self.pal.green);
@@ -766,7 +767,7 @@ impl App {
             if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) { self.do_search(); }
 
             ui.add_space(6.0);
-            egui::ComboBox::from_id_source("cat_cb")
+            egui::ComboBox::from_id_salt("cat_cb")
                 .selected_text(RichText::new(&self.cat).font(FontId::proportional(fs)))
                 .width(115.0)
                 .show_ui(ui, |ui| {
@@ -782,12 +783,12 @@ impl App {
                     RichText::new(if busy { "  Scanning…  " } else { "    Search    " })
                         .font(FontId::proportional(fs)).strong().color(Color32::WHITE))
                     .fill(if busy { rgb(6,100,130) } else { self.pal.accent })
-                    .rounding(6.0).min_size(Vec2::new(0.0, 36.0))
+                    .corner_radius(6.0).min_size(Vec2::new(0.0, 36.0))
             ).clicked() { self.do_search(); }
 
             if !self.query.is_empty()
                 && ui.add(egui::Button::new(RichText::new("✕").size(13.0).color(self.pal.sub))
-                    .fill(Color32::TRANSPARENT).rounding(4.0)).on_hover_text("Clear").clicked() {
+                    .fill(Color32::TRANSPARENT).corner_radius(4.0)).on_hover_text("Clear").clicked() {
                     self.query.clear(); self.show_hist = false;
                 }
         });
@@ -817,12 +818,12 @@ impl App {
             }
             SearchState::Error(err) => {
                 ui.add_space(10.0);
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(tint(self.pal.red, 10))
                     .stroke(Stroke::new(1.0_f32, tint(self.pal.red, 70)))
-                    .rounding(8.0)
-                    .inner_margin(egui::Margin::symmetric(20.0, 14.0))
-                    .outer_margin(egui::Margin::symmetric(12.0, 0.0))
+                    .corner_radius(8.0)
+                    .inner_margin(egui::Margin::symmetric(20, 14))
+                    .outer_margin(egui::Margin::symmetric(12, 0))
                     .show(ui, |ui| {
                         for line in err.lines() {
                             lbl(ui, line, self.pal.red, fs);
@@ -890,12 +891,12 @@ impl App {
                             ui.add_space(12.0);
                             for (cat, count, col) in &chips {
                                 let sel = self.f_text == *cat;
-                                egui::Frame::none()
-                                    .fill(tint(*col, if sel { 50 } else { 20 })).rounding(10.0)
+                                egui::Frame::NONE
+                                    .fill(tint(*col, if sel { 50 } else { 20 })).corner_radius(10.0)
                                     .stroke(Stroke::new(
                                         if sel { 1.5_f32 } else { 1.0_f32 },
                                         tint(*col, if sel { 200 } else { 80 })))
-                                    .inner_margin(egui::Margin::symmetric(7.0, 2.0))
+                                    .inner_margin(egui::Margin::symmetric(7, 2))
                                     .show(ui, |ui| {
                                         if ui.add(egui::Label::new(
                                             RichText::new(format!("{cat}  {count}"))
@@ -914,7 +915,7 @@ impl App {
                 ui.add_space(4.0);
 
                 // Keyboard navigation (only when no text input is focused)
-                let typing = ui.ctx().wants_keyboard_input();
+                let typing = ui.ctx().egui_wants_keyboard_input();
                 if !typing && ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
                     self.selected = Some(self.selected.map_or(0, |s| (s + 1).min(page_n.saturating_sub(1))));
                     self.detail_open = true;
@@ -953,18 +954,18 @@ impl App {
 
                 // Pagination
                 if max_p > 1 {
-                    egui::TopBottomPanel::bottom("pages")
-                        .exact_height(34.0)
-                        .frame(egui::Frame::none().fill(self.pal.bg)
+                    egui::Panel::bottom("pages")
+                        .default_size(34.0)
+                        .frame(egui::Frame::NONE.fill(self.pal.bg)
                             .stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .inner_margin(egui::Margin::symmetric(12.0, 5.0)))
-                        .show_inside(ui, |ui| {
+                            .inner_margin(egui::Margin::symmetric(12, 5)))
+                        .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 if ui.add_enabled(pg > 0,
                                     egui::Button::new(RichText::new("← Prev")
                                         .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
                                     .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::new(1.0_f32, self.pal.border)).rounding(4.0)
+                                    .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0)
                                 ).clicked() { self.page -= 1; self.selected = None; }
                                 ui.add_space(6.0);
                                 for p in 0..max_p {
@@ -976,7 +977,7 @@ impl App {
                                         continue;
                                     }
                                     let on = p == pg;
-                                    if ui.add(egui::SelectableLabel::new(on,
+                                    if ui.add(egui::Button::selectable(on,
                                         RichText::new(format!("{}", p + 1))
                                             .font(FontId::proportional(fs - 1.0))
                                             .color(if on { self.pal.accent } else { self.pal.sub })
@@ -987,7 +988,7 @@ impl App {
                                     egui::Button::new(RichText::new("Next →")
                                         .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
                                     .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::new(1.0_f32, self.pal.border)).rounding(4.0)
+                                    .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0)
                                 ).clicked() { self.page += 1; self.selected = None; }
                                 lbl(ui, &format!("  Page {} of {max_p}", pg + 1), self.pal.dim, fs - 1.0);
                             });
@@ -1000,7 +1001,7 @@ impl App {
         }
     }
 
-    fn draw_detail_panel(&mut self, ctx: &egui::Context) {
+    fn draw_detail_panel(&mut self, ui: &mut egui::Ui) {
         if !self.detail_open || self.tab != Tab::Search { return; }
         let state = self.cur_state();
         if state != SearchState::Done { return; }
@@ -1009,13 +1010,13 @@ impl App {
         let page_s = self.page_slice(&sorted);
         if let Some(idx) = self.selected {
             if let Some(r) = page_s.get(idx).cloned() {
-                egui::SidePanel::right("detail_pnl")
-                    .resizable(true).default_width(self.detail_width).min_width(240.0)
-                    .frame(egui::Frame::none()
+                egui::Panel::right("detail_pnl")
+                    .resizable(true).default_size(self.detail_width).size_range(240.0..)
+                    .frame(egui::Frame::NONE
                         .fill(self.pal.surface)
                         .stroke(Stroke::new(1.0_f32, self.pal.border))
-                        .inner_margin(egui::Margin::symmetric(12.0, 8.0)))
-                    .show(ctx, |ui| { self.draw_detail(ui, &r); });
+                        .inner_margin(egui::Margin::symmetric(12, 8)))
+                    .show(ui, |ui| { self.draw_detail(ui, &r); });
             }
         }
     }
@@ -1032,17 +1033,17 @@ impl App {
                 .fixed_pos(pos)
                 .order(egui::Order::Foreground)
                 .show(ctx, |ui| {
-                    egui::Frame::none()
+                    egui::Frame::NONE
                         .fill(self.pal.surface)
-                        .rounding(8.0)
+                        .corner_radius(8.0)
                         .stroke(Stroke::new(1.0_f32, self.pal.accent))
                         .shadow(egui::epaint::Shadow {
-                            offset: [0.0, 4.0].into(),
-                            blur: 12.0,
-                            spread: 0.0,
+                            offset: [0, 4],
+                            blur: 12,
+                            spread: 0,
                             color: rgba(0, 0, 0, 70),
                         })
-                        .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+                        .inner_margin(egui::Margin::symmetric(10, 8))
                         .show(ui, |ui| {
                             ui.set_width(w.max(280.0));
                             ui.horizontal(|ui| {
@@ -1084,11 +1085,11 @@ impl App {
     }
 
     fn draw_filter_bar(&mut self, ui: &mut egui::Ui, fs: f32) {
-        egui::Frame::none()
-            .fill(self.pal.surface).rounding(8.0)
+        egui::Frame::NONE
+            .fill(self.pal.surface).corner_radius(8.0)
             .stroke(Stroke::new(1.0_f32, self.pal.border))
-            .inner_margin(egui::Margin::symmetric(12.0, 7.0))
-            .outer_margin(egui::Margin::symmetric(12.0, 0.0))
+            .inner_margin(egui::Margin::symmetric(12, 7))
+            .outer_margin(egui::Margin::symmetric(12, 0))
             .show(ui, |ui| {
                 // Row 1
                 ui.horizontal(|ui| {
@@ -1133,7 +1134,7 @@ impl App {
                     ui.add_space(4.0);
                     for hf in [Hlth::All, Hlth::Hot, Hlth::Good, Hlth::Slow, Hlth::Dead] {
                         let on = self.f_hlth == hf;
-                        if ui.add(egui::SelectableLabel::new(on,
+                        if ui.add(egui::Button::selectable(on,
                             RichText::new(hf.label()).font(FontId::proportional(fs - 1.0))
                                 .color(if on { self.pal.accent } else { self.pal.sub })
                         )).clicked() { self.f_hlth = hf; self.page = 0; }
@@ -1144,7 +1145,7 @@ impl App {
                         if ui.add(egui::Button::new(
                             RichText::new(d_lbl).font(FontId::proportional(fs - 1.0)).color(self.pal.accent))
                             .fill(tint(self.pal.accent, 18))
-                            .stroke(Stroke::new(1.0_f32, tint(self.pal.accent, 60))).rounding(4.0)
+                            .stroke(Stroke::new(1.0_f32, tint(self.pal.accent, 60))).corner_radius(4.0)
                         ).on_hover_text("Toggle sort direction").clicked() {
                             self.s_dir = if self.s_dir == SortDir::Desc { SortDir::Asc } else { SortDir::Desc };
                             self.page = 0;
@@ -1159,7 +1160,7 @@ impl App {
                             let txt = if on {
                                 if self.s_dir == SortDir::Desc { format!("{l}▼") } else { format!("{l}▲") }
                             } else { l.to_string() };
-                            if ui.add(egui::SelectableLabel::new(on,
+                            if ui.add(egui::Button::selectable(on,
                                 RichText::new(&txt).font(FontId::proportional(fs - 1.0))
                                     .color(if on { self.pal.accent } else { self.pal.sub })
                             )).clicked() {
@@ -1280,7 +1281,7 @@ impl App {
                             let resp = ui.add(egui::Label::new(
                                 RichText::new(&r.title).font(FontId::proportional(fsz))
                                     .color(if is_sel { pal.accent } else { pal.text })
-                            ).truncate(true).sense(egui::Sense::click()));
+                            ).truncate().sense(egui::Sense::click()));
                             if resp.clicked() { actions.push((i, "select")); }
                             if resp.hovered() {
                                 self.hovered = Some(i);
@@ -1290,7 +1291,7 @@ impl App {
                                 let cat = r.category_desc.as_deref().unwrap_or("Other");
                                 ui.add(egui::Label::new(RichText::new(cat)
                                     .font(FontId::proportional(fsz - 2.5))
-                                    .color(cat_col(cat))).truncate(true));
+                                    .color(cat_col(cat))).truncate());
                             }
                         });
                         // Tracker
@@ -1299,7 +1300,7 @@ impl App {
                                 ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                                 ui.add(egui::Label::new(RichText::new(
                                     r.tracker.as_deref().unwrap_or("—"))
-                                    .font(FontId::proportional(fsz - 1.0)).color(pal.sub)).truncate(true));
+                                    .font(FontId::proportional(fsz - 1.0)).color(pal.sub)).truncate());
                             });
                         }
                         // Size
@@ -1406,7 +1407,7 @@ impl App {
                         } else { self.selected = Some(i); self.detail_open = true; }
                     }
                     "mag" => { if let Some(m) = &r.magnet_uri { let _ = open::that(m); self.toast("Opening magnet…", self.pal.accent); } }
-                    "copy" => { if let Some(m) = &r.magnet_uri { ui.output_mut(|o| o.copied_text = m.clone()); self.toast("Magnet copied ✓", self.pal.green); } }
+                    "copy" => { if let Some(m) = &r.magnet_uri { ui.ctx().copy_text(m.clone()); self.toast("Magnet copied ✓", self.pal.green); } }
                     "dl" => { if let Some(l) = &r.link { let _ = open::that(l); self.toast("Downloading…", self.pal.green); } }
                     "fav" => { self.add_fav(&r); }
                     "info" => {
@@ -1457,7 +1458,7 @@ impl App {
                             RichText::new(h.as_str()).font(FontId::proportional(fs)).color(self.pal.sub))
                             .fill(self.pal.surface)
                             .stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .rounding(14.0).min_size(egui::vec2(0.0, 28.0))
+                            .corner_radius(14.0).min_size(egui::vec2(0.0, 28.0))
                         ).clicked() { clicked = Some(h.clone()); }
                     }
                 });
@@ -1474,17 +1475,17 @@ impl App {
                             RichText::new(*s).font(FontId::proportional(fs)).color(self.pal.dim))
                             .fill(self.pal.surface)
                             .stroke(Stroke::new(1.0_f32, tint(self.pal.border, 140)))
-                            .rounding(14.0).min_size(egui::vec2(0.0, 28.0))
+                            .corner_radius(14.0).min_size(egui::vec2(0.0, 28.0))
                         ).clicked() { clicked = Some(s); }
                     }
                 });
                 if let Some(s) = clicked { self.query = s.to_string(); self.do_search(); }
 
                 ui.add_space(32.0);
-                egui::Frame::none()
-                    .fill(tint(self.pal.accent, 12)).rounding(10.0)
+                egui::Frame::NONE
+                    .fill(tint(self.pal.accent, 12)).corner_radius(10.0)
                     .stroke(Stroke::new(1.0_f32, tint(self.pal.accent, 50)))
-                    .inner_margin(egui::Margin::symmetric(24.0, 16.0))
+                    .inner_margin(egui::Margin::symmetric(24, 16))
                     .show(ui, |ui| {
                         ui.set_max_width(480.0);
                         ui.label(RichText::new("First time?")
@@ -1513,7 +1514,7 @@ impl App {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
                 if ui.add(egui::Button::new(RichText::new("✕").size(14.0).color(self.pal.sub))
-                    .fill(Color32::TRANSPARENT).rounding(4.0))
+                    .fill(Color32::TRANSPARENT).corner_radius(4.0))
                     .on_hover_text("Close").clicked() {
                     self.detail_open = false; self.selected = None;
                 }
@@ -1522,16 +1523,16 @@ impl App {
         ui.separator();
         ui.add_space(8.0);
 
-        egui::ScrollArea::vertical().id_source("det_scr").show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt("det_scr").show(ui, |ui| {
             ui.add(egui::Label::new(
                 RichText::new(&r.title).font(FontId::proportional(fs)).color(self.pal.text).strong()
-            ).wrap(true));
+            ).wrap());
             ui.add_space(8.0);
 
             let cat = r.category_desc.as_deref().unwrap_or("Unknown");
-            egui::Frame::none()
-                .fill(tint(cat_col(cat), 25)).rounding(8.0)
-                .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+            egui::Frame::NONE
+                .fill(tint(cat_col(cat), 25)).corner_radius(8.0)
+                .inner_margin(egui::Margin::symmetric(8, 3))
                 .show(ui, |ui| {
                     ui.label(RichText::new(cat).font(FontId::proportional(fs - 1.0)).color(cat_col(cat)));
                 });
@@ -1594,7 +1595,7 @@ impl App {
                         RichText::new(truncated).font(FontId::monospace(fs-2.0)).color(self.pal.sub))
                         .sense(egui::Sense::click()));
                     if resp.on_hover_text("Click to copy full magnet").clicked() {
-                        ui.output_mut(|o| o.copied_text = mag.clone());
+                        ui.ctx().copy_text(mag.clone());
                         self.toast("Magnet copied ✓", self.pal.green);
                     }
                 });
@@ -1611,7 +1612,7 @@ impl App {
                 }
                 ui.add_space(4.0);
                 if wide_btn(ui, "⎘  Copy Magnet Link", self.pal.sub) {
-                    ui.output_mut(|o| o.copied_text = mc);
+                    ui.ctx().copy_text(mc);
                     self.toast("Copied ✓", self.pal.green);
                 }
                 ui.add_space(4.0);
@@ -1692,15 +1693,15 @@ impl App {
                 { continue; }
                 row_i += 1;
                 let bg = if row_i.is_multiple_of(2) { self.pal.row_odd } else { self.pal.row_even };
-                egui::Frame::none()
-                    .fill(bg).inner_margin(egui::Margin::symmetric(16.0, 10.0))
+                egui::Frame::NONE
+                    .fill(bg).inner_margin(egui::Margin::symmetric(16, 10))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.vertical(|ui| {
                                 ui.set_min_width(ui.available_width() - 130.0);
                                 ui.add(egui::Label::new(
                                     RichText::new(&fav.title).font(FontId::proportional(fs))
-                                        .color(self.pal.text)).truncate(true));
+                                        .color(self.pal.text)).truncate());
                                 ui.horizontal(|ui| {
                                     if let Some(t) = &fav.tracker {
                                         lbl(ui, t, self.pal.sub, fs - 1.5);
@@ -1750,10 +1751,10 @@ impl App {
                 ui.add_space(6.0);
                 lbl(ui, "Add Jackett Torznab feeds to auto-refresh torrents", pal.dim, fs);
                 ui.add_space(20.0);
-                egui::Frame::none()
-                    .fill(tint(pal.accent, 12)).rounding(10.0)
+                egui::Frame::NONE
+                    .fill(tint(pal.accent, 12)).corner_radius(10.0)
                     .stroke(Stroke::new(1.0_f32, tint(pal.accent, 50)))
-                    .inner_margin(egui::Margin::symmetric(24.0, 16.0))
+                    .inner_margin(egui::Margin::symmetric(24, 16))
                     .show(ui, |ui| {
                         ui.set_max_width(420.0);
                         lbl(ui, "How Torznab RSS works", pal.accent, fs);
@@ -1769,14 +1770,14 @@ impl App {
         }
 
         ui.horizontal_top(|ui| {
-            egui::SidePanel::left("rss_sidebar")
-                .resizable(true).default_width(220.0).min_width(160.0)
-                .frame(egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)))
-                .show_inside(ui, |ui| { self.draw_rss_sidebar(ui); });
+            egui::Panel::left("rss_sidebar")
+                .resizable(true).default_size(220.0).size_range(160.0..)
+                .frame(egui::Frame::NONE.fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)))
+                .show(ui, |ui| { self.draw_rss_sidebar(ui); });
 
             egui::CentralPanel::default()
-                .frame(egui::Frame::none().fill(pal.bg))
-                .show_inside(ui, |ui| {
+                .frame(egui::Frame::NONE.fill(pal.bg))
+                .show(ui, |ui| {
                     if self.rss_add_mode { self.draw_rss_form(ui, None); }
                     else if let Some(idx) = self.rss_edit_idx { self.draw_rss_form(ui, Some(idx)); }
                     else { self.draw_rss_items(ui); }
@@ -1786,16 +1787,16 @@ impl App {
 
     fn draw_rss_sidebar(&mut self, ui: &mut egui::Ui) {
         let pal = self.pal.clone(); let fs = self.cfg.font_size;
-        egui::Frame::none()
+        egui::Frame::NONE
             .fill(pal.hdr).stroke(Stroke::new(1.0_f32, pal.border))
-            .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+            .inner_margin(egui::Margin::symmetric(10, 8))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     lbl(ui, "RSS Feeds", pal.accent, fs);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let sub = pal.sub;
                         if ui.add(egui::Button::new(RichText::new("⟳ All").font(FontId::proportional(fs - 1.5)).color(sub))
-                            .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, pal.border)).rounding(4.0)
+                            .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, pal.border)).corner_radius(4.0)
                         ).on_hover_text("Refresh all feeds").clicked() { self.refresh_all_feeds(); }
                     });
                 });
@@ -1804,7 +1805,7 @@ impl App {
                     .desired_width(ui.available_width()).hint_text("Filter feeds…").font(FontId::proportional(fs)));
             });
 
-        egui::ScrollArea::vertical().id_source("rss_feed_list").show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt("rss_feed_list").show(ui, |ui| {
             let filter = self.rss_filter.to_lowercase();
             let len = self.rss_feeds.len();
             let mut sel: Option<usize> = None;
@@ -1822,8 +1823,8 @@ impl App {
                 let is_sel = self.rss_selected == i && !self.rss_add_mode && self.rss_edit_idx.is_none();
                 let bg = if is_sel { tint(pal.accent, 22) } else { Color32::TRANSPARENT };
 
-                egui::Frame::none().fill(bg).rounding(6.0)
-                    .inner_margin(egui::Margin::symmetric(10.0, 7.0))
+                egui::Frame::NONE.fill(bg).corner_radius(6.0)
+                    .inner_margin(egui::Margin::symmetric(10, 7))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             let (dc, dot) = match st {
@@ -1834,7 +1835,7 @@ impl App {
                             ui.add_space(4.0);
                             let nc = if en { pal.text } else { pal.dim };
                             if ui.add(egui::Label::new(RichText::new(&name).font(FontId::proportional(fs - 0.5)).color(nc))
-                                .truncate(true).sense(egui::Sense::click())).clicked() { sel = Some(i); }
+                                .truncate().sense(egui::Sense::click())).clicked() { sel = Some(i); }
                             // Auto-refresh marker
                             if self.rss_feeds[i].config.auto_refresh {
                                 let ac = if en { pal.accent } else { pal.dim };
@@ -1844,8 +1845,8 @@ impl App {
                             }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if n > 0 {
-                                    egui::Frame::none().fill(tint(pal.accent, 25)).rounding(8.0)
-                                        .inner_margin(egui::Margin::symmetric(5.0, 1.0))
+                                    egui::Frame::NONE.fill(tint(pal.accent, 25)).corner_radius(8.0)
+                                        .inner_margin(egui::Margin::symmetric(5, 1))
                                         .show(ui, |ui| { ui.label(RichText::new(n.to_string()).font(FontId::proportional(fs - 3.0)).color(pal.accent)); });
                                 }
                             });
@@ -1872,7 +1873,7 @@ impl App {
         });
 
         ui.add_space(8.0);
-        egui::Frame::none().inner_margin(egui::Margin::symmetric(10.0, 6.0)).show(ui, |ui| {
+        egui::Frame::NONE.inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
             if wide_btn(ui, "+ Add Feed", pal.accent) { self.rss_add_mode = true; self.rss_edit_idx = None; self.rss_new_cfg = RssFeedConfig::new_default(); }
         });
     }
@@ -1887,8 +1888,8 @@ impl App {
         let items = self.rss_feeds[sel].items.clone();
         let err = self.rss_feeds[sel].error.clone();
 
-        egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border))
-            .inner_margin(egui::Margin::symmetric(14.0, 8.0))
+        egui::Frame::NONE.fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border))
+            .inner_margin(egui::Margin::symmetric(14, 8))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     lbl(ui, &name, pal.accent, fs + 1.0); ui.add_space(8.0);
@@ -1918,10 +1919,10 @@ impl App {
 
         if let Some(di) = self.rss_detail {
             if let Some(item) = items.get(di).cloned() {
-                egui::SidePanel::right("rss_detail_pnl")
-                    .resizable(true).default_width(280.0).min_width(220.0)
-                    .frame(egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)))
-                    .show_inside(ui, |ui| { self.draw_rss_item_detail(ui, &item); });
+                egui::Panel::right("rss_detail_pnl")
+                    .resizable(true).default_size(280.0).size_range(220.0..)
+                    .frame(egui::Frame::NONE.fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)))
+                    .show(ui, |ui| { self.draw_rss_item_detail(ui, &item); });
             }
         }
 
@@ -1949,12 +1950,12 @@ impl App {
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                             let resp = ui.add(egui::Label::new(RichText::new(&item.title).font(FontId::proportional(fs)).color(if is_sel { pal.accent } else { pal.text }))
-                                .truncate(true).sense(egui::Sense::click()));
+                                .truncate().sense(egui::Sense::click()));
                             if resp.clicked() { actions.push((i, "detail")); }
                         });
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                            ui.add(egui::Label::new(RichText::new(item.tracker.as_deref().unwrap_or("—")).font(FontId::proportional(fs - 1.0)).color(pal.sub)).truncate(true));
+                            ui.add(egui::Label::new(RichText::new(item.tracker.as_deref().unwrap_or("—")).font(FontId::proportional(fs - 1.0)).color(pal.sub)).truncate());
                         });
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
@@ -1990,7 +1991,7 @@ impl App {
                 match action {
                     "detail" => { self.rss_detail = if self.rss_detail == Some(i) { None } else { Some(i) }; }
                     "mag" => { if let Some(m) = &item.magnet { let _ = open::that(m); self.toast("Opening magnet…", pal.accent); } }
-                    "copy" => { if let Some(m) = &item.magnet { ui.output_mut(|o| o.copied_text = m.clone()); self.toast("Magnet copied ✓", pal.green); } }
+                    "copy" => { if let Some(m) = &item.magnet { ui.ctx().copy_text(m.clone()); self.toast("Magnet copied ✓", pal.green); } }
                     "dl" => { if let Some(l) = &item.link { let _ = open::that(l); } }
                     "fav" => { self.add_fav_from_rss(&item); }
                     _ => {}
@@ -2002,8 +2003,8 @@ impl App {
     fn draw_rss_item_detail(&mut self, ui: &mut egui::Ui, item: &RssItem) {
         let pal = self.pal.clone(); let fs = self.cfg.font_size;
         ui.add_space(10.0);
-        egui::Frame::none().inner_margin(egui::Margin::symmetric(12.0, 0.0)).show(ui, |ui| {
-            ui.add(egui::Label::new(RichText::new(&item.title).font(FontId::proportional(fs)).color(pal.text).strong()).wrap(true));
+        egui::Frame::NONE.inner_margin(egui::Margin::symmetric(12, 0)).show(ui, |ui| {
+            ui.add(egui::Label::new(RichText::new(&item.title).font(FontId::proportional(fs)).color(pal.text).strong()).wrap());
             ui.add_space(12.0);
             egui::Grid::new("rss_item_grid").num_columns(2).spacing([8.0, 5.0]).show(ui, |ui| {
                 if let Some(t) = &item.tracker { grid_row(ui, "Tracker", t, pal.accent, &pal, fs); }
@@ -2017,7 +2018,7 @@ impl App {
             if item.magnet.is_some() {
                 if wide_btn(ui, "⚡  Open Magnet", pal.accent) { if let Some(m) = &item.magnet { let _ = open::that(m); } }
                 ui.add_space(4.0);
-                if wide_btn(ui, "⎘  Copy Magnet", pal.sub) { if let Some(m) = &item.magnet { ui.output_mut(|o| o.copied_text = m.clone()); self.toast("Copied ✓", pal.green); } }
+                if wide_btn(ui, "⎘  Copy Magnet", pal.sub) { if let Some(m) = &item.magnet { ui.ctx().copy_text(m.clone()); self.toast("Copied ✓", pal.green); } }
                 ui.add_space(4.0);
             }
             if item.link.is_some() { if wide_btn(ui, "↓  Download .torrent", pal.green) { if let Some(l) = &item.link { let _ = open::that(l); } } ui.add_space(4.0); }
@@ -2105,7 +2106,7 @@ impl App {
                 ui.add_space(24.0);
                 for (k, v) in [
                     ("Language", "Rust 2021 edition"),
-                    ("GUI", "egui 0.27 + egui_extras"),
+                    ("GUI", "egui 0.36 + egui_extras"),
                     ("Rendering", "GPU via wgpu / OpenGL (eframe)"),
                     ("HTTP", "reqwest (blocking)"),
                     ("Config", "~/.config/torrentx/config.json"),
@@ -2128,12 +2129,12 @@ impl App {
                     for t in Theme::all() {
                         let col = t.accent_color();
                         let active = &self.cfg.theme == t;
-                        egui::Frame::none()
-                            .fill(tint(col, if active { 45 } else { 20 })).rounding(6.0)
+                        egui::Frame::NONE
+                            .fill(tint(col, if active { 45 } else { 20 })).corner_radius(6.0)
                             .stroke(Stroke::new(
                                 if active { 2.0_f32 } else { 1.0_f32 },
                                 tint(col, if active { 220 } else { 90 })))
-                            .inner_margin(egui::Margin::symmetric(9.0, 4.0))
+                            .inner_margin(egui::Margin::symmetric(9, 4))
                             .show(ui, |ui| {
                                 ui.label(RichText::new(t.name())
                                     .font(FontId::proportional(fs - 1.5)).color(col));
@@ -2188,7 +2189,7 @@ impl App {
                         ui.add(egui::Button::new(
                             RichText::new(k).font(FontId::proportional(fs)).color(self.pal.accent))
                             .fill(self.pal.surface)
-                            .stroke(Stroke::new(1.0_f32, self.pal.border)).rounding(4.0));
+                            .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0));
                         ui.add_space(8.0);
                         lbl(ui, v, self.pal.sub, fs);
                     });
@@ -2205,7 +2206,7 @@ impl App {
 
     fn draw_toasts(&self, ctx: &egui::Context) {
         if self.toasts.is_empty() { return; }
-        let scr = ctx.screen_rect();
+        let scr = ctx.input(|i| i.viewport_rect());
         let mut y = scr.max.y - 54.0;
         for toast in self.toasts.iter().rev() {
             let a = ((toast.ttl.min(0.4) / 0.4) * 230.0) as u8;
@@ -2213,15 +2214,15 @@ impl App {
                 .fixed_pos([scr.max.x - 310.0, y])
                 .order(egui::Order::Foreground)
                 .show(ctx, |ui| {
-                    egui::Frame::none()
+                    egui::Frame::NONE
                         .fill(tint(self.pal.surface, a))
                         .stroke(Stroke::new(1.5_f32, tint(toast.col, a)))
-                        .rounding(8.0)
-                        .inner_margin(egui::Margin::symmetric(14.0, 9.0))
+                        .corner_radius(8.0)
+                        .inner_margin(egui::Margin::symmetric(14, 9))
                         .shadow(egui::epaint::Shadow {
-                            offset: [0.0, 2.0].into(),
-                            blur: 8.0,
-                            spread: 0.0,
+                            offset: [0, 2],
+                            blur: 8,
+                            spread: 0,
                             color: rgba(0, 0, 0, 80),
                         })
                         .show(ui, |ui| {
@@ -2254,8 +2255,10 @@ fn native_options() -> eframe::NativeOptions {
     }
 }
 
-fn app_creator() -> Box<dyn FnOnce(&eframe::CreationContext) -> Box<dyn eframe::App>> {
-    Box::new(|_cc| Box::new(App::default()) as Box<dyn eframe::App>)
+type AppCreator = Box<dyn FnOnce(&eframe::CreationContext) -> Result<Box<dyn eframe::App>, Box<dyn std::error::Error + Send + Sync>>>;
+
+fn app_creator() -> AppCreator {
+    Box::new(|_cc| Ok(Box::new(App::default()) as Box<dyn eframe::App>))
 }
 
 fn main() -> eframe::Result<()> {
