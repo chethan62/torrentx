@@ -369,6 +369,10 @@ impl App {
     }
 
     fn export_csv(&self, rows: &[TorrentResult]) {
+        // Proper CSV escaping: wrap in quotes, double any embedded quotes.
+        fn esc(s: &str) -> String {
+            format!("\"{}\"", s.replace('"', "\"\""))
+        }
         let path = dirs_next::download_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join(format!("torrentx_{}.csv",
@@ -376,13 +380,13 @@ impl App {
         let mut out = "Title,Tracker,Category,Size,Seeders,Leechers,Date\n".to_string();
         for r in rows {
             out.push_str(&format!(
-                "\"{}\",\"{}\",\"{}\",\"{}\",{},{},\"{}\"\n",
-                r.title.replace('"', "'"),
-                r.tracker.as_deref().unwrap_or(""),
-                r.category_desc.as_deref().unwrap_or(""),
-                r.size.map(fmt_size).unwrap_or_default(),
+                "{},{},{},{},{},{},{}\n",
+                esc(&r.title),
+                esc(r.tracker.as_deref().unwrap_or("")),
+                esc(r.category_desc.as_deref().unwrap_or("")),
+                esc(&r.size.map(fmt_size).unwrap_or_default()),
                 r.seeders.unwrap_or(0), r.peers.unwrap_or(0),
-                r.publish_date.as_deref().map(time_ago).unwrap_or_default(),
+                esc(&r.publish_date.as_deref().map(time_ago).unwrap_or_default()),
             ));
         }
         if fs::write(&path, out).is_ok() { let _ = open::that(&path); }
@@ -1831,6 +1835,13 @@ impl App {
                             let nc = if en { pal.text } else { pal.dim };
                             if ui.add(egui::Label::new(RichText::new(&name).font(FontId::proportional(fs - 0.5)).color(nc))
                                 .truncate(true).sense(egui::Sense::click())).clicked() { sel = Some(i); }
+                            // Auto-refresh marker
+                            if self.rss_feeds[i].config.auto_refresh {
+                                let ac = if en { pal.accent } else { pal.dim };
+                                ui.add(egui::Label::new(RichText::new("⟳").font(FontId::proportional(fs - 2.0)).color(ac))
+                                    .sense(egui::Sense::hover()))
+                                    .on_hover_text("Auto-refreshes every 10 min");
+                            }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if n > 0 {
                                     egui::Frame::none().fill(tint(pal.accent, 25)).rounding(8.0)
@@ -2149,6 +2160,7 @@ impl App {
                     "Favorites with search filter, timestamps, persistent storage",
                     "Detail side panel with seeder/leecher ratio bar",
                     "Deduplication across trackers",
+                    "RSS feeds with background auto-refresh (10 min)",
                     "Export filtered results to CSV",
                     "Pagination: 25 / 50 / 100 / All per page",
                     "Keyboard nav: ↑↓ Enter D F M Ctrl+F Ctrl+R Esc",

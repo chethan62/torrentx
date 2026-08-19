@@ -72,7 +72,8 @@ pub(crate) fn fmt_size(b: u64) -> String {
     let b = b as f64;
     if b >= 1_073_741_824.0 { format!("{:.2} GB", b / 1_073_741_824.0) }
     else if b >= 1_048_576.0 { format!("{:.0} MB", b / 1_048_576.0) }
-    else { format!("{:.0} KB", b / 1_024.0) }
+    else if b >= 1_024.0 { format!("{:.0} KB", b / 1_024.0) }
+    else { format!("{b} B") }
 }
 
 pub(crate) fn time_ago(s: &str) -> String {
@@ -143,6 +144,17 @@ pub(crate) fn set_err(st: &Arc<Mutex<SearchState>>, msg: String) {
 
 // ─── Search thread ─────────────────────────────────────────────────────────
 
+/// Shared HTTP client, built once. Avoids re-handshaking per request.
+pub(crate) fn shared_client() -> &'static Client {
+    static CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .expect("failed to build HTTP client")
+    })
+}
+
 /// Map UI category labels to Jackett/Torznab numeric category IDs.
 /// The API expects numbers (2000=Movies, 5000=TV, …), not English labels.
 pub(crate) fn category_id(label: &str) -> Option<&'static str> {
@@ -178,11 +190,7 @@ pub(crate) fn start_search(
             }
         }
 
-        let client = match Client::builder().timeout(Duration::from_secs(timeout)).build() {
-            Ok(c) => c,
-            Err(e) => { set_err(&state, format!("Client error: {e}")); return; }
-        };
-        match client.get(&ep).send() {
+        match shared_client().get(&ep).timeout(Duration::from_secs(timeout)).send() {
             Ok(resp) => {
                 let st = resp.status();
                 if st.is_success() {
@@ -212,7 +220,7 @@ pub(crate) fn start_search(
             } else {
                 format!("Network error: {e}")
             }),
-        }
+        };
     });
 }
 

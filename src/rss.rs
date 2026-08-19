@@ -1,6 +1,5 @@
 // ─── RSS types ──────────────────────────────────────────────────────────────
 use crate::jackett::urlenc;
-use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::thread;
 use std::time::Duration;
@@ -175,13 +174,15 @@ pub(crate) fn tag_name(raw: &[u8]) -> String {
 }
 
 pub(crate) fn fetch_rss(url: &str, timeout: u64) -> Result<Vec<RssItem>, String> {
-    let client = Client::builder().timeout(Duration::from_secs(timeout)).build()
-        .map_err(|e| format!("Client error: {e}"))?;
-    let resp = client.get(url).send().map_err(|e| {
-        if e.is_connect() { "Cannot reach Jackett. Is it running?".into() }
-        else if e.is_timeout() { format!("Timed out after {timeout}s") }
-        else { format!("Network error: {e}") }
-    })?;
+    let resp = crate::jackett::shared_client()
+        .get(url)
+        .timeout(Duration::from_secs(timeout))
+        .send()
+        .map_err(|e| {
+            if e.is_connect() { "Cannot reach Jackett. Is it running?".into() }
+            else if e.is_timeout() { format!("Timed out after {timeout}s") }
+            else { format!("Network error: {e}") }
+        })?;
     if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status().as_u16())); }
     let body = resp.text().map_err(|e| format!("Read error: {e}"))?;
     parse_torznab_xml(&body)

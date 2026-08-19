@@ -26,7 +26,7 @@
 - **Pagination** — 25/50/100/All
 - **Deduplication** — across trackers
 - **Search history** — with per-item delete
-- **RSS feeds** — Jackett Torznab indexer feeds with auto-refresh
+- **RSS feeds** — Jackett Torznab indexer feeds with auto-refresh (10 min)
 - **Toast notifications** — animated, per-theme colored
 
 ## Download
