@@ -75,6 +75,7 @@ struct App {
     fav_search: String,
     // RSS
     rss_feeds: Vec<RssFeedState>,
+    rss_last_refresh: Vec<Instant>,
     rss_tx: std::sync::mpsc::Sender<(usize, Result<Vec<RssItem>, String>)>,
     rss_rx: std::sync::mpsc::Receiver<(usize, Result<Vec<RssItem>, String>)>,
     rss_selected: usize,
@@ -94,6 +95,7 @@ impl Default for App {
     fn default() -> Self {
         let cfg = load_cfg();
         let pal = Pal::from(&cfg.theme);
+        let n_feeds = cfg.rss_feeds.len();
         let feeds: Vec<RssFeedState> = cfg.rss_feeds.iter().map(|c| RssFeedState::new(c.clone())).collect();
         let (rss_tx, rss_rx) = std::sync::mpsc::channel();
         Self {
@@ -111,6 +113,7 @@ impl Default for App {
             page: 0, last_query: String::new(), toasts: vec![],
             hovered: None, fav_search: String::new(),
             rss_feeds: feeds,
+            rss_last_refresh: vec![Instant::now(); n_feeds],
             rss_tx, rss_rx,
             rss_selected: 0, rss_detail: None, rss_filter: String::new(),
             rss_add_mode: false, rss_edit_idx: None,
@@ -223,6 +226,9 @@ impl App {
         if self.rss_feeds[idx].status == FeedStatus::Loading { return; } // already in flight
         self.rss_feeds[idx].status = FeedStatus::Loading;
         self.rss_feeds[idx].error = None;
+        if self.rss_last_refresh.len() == self.rss_feeds.len() {
+            self.rss_last_refresh[idx] = Instant::now();
+        }
         let tx = self.rss_tx.clone();
         let base = self.cfg.jackett_url.clone();
         let key = self.cfg.api_key.clone();
@@ -252,6 +258,25 @@ impl App {
                     self.rss_feeds[idx].error = Some(e);
                 }
             }
+        }
+    }
+
+    /// Auto-refresh enabled feeds whose `auto_refresh` flag is set.
+    /// Re-checks every `RSS_AUTO_REFRESH_SECS`; skips feeds already loading.
+    fn auto_refresh_feeds(&mut self) {
+        const RSS_AUTO_REFRESH_SECS: u64 = 600; // 10 min
+        // Keep timestamps in sync with the feed list (add/remove).
+        while self.rss_last_refresh.len() < self.rss_feeds.len() {
+            self.rss_last_refresh.push(Instant::now());
+        }
+        self.rss_last_refresh.truncate(self.rss_feeds.len());
+        for i in 0..self.rss_feeds.len() {
+            let cfg = self.rss_feeds[i].config.clone();
+            if !cfg.enabled || !cfg.auto_refresh { continue; }
+            if self.rss_feeds[i].status == FeedStatus::Loading { continue; }
+            let due = self.rss_last_refresh[i].elapsed()
+                >= Duration::from_secs(RSS_AUTO_REFRESH_SECS);
+            if due { self.refresh_feed(i); }
         }
     }
 
@@ -474,6 +499,7 @@ impl eframe::App for App {
 
         // ── RSS polling ───────────────────────────────────────────────
         self.poll_rss();
+        self.auto_refresh_feeds();
 
         // ── Settings panel ───────────────────────────────────────────────
         if self.show_settings {
