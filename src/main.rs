@@ -269,6 +269,12 @@ impl App {
             if idx >= self.rss_feeds.len() { continue; }
             match result {
                 Ok(items) => {
+                    // Dedupe by normalized title (same logic as main search):
+                    // sort by seeders desc so the best copy wins, then keep first.
+                    let mut items = items;
+                    items.sort_by(|a, b| b.seeders.unwrap_or(0).cmp(&a.seeders.unwrap_or(0)));
+                    let mut seen = std::collections::HashSet::new();
+                    items.retain(|it| seen.insert(normalize(&it.title)));
                     self.rss_feeds[idx].items = items;
                     self.rss_feeds[idx].status = FeedStatus::Ok;
                     self.rss_feeds[idx].error = None;
