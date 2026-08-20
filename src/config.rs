@@ -28,6 +28,9 @@ pub(crate) struct Config {
     pub(crate) col_date: bool,
     #[serde(default)]
     pub(crate) rss_feeds: Vec<RssFeedConfig>,
+    /// Custom accent color (RGB) overriding the theme default; None = theme default.
+    #[serde(default)]
+    pub(crate) accent: Option<[u8; 3]>,
 }
 
 impl Default for Config {
@@ -47,6 +50,7 @@ impl Default for Config {
             col_tracker: true, col_size: true, col_leech: true,
             col_ratio: true, col_health: true, col_date: true,
             rss_feeds: vec![],
+            accent: None,
         }
     }
 }

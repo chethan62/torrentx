@@ -103,9 +103,9 @@ pub(crate) fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color32 { Color32::from_rgba_u
 pub(crate) fn tint(c: Color32, a: u8) -> Color32 { rgba(c.r(), c.g(), c.b(), a) }
 
 impl Pal {
-    pub(crate) fn from(t: &Theme) -> Self {
+    pub(crate) fn from(t: &Theme, accent: Option<[u8; 3]>) -> Self {
         use Theme::*;
-        match t {
+        let mut p = match t {
             TokyoNight => Self {
                 bg: rgb(26,27,38),    surface: rgb(36,40,59),   surface2: rgb(41,46,66),
                 hdr: rgb(20,21,32),   accent: rgb(122,162,247),
@@ -277,7 +277,15 @@ impl Pal {
                 row_odd: rgba(255,255,255,255), row_even: rgba(239,241,245,255),
                 row_sel: rgba(30,102,245,40),   row_hov: rgba(30,102,245,10), light: true,
             },
+        };
+        // Apply custom accent override (if set) + derive selection colors from it
+        if let Some([r, g, b]) = accent {
+            let ac = rgb(r, g, b);
+            p.accent = ac;
+            p.row_sel = tint(ac, if p.light { 40 } else { 55 });
+            p.row_hov = tint(ac, if p.light { 10 } else { 18 });
         }
+        p
     }
 }
 

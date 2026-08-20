@@ -87,6 +87,8 @@ struct App {
     // batch selection mode
     sel_mode: bool,
     sel_set: std::collections::HashSet<usize>,
+    // accent color picker
+    show_color_picker: bool,
     // RSS
     rss_feeds: Vec<RssFeedState>,
     rss_last_refresh: Vec<Instant>,
@@ -108,7 +110,7 @@ struct App {
 impl Default for App {
     fn default() -> Self {
         let cfg = load_cfg();
-        let pal = Pal::from(&cfg.theme);
+        let pal = Pal::from(&cfg.theme, cfg.accent);
         let n_feeds = cfg.rss_feeds.len();
         let feeds: Vec<RssFeedState> = cfg.rss_feeds.iter().map(|c| RssFeedState::new(c.clone())).collect();
         let (rss_tx, rss_rx) = std::sync::mpsc::channel();
@@ -136,6 +138,7 @@ impl Default for App {
             page: 0, last_query: String::new(), toasts: vec![],
             hovered: None, fav_search: String::new(),
             sel_mode: false, sel_set: std::collections::HashSet::new(),
+            show_color_picker: false,
             rss_feeds: feeds,
             rss_last_refresh: vec![Instant::now(); n_feeds],
             rss_tx, rss_rx,
@@ -257,7 +260,7 @@ impl App {
     }
 
     fn set_theme(&mut self, t: Theme) {
-        self.cfg.theme = t; self.pal = Pal::from(&self.cfg.theme); save_cfg(&self.cfg);
+        self.cfg.theme = t; self.pal = Pal::from(&self.cfg.theme, self.cfg.accent); save_cfg(&self.cfg);
     }
 
     // ── RSS helpers ───────────────────────────────────────────────────────
@@ -819,6 +822,54 @@ impl App {
                         RichText::new("Cat bar").font(FontId::proportional(12.0))
                     )).on_hover_text("Show category breakdown chips").clicked() {
                         self.cfg.show_cat_bar = !self.cfg.show_cat_bar; save_cfg(&self.cfg);
+                    }
+                    ui.add_space(8.0);
+                    // Custom accent color
+                    lbl(ui, "Accent", self.pal.sub, 12.0);
+                    let cur = self.cfg.accent
+                        .map(|[r, g, b]| rgb(r, g, b))
+                        .unwrap_or(self.pal.accent);
+                    if ui.add(egui::Button::new("")
+                        .fill(cur)
+                        .min_size(egui::vec2(18.0, 18.0))
+                        .stroke(Stroke::new(1.0_f32, self.pal.border))
+                    ).on_hover_text("Custom accent color (overrides theme)").clicked() {
+                        self.show_color_picker = !self.show_color_picker;
+                    }
+                    if self.cfg.accent.is_some() {
+                        ui.add_space(4.0);
+                        if ui.add(egui::Button::new("✕")
+                            .min_size(egui::vec2(18.0, 18.0))
+                            .stroke(Stroke::new(1.0_f32, self.pal.border))
+                        ).on_hover_text("Reset to theme accent").clicked() {
+                            self.cfg.accent = None;
+                            self.pal = Pal::from(&self.cfg.theme, None);
+                            save_cfg(&self.cfg);
+                        }
+                    }
+                    // Color picker popup
+                    if self.show_color_picker {
+                        let mut col: [f32; 3] = self.cfg.accent
+                            .map(|[r, g, b]| [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0])
+                            .unwrap_or([self.pal.accent.r() as f32 / 255.0, self.pal.accent.g() as f32 / 255.0, self.pal.accent.b() as f32 / 255.0]);
+                        let mut close = false;
+                        egui::Window::new("Accent color")
+                            .collapsible(false).resizable(false)
+                            .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-30.0, 60.0))
+                            .show(ui.ctx(), |ui| {
+                                if ui.color_edit_button_rgb(&mut col).changed()
+                                    || ui.add(egui::Slider::new(&mut col[2], 0.0..=1.0).text("")).changed() {
+                                    self.cfg.accent = Some([
+                                        (col[0] * 255.0).round() as u8,
+                                        (col[1] * 255.0).round() as u8,
+                                        (col[2] * 255.0).round() as u8,
+                                    ]);
+                                    self.pal = Pal::from(&self.cfg.theme, self.cfg.accent);
+                                }
+                                ui.add_space(6.0);
+                                if ui.button("Done").clicked() { close = true; }
+                            });
+                        if close { self.show_color_picker = false; save_cfg(&self.cfg); }
                     }
                 });
                 ui.add_space(5.0);
