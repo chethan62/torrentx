@@ -481,6 +481,24 @@ impl eframe::App for App {
         self.apply_theme(&ctx);
         let state = self.cur_state();
 
+        // Minimize-to-tray: intercept window close (unless tray "Quit" was used).
+        if ctx.input(|i| i.viewport().close_requested())
+            && !QUIT.load(std::sync::atomic::Ordering::SeqCst) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        }
+        // Tray "Quit" → exit the whole app.
+        if QUIT.load(std::sync::atomic::Ordering::SeqCst) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+        // Tray "Show / Hide" → toggle window visibility.
+        if TOGGLE_VIS.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(!focused));
+            if focused { ctx.request_repaint(); }
+        }
+
         // Fetch indexer list once (background, so UI never blocks)
         if self.indexers.is_empty() && !self.indexers_loading && !self.cfg.api_key.is_empty() {
             let url = self.cfg.jackett_url.clone();
@@ -2482,7 +2500,69 @@ fn app_creator() -> AppCreator {
     Box::new(|_cc| Ok(Box::new(App::default()) as Box<dyn eframe::App>))
 }
 
+/// Shared quit flag: set when the tray "Quit" is clicked, so the app exits
+/// even from the tray (which runs outside the egui event loop).
+static QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Set when the tray "Show / Hide" is clicked; the app toggles window visibility.
+static TOGGLE_VIS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Create the system tray icon + menu (Show/Hide, Quit) on a dedicated GTK
+/// thread (tray-icon requires a GTK event loop on Linux). Returns immediately;
+/// the tray lives for the app's lifetime. Failure is non-fatal.
+fn setup_tray() {
+    #[cfg(target_os = "linux")]
+    {
+        std::thread::spawn(|| {
+            use tray_icon::{menu::{Menu, MenuItem, MenuEvent}, Icon, TrayIconBuilder};
+            if gtk::init().is_err() { return; }
+
+            // A tiny 16x16 TorrentX-ish icon (blue "T" on dark).
+            let mut rgba = Vec::with_capacity(16 * 16 * 4);
+            for y in 0..16 {
+                for x in 0..16 {
+                    let in_t = (x >= 4 && x <= 11) && (y >= 3 && y <= 12) && !(x >= 6 && x <= 9 && y >= 6 && y <= 9);
+                    if in_t { rgba.extend_from_slice(&[122, 162, 247, 255]); }
+                    else { rgba.extend_from_slice(&[26, 27, 38, 255]); }
+                }
+            }
+            let Ok(icon) = Icon::from_rgba(rgba, 16, 16) else { return };
+
+            let show = MenuItem::new("Show / Hide", true, None);
+            let quit = MenuItem::new("Quit", true, None);
+            let menu = Menu::new();
+            if menu.append_items(&[&show, &quit]).is_err() { return; }
+
+            if TrayIconBuilder::new()
+                .with_menu(Box::new(menu))
+                .with_tooltip("TorrentX")
+                .with_icon(icon)
+                .build().is_err() { return; }
+
+            // Menu events arrive on this thread's channel; signal the app.
+            let show_id = show.id().clone();
+            let quit_id = quit.id().clone();
+            std::thread::spawn(move || {
+                while let Ok(ev) = MenuEvent::receiver().recv() {
+                    if ev.id == quit_id {
+                        QUIT.store(true, std::sync::atomic::Ordering::SeqCst);
+                        break;
+                    }
+                    if ev.id == show_id {
+                        TOGGLE_VIS.store(true, std::sync::atomic::Ordering::SeqCst);
+                    }
+                }
+            });
+
+            // Run the GTK event loop (blocks; keeps the tray alive).
+            gtk::main();
+        });
+    }
+}
+
 fn main() -> eframe::Result<()> {
+    // System tray on a dedicated GTK thread (optional; non-fatal if unavailable).
+    setup_tray();
+
     // Try the normal (GPU-accelerated GL) run first.
     match eframe::run_native("TorrentX", native_options(), app_creator()) {
         Ok(()) => Ok(()),

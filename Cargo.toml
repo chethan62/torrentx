@@ -19,6 +19,10 @@ open = "5.1"
 dirs-next = "2.0"
 url = "2.5"
 quick-xml = "0.31"
+tray-icon = "0.19"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
 
 [profile.release]
 opt-level = 3
