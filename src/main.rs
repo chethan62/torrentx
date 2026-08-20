@@ -293,7 +293,7 @@ impl App {
                     // Dedupe by normalized title (same logic as main search):
                     // sort by seeders desc so the best copy wins, then keep first.
                     let mut items = items;
-                    items.sort_by(|a, b| b.seeders.unwrap_or(0).cmp(&a.seeders.unwrap_or(0)));
+                    items.sort_by_key(|a| std::cmp::Reverse(a.seeders.unwrap_or(0)));
                     let mut seen = std::collections::HashSet::new();
                     items.retain(|it| seen.insert(normalize(&it.title)));
                     self.rss_feeds[idx].items = items;
@@ -350,7 +350,8 @@ impl App {
 
     fn filtered(&self, raw: &[TorrentResult]) -> Vec<TorrentResult> {
         let min_s: u32 = self.f_seed.parse().unwrap_or(0);
-        let max_b: u64 = self.f_size.parse::<f64>().unwrap_or(0.0) as u64 * 1_073_741_824;
+        let max_b: u64 = self.f_size.parse::<f64>().unwrap_or(0.0).max(0.0) as u64;
+        let max_b = max_b.saturating_mul(1_073_741_824);
         let min_y: u32 = self.f_year.parse().unwrap_or(0);
         let trk = self.f_trk.to_lowercase();
         let txt = self.f_text.to_lowercase();
@@ -1060,8 +1061,9 @@ impl App {
                 let sorted = self.filtered(&raw);
                 let total = sorted.len();
 
-                // Clamp selected index after filtering
-                self.selected = self.selected.filter(|&i| i < total);
+                // Clamp selected index after filtering (page-local index space)
+                let page_n = self.page_slice(&sorted).len();
+                self.selected = self.selected.filter(|&i| i < page_n);
                 if self.selected.is_none() {
                     self.detail_open = false;
                 }
@@ -1078,8 +1080,9 @@ impl App {
                     return;
                 }
 
-                let pg = self.page;
                 let max_p = self.max_pages(total);
+                if self.page >= max_p { self.page = max_p.saturating_sub(1); }
+                let pg = self.page;
                 let page_s = self.page_slice(&sorted).to_vec();
                 let page_n = page_s.len();
 
@@ -1217,7 +1220,8 @@ impl App {
                 }
 
                 // Results table
-                self.draw_results_table(ui, &page_s);
+                let base = if self.cfg.page_size == 0 { 0 } else { pg * self.cfg.page_size };
+                self.draw_results_table(ui, &page_s, base);
             }
         }
     }
@@ -1377,10 +1381,16 @@ impl App {
                             RichText::new("☑ All").font(FontId::proportional(fs - 1.0)).color(self.pal.accent))
                             .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, self.pal.border))
                             .corner_radius(4.0)
-                        ).on_hover_text("Select all filtered results").clicked() {
+                        ).on_hover_text("Select all results on this page").clicked() {
                             let raw = self.all_results();
                             let sorted = self.filtered(&raw);
-                            self.sel_set = (0..sorted.len()).collect();
+                            if self.cfg.page_size == 0 {
+                                self.sel_set = (0..sorted.len()).collect();
+                            } else {
+                                let base = self.page * self.cfg.page_size;
+                                let end = (base + self.cfg.page_size).min(sorted.len());
+                                self.sel_set = (base..end).collect();
+                            }
                         }
                         if !self.sel_set.is_empty() && ui.add(egui::Button::new(
                             RichText::new("✕ Clear").font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
@@ -1439,7 +1449,7 @@ impl App {
             });
     }
 
-    fn draw_results_table(&mut self, ui: &mut egui::Ui, page_s: &[TorrentResult]) {
+    fn draw_results_table(&mut self, ui: &mut egui::Ui, page_s: &[TorrentResult], base: usize) {
         let mut actions: Vec<(usize, &'static str)> = vec![];
         let pal = self.pal.clone();
         let s_col = self.s_col.clone();
@@ -1509,6 +1519,7 @@ impl App {
             })
             .body(|mut body| {
                 for (i, r) in page_s.iter().enumerate() {
+                    let gi = base + i; // global index into the filtered results
                     let is_sel = sel == Some(i);
                     let is_hov = self.hovered == Some(i);
                     let seed = r.seeders.unwrap_or(0);
@@ -1526,9 +1537,9 @@ impl App {
                                     TableCol::Name => {
                                         ui.horizontal(|ui| {
                                             if self.sel_mode {
-                                                let mut checked = self.sel_set.contains(&i);
+                                                let mut checked = self.sel_set.contains(&gi);
                                                 if ui.add(egui::Checkbox::without_text(&mut checked)).clicked() {
-                                                    if checked { self.sel_set.insert(i); } else { self.sel_set.remove(&i); }
+                                                    if checked { self.sel_set.insert(gi); } else { self.sel_set.remove(&gi); }
                                                 }
                                             }
                                             let resp = ui.add(egui::Label::new(
@@ -1537,7 +1548,7 @@ impl App {
                                             ).truncate().sense(egui::Sense::click()));
                                             if resp.clicked() {
                                                 if self.sel_mode {
-                                                    if !self.sel_set.insert(i) { self.sel_set.remove(&i); }
+                                                    if !self.sel_set.insert(gi) { self.sel_set.remove(&gi); }
                                                 } else {
                                                     actions.push((i, "select"));
                                                 }
@@ -2520,7 +2531,7 @@ fn setup_tray() {
             let mut rgba = Vec::with_capacity(16 * 16 * 4);
             for y in 0..16 {
                 for x in 0..16 {
-                    let in_t = (x >= 4 && x <= 11) && (y >= 3 && y <= 12) && !(x >= 6 && x <= 9 && y >= 6 && y <= 9);
+                    let in_t = (4..=11).contains(&x) && (3..=12).contains(&y) && !((6..=9).contains(&x) && (6..=9).contains(&y));
                     if in_t { rgba.extend_from_slice(&[122, 162, 247, 255]); }
                     else { rgba.extend_from_slice(&[26, 27, 38, 255]); }
                 }
