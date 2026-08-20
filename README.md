@@ -14,28 +14,32 @@
 ## Features
 
 - **19 themes** — 16 dark + 3 light, instant switching
-- **All Jackett indexers** — search 100+ trackers simultaneously
-- **Multi-column results** — Name, Tracker, Size, Seeds, Leechers, Ratio, Health, Date (toggle any)
+- **All Jackett indexers** — search 100+ trackers simultaneously, or pick one
+- **Multi-column results** — Name, Tracker, Size, Seeds, Leechers, Ratio, Health, Date (toggle any, reorder via Settings)
 - **Row density** — Compact / Normal / Roomy
 - **Filters** — text search, min seeds, size range, year, tracker, health status, category chips
-- **Sort** — by Name, Tracker, Size, Seeds, Leechers, Date
+- **Sort** — by Name, Tracker, Size, Seeds, Leechers, Ratio, Date
 - **Favorites** — save torrents with timestamps, search filter, persistent storage
 - **Detail panel** — seeder/leecher ratio bar, magnet copy/open, .torrent download
+- **Batch actions** — select mode, select-all, copy N magnets at once
 - **Keyboard shortcuts** — ↑↓ Enter D F M Ctrl+F Ctrl+R Esc
 - **CSV export** — export filtered results
 - **Pagination** — 25/50/100/All
-- **Deduplication** — across trackers
+- **Deduplication** — across trackers (main search + RSS)
 - **Search history** — with per-item delete
-- **RSS feeds** — Jackett Torznab indexer feeds with auto-refresh (10 min)
+- **RSS feeds** — Jackett Torznab indexer feeds with auto-refresh (10 min), deduped
+- **Custom accent color** — override any theme's accent
+- **System tray** — minimize-to-tray with Show/Hide + Quit
+- **Update checker** — notifies when a new release is out
 - **Toast notifications** — animated, per-theme colored
+- **egui 0.36** — modern rendering, GPU-accelerated
 
 ## Download
 
 | Platform | File | Size |
 |----------|------|------|
-| Linux (AppImage) | [TorrentX-17.0.0-x86_64.AppImage](https://github.com/chethan62/torrentx/releases/tag/v17.0.0) | ~8 MB |
-| Linux (binary) | [torrentx-linux-amd64](https://github.com/chethan62/torrentx/releases/tag/v17.0.0) | ~11 MB |
-| Windows | [TorrentX-17.0.0-x86_64.exe](https://github.com/chethan62/torrentx/releases/tag/v17.0.0) | ~6 MB |
+| Linux (AppImage) | [TorrentX-18.0.0-x86_64.AppImage](https://github.com/chethan62/torrentx/releases/tag/v18.0.0) | ~9 MB |
+| Linux (binary) | [torrentx](https://github.com/chethan62/torrentx/releases/tag/v18.0.0) | ~19 MB |
 
 ## Build from source
 
