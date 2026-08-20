@@ -84,6 +84,9 @@ struct App {
     toasts: Vec<Toast>,
     hovered: Option<usize>,
     fav_search: String,
+    // batch selection mode
+    sel_mode: bool,
+    sel_set: std::collections::HashSet<usize>,
     // RSS
     rss_feeds: Vec<RssFeedState>,
     rss_last_refresh: Vec<Instant>,
@@ -132,6 +135,7 @@ impl Default for App {
             selected: None, detail_open: false, detail_width: 295.0, show_hist: false,
             page: 0, last_query: String::new(), toasts: vec![],
             hovered: None, fav_search: String::new(),
+            sel_mode: false, sel_set: std::collections::HashSet::new(),
             rss_feeds: feeds,
             rss_last_refresh: vec![Instant::now(); n_feeds],
             rss_tx, rss_rx,
@@ -202,6 +206,7 @@ impl App {
         save_cfg(&self.cfg);
         self.selected = None; self.detail_open = false;
         self.show_hist = false; self.page = 0;
+        self.sel_set.clear(); self.sel_mode = false;
         self.last_query = q.clone(); self.f_text.clear();
         self.hovered = None; self.t_start = Some(Instant::now()); self.t_done = None;
         if let Ok(mut r) = self.results.lock() { r.clear(); }
@@ -211,6 +216,27 @@ impl App {
             q, self.cat.clone(), self.indexer.clone(), self.cfg.timeout_secs,
             Arc::clone(&self.results), Arc::clone(&self.state), Arc::clone(&self.count),
         );
+    }
+
+    /// Copy all magnet links from the batch-selected rows (one per line).
+    fn copy_selected_magnets(&mut self, ui: &egui::Ui) {
+        let raw = self.all_results();
+        let sorted = self.filtered(&raw);
+        let magnets: Vec<&str> = self.sel_set.iter()
+            .filter_map(|&i| sorted.get(i))
+            .filter_map(|r| r.magnet_uri.as_deref())
+            .filter(|m| is_magnet(m))
+            .collect();
+        if magnets.is_empty() {
+            self.toast("No valid magnets selected", self.pal.yellow);
+            return;
+        }
+        let text = magnets.join("\n");
+        ui.ctx().copy_text(text);
+        self.toast(&format!("Copied {} magnet{}", magnets.len(),
+            if magnets.len() == 1 { "" } else { "s" }), self.pal.green);
+        self.sel_mode = false;
+        self.sel_set.clear();
     }
 
     fn add_fav(&mut self, r: &TorrentResult) {
@@ -1236,8 +1262,31 @@ impl App {
                     }
                 });
                 ui.add_space(5.0);
-                // Row 2 — health + sort
+                // Row 2 — select mode + health + sort
                 ui.horizontal(|ui| {
+                    // Batch select toggle
+                    if ui.add(egui::Button::selectable(self.sel_mode,
+                        RichText::new("☑ Select").font(FontId::proportional(fs - 1.0))
+                            .color(if self.sel_mode { self.pal.accent } else { self.pal.sub })
+                    )).clicked() {
+                        self.sel_mode = !self.sel_mode;
+                        self.sel_set.clear();
+                        self.detail_open = false;
+                    }
+                    if self.sel_mode {
+                        let n = self.sel_set.len();
+                        if n > 0 && ui.add(egui::Button::new(
+                            RichText::new(format!("⧉ Copy {n} magnet{}", if n == 1 { "" } else { "s" }))
+                                .font(FontId::proportional(fs - 1.0)).color(self.pal.green))
+                            .fill(tint(self.pal.green, 14))
+                            .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 60)))
+                            .corner_radius(4.0)
+                        ).clicked() {
+                            self.copy_selected_magnets(ui);
+                        }
+                        ui.add_space(4.0);
+                    }
+                    ui.add_space(6.0);
                     lbl(ui, "Health", self.pal.dim, fs);
                     ui.add_space(4.0);
                     for hf in [Hlth::All, Hlth::Hot, Hlth::Good, Hlth::Slow, Hlth::Dead] {
@@ -1389,15 +1438,30 @@ impl App {
                         // Name
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                            let resp = ui.add(egui::Label::new(
-                                RichText::new(&r.title).font(FontId::proportional(fsz))
-                                    .color(if is_sel { pal.accent } else { pal.text })
-                            ).truncate().sense(egui::Sense::click()));
-                            if resp.clicked() { actions.push((i, "select")); }
-                            if resp.hovered() {
-                                self.hovered = Some(i);
-                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                            }
+                            ui.horizontal(|ui| {
+                                if self.sel_mode {
+                                    // Checkbox + click toggles batch selection
+                                    let mut checked = self.sel_set.contains(&i);
+                                    if ui.add(egui::Checkbox::without_text(&mut checked)).clicked() {
+                                        if checked { self.sel_set.insert(i); } else { self.sel_set.remove(&i); }
+                                    }
+                                }
+                                let resp = ui.add(egui::Label::new(
+                                    RichText::new(&r.title).font(FontId::proportional(fsz))
+                                        .color(if is_sel { pal.accent } else { pal.text })
+                                ).truncate().sense(egui::Sense::click()));
+                                if resp.clicked() {
+                                    if self.sel_mode {
+                                        if !self.sel_set.insert(i) { self.sel_set.remove(&i); }
+                                    } else {
+                                        actions.push((i, "select"));
+                                    }
+                                }
+                                if resp.hovered() {
+                                    self.hovered = Some(i);
+                                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                }
+                            });
                             if rh >= 40.0 {
                                 let cat = r.category_desc.as_deref().unwrap_or("Other");
                                 ui.add(egui::Label::new(RichText::new(cat)
