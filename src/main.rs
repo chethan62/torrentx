@@ -60,6 +60,15 @@ struct App {
     results: Arc<Mutex<Vec<TorrentResult>>>,
     state: Arc<Mutex<SearchState>>,
     count: Arc<Mutex<usize>>,
+    // indexers (from Jackett)
+    indexers: Vec<String>,
+    indexer: String,
+    indexers_loading: bool,
+    indexers_handle: std::sync::mpsc::Sender<Vec<String>>,
+    indexers_rx: std::sync::mpsc::Receiver<Vec<String>>,
+    update_checked: bool,
+    update_tx: std::sync::mpsc::Sender<Option<String>>,
+    update_rx: std::sync::mpsc::Receiver<Option<String>>,
     // ui
     tab: Tab,
     show_settings: bool,
@@ -98,6 +107,8 @@ impl Default for App {
         let n_feeds = cfg.rss_feeds.len();
         let feeds: Vec<RssFeedState> = cfg.rss_feeds.iter().map(|c| RssFeedState::new(c.clone())).collect();
         let (rss_tx, rss_rx) = std::sync::mpsc::channel();
+        let (indexers_handle, indexers_rx) = std::sync::mpsc::channel::<Vec<String>>();
+        let (update_tx, update_rx) = std::sync::mpsc::channel::<Option<String>>();
         Self {
             cfg, pal,
             query: String::new(), cat: "All".into(),
@@ -108,6 +119,12 @@ impl Default for App {
             results: Arc::new(Mutex::new(vec![])),
             state: Arc::new(Mutex::new(SearchState::Idle)),
             count: Arc::new(Mutex::new(0)),
+            indexers: vec![],
+            indexer: "All".into(),
+            indexers_loading: false,
+            indexers_handle, indexers_rx,
+            update_checked: false,
+            update_tx, update_rx,
             tab: Tab::Search, show_settings: false, key_vis: false,
             selected: None, detail_open: false, detail_width: 295.0, show_hist: false,
             page: 0, last_query: String::new(), toasts: vec![],
@@ -188,7 +205,7 @@ impl App {
         if let Ok(mut c) = self.count.lock() { *c = 0; }
         start_search(
             self.cfg.jackett_url.clone(), self.cfg.api_key.clone(),
-            q, self.cat.clone(), self.cfg.timeout_secs,
+            q, self.cat.clone(), self.indexer.clone(), self.cfg.timeout_secs,
             Arc::clone(&self.results), Arc::clone(&self.state), Arc::clone(&self.count),
         );
     }
@@ -331,6 +348,14 @@ impl App {
             let c = match self.s_col {
                 SortCol::Seeds => b.seeders.unwrap_or(0).cmp(&a.seeders.unwrap_or(0)),
                 SortCol::Leech => b.peers.unwrap_or(0).cmp(&a.peers.unwrap_or(0)),
+                SortCol::Ratio => {
+                    let r = |x: &TorrentResult| {
+                        let s = x.seeders.unwrap_or(0) as f64;
+                        let l = x.peers.unwrap_or(0) as f64;
+                        if l > 0.0 { s / l } else { f64::INFINITY }
+                    };
+                    r(b).partial_cmp(&r(a)).unwrap_or(std::cmp::Ordering::Equal)
+                }
                 SortCol::Size => b.size.unwrap_or(0).cmp(&a.size.unwrap_or(0)),
                 SortCol::Name => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
                 SortCol::Tracker => a.tracker.as_deref().unwrap_or("").to_lowercase()
@@ -425,6 +450,39 @@ impl eframe::App for App {
         let ctx = ui.ctx().clone();
         self.apply_theme(&ctx);
         let state = self.cur_state();
+
+        // Fetch indexer list once (background, so UI never blocks)
+        if self.indexers.is_empty() && !self.indexers_loading && !self.cfg.api_key.is_empty() {
+            let url = self.cfg.jackett_url.clone();
+            let key = self.cfg.api_key.clone();
+            let handle = self.indexers_handle.clone();
+            self.indexers_loading = true;
+            std::thread::spawn(move || {
+                let list = jackett::fetch_indexers(&url, &key);
+                let _ = handle.send(list);
+            });
+        }
+        // Drain indexer fetch result
+        if self.indexers_loading {
+            if let Ok(list) = self.indexers_rx.try_recv() {
+                self.indexers = list;
+                self.indexers_loading = false;
+            }
+        }
+
+        // Check for updates once at startup (background); show a toast when found
+        if !self.update_checked {
+            self.update_checked = true;
+            let cur = env!("CARGO_PKG_VERSION").to_string();
+            let update_tx = self.update_tx.clone();
+            std::thread::spawn(move || {
+                let new = jackett::check_update(&cur);
+                let _ = update_tx.send(new);
+            });
+        }
+        if let Ok(Some(new)) = self.update_rx.try_recv() {
+            self.toast(&format!("Update available: {new}"), self.pal.accent);
+        }
 
         // Spinner tick
         if state == SearchState::Searching {
@@ -776,6 +834,22 @@ impl App {
                             RichText::new(c).font(FontId::proportional(fs)));
                     }
                 });
+
+            // Indexer picker (from Jackett's configured indexers)
+            ui.add_space(6.0);
+            egui::ComboBox::from_id_salt("idx_cb")
+                .selected_text(RichText::new(&self.indexer).font(FontId::proportional(fs)))
+                .width(130.0)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.indexer, "All".into(),
+                        RichText::new("All").font(FontId::proportional(fs)));
+                    for idx in &self.indexers {
+                        ui.selectable_value(&mut self.indexer, idx.clone(),
+                            RichText::new(idx).font(FontId::proportional(fs)));
+                    }
+                })
+                .response
+                .on_hover_text("Search one indexer instead of all");
 
             ui.add_space(6.0);
             if ui.add_enabled(!busy,
@@ -1155,7 +1229,8 @@ impl App {
                         ui.add_space(4.0);
                         for (l, col) in [("Date", SortCol::Date), ("Size", SortCol::Size),
                                          ("Leech", SortCol::Leech), ("Seeds", SortCol::Seeds),
-                                         ("Tracker", SortCol::Tracker), ("Name", SortCol::Name)] {
+                                         ("Ratio", SortCol::Ratio), ("Tracker", SortCol::Tracker),
+                                         ("Name", SortCol::Name)] {
                             let on = self.s_col == col;
                             let txt = if on {
                                 if self.s_dir == SortDir::Desc { format!("{l}▼") } else { format!("{l}▲") }
@@ -1244,7 +1319,9 @@ impl App {
                 }
                 if cfg.col_ratio {
                     header.col(|ui| {
-                        ui.label(RichText::new("Ratio").font(FontId::proportional(fsz)).color(pal.sub).strong());
+                        if ui.add(egui::Label::new(hdr("Ratio", &SortCol::Ratio)).sense(egui::Sense::click())).clicked() {
+                            new_sort = Some((SortCol::Ratio, s_col == SortCol::Ratio));
+                        }
                     });
                 }
                 if cfg.col_health {
@@ -2162,6 +2239,8 @@ impl App {
                     "Detail side panel with seeder/leecher ratio bar",
                     "Deduplication across trackers",
                     "RSS feeds with background auto-refresh (10 min)",
+                    "Per-indexer search — pick one Jackett indexer",
+                    "Automatic update check on startup",
                     "Export filtered results to CSV",
                     "Pagination: 25 / 50 / 100 / All per page",
                     "Keyboard nav: ↑↓ Enter D F M Ctrl+F Ctrl+R Esc",

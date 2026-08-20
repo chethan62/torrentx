@@ -32,7 +32,7 @@ pub(crate) struct TorrentResult {
 // ─── App state types ───────────────────────────────────────────────────────
 
 #[derive(Clone, PartialEq)]
-pub(crate) enum SortCol { Name, Tracker, Size, Seeds, Leech, Date }
+pub(crate) enum SortCol { Name, Tracker, Size, Seeds, Leech, Ratio, Date }
 
 #[derive(Clone, PartialEq)]
 pub(crate) enum SortDir { Asc, Desc }
@@ -155,6 +155,35 @@ pub(crate) fn shared_client() -> &'static Client {
     })
 }
 
+/// Check GitHub releases for a newer version. Returns the latest release tag
+/// (e.g. "v17.0.0") or None on failure / no newer version.
+pub(crate) fn check_update(current: &str) -> Option<String> {
+    let ep = "https://api.github.com/repos/chethan62/torrentx/releases/latest";
+    let resp = shared_client()
+        .get(ep)
+        .header("User-Agent", "TorrentX")
+        .timeout(Duration::from_secs(10))
+        .send()
+        .ok()?;
+    if !resp.status().is_success() { return None; }
+    let body = resp.text().ok()?;
+    // Parse "tag_name":"vX.Y.Z" (char-safe: avoid byte slicing on multibyte)
+    let tag = body.find("\"tag_name\":\"")?;
+    let rest = &body[tag + "\"tag_name\":\"".len()..];
+    let latest = rest.split('"').next()?;
+    let latest_trim = latest.trim_start_matches('v');
+    let cur_trim = current.trim_start_matches('v');
+    // Compare dotted versions
+    let parse = |s: &str| -> Vec<u64> {
+        s.split('.').filter_map(|p| p.parse::<u64>().ok()).collect()
+    };
+    let (l, c) = (parse(latest_trim), parse(cur_trim));
+    let newer = l.iter().zip(c.iter()).find(|(a, b)| a != b)
+        .map(|(a, b)| a > b)
+        .unwrap_or(l.len() > c.len());
+    if newer { Some(latest.to_string()) } else { None }
+}
+
 /// Map UI category labels to Jackett/Torznab numeric category IDs.
 /// The API expects numbers (2000=Movies, 5000=TV, …), not English labels.
 pub(crate) fn category_id(label: &str) -> Option<&'static str> {
@@ -171,18 +200,53 @@ pub(crate) fn category_id(label: &str) -> Option<&'static str> {
     })
 }
 
+/// Fetch the list of *configured* Jackett indexers (id slugs).
+/// Uses the Torznab `t=indexers` endpoint; returns empty vec on any failure.
+pub(crate) fn fetch_indexers(url: &str, key: &str) -> Vec<String> {
+    let ep = format!(
+        "{}/api/v2.0/indexers/all/results/torznab/api?apikey={}&t=indexers",
+        url.trim_end_matches('/'), key
+    );
+    let Ok(resp) = shared_client()
+        .get(&ep)
+        .timeout(Duration::from_secs(15))
+        .send()
+    else { return vec![] };
+    let Ok(body) = resp.text() else { return vec![] };
+    // Parse `<indexer id="..." configured="true"><title>...</title>` entries
+    let mut out = vec![];
+    let mut pos = 0;
+    while let Some(start) = body[pos..].find("<indexer ") {
+        let seg = &body[pos + start..];
+        // Extract id="..." — safe against attribute order / malformed XML
+        if let Some(i0) = seg.find("id=\"") {
+            let i0 = i0 + 4;
+            if let Some(i1) = seg[i0..].find('"') {
+                let id = &seg[i0..i0 + i1];
+                let configured = seg.contains("configured=\"true\"");
+                if configured && !id.is_empty() { out.push(id.to_string()); }
+            }
+        }
+        pos += start + 10;
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_search(
-    url: String, key: String, query: String, cat: String, timeout: u64,
+    url: String, key: String, query: String, cat: String, indexer: String, timeout: u64,
     results: Arc<Mutex<Vec<TorrentResult>>>,
     state: Arc<Mutex<SearchState>>,
     count: Arc<Mutex<usize>>,
 ) {
     thread::spawn(move || {
         if let Ok(mut s) = state.lock() { *s = SearchState::Searching; }
+        let idx = if indexer.is_empty() || indexer == "All" { "all" } else { indexer.as_str() };
         let mut ep = format!(
-            "{}/api/v2.0/indexers/all/results?apikey={}&Query={}",
-            url.trim_end_matches('/'), urlenc(&key), urlenc(&query)
+            "{}/api/v2.0/indexers/{}/results?apikey={}&Query={}",
+            url.trim_end_matches('/'), urlenc(idx), urlenc(&key), urlenc(&query)
         );
         if cat != "All" {
             if let Some(id) = category_id(&cat) {
