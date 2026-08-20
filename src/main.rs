@@ -764,11 +764,11 @@ impl App {
 
 impl App {
     fn draw_settings_panel(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.add_space(MARGIN_DEFAULT);
             ui.vertical(|ui| {
                 // Row 1 — Connection
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     lbl(ui, "CONNECTION", self.pal.dim, 10.0);
                     ui.add_space(6.0);
                     lbl(ui, "Jackett URL", self.pal.sub, 12.0);
@@ -795,7 +795,7 @@ impl App {
                 ui.add_space(5.0);
 
                 // Row 2 — Display
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     lbl(ui, "DISPLAY", self.pal.dim, 10.0);
                     ui.add_space(6.0);
                     lbl(ui, "Rows", self.pal.sub, 12.0);
@@ -885,7 +885,7 @@ impl App {
                 ui.add_space(5.0);
 
                 // Row 3 — Columns
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     lbl(ui, "COLUMNS", self.pal.dim, 10.0);
                     ui.add_space(6.0);
                     let mut col_changed = false;
@@ -907,7 +907,7 @@ impl App {
                     if col_changed { save_cfg(&self.cfg); }
                     ui.add_space(10.0);
                     // Column order (reorder via ↑/↓)
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         lbl(ui, "Order", self.pal.dim, 10.0);
                         ui.add_space(4.0);
                         let mut moved: Option<(usize, isize)> = None;
@@ -957,12 +957,12 @@ impl App {
         let mut bar_rect = egui::Rect::NOTHING;
 
         // Search input
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.add_space(12.0);
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.query)
                     .id(egui::Id::new("q"))
-                    .desired_width(ui.available_width() - 310.0)
+                    .desired_width((ui.available_width() - 310.0).max(160.0))
                     .hint_text("Search torrents — movies, shows, games, software, anime…")
                     .font(FontId::proportional(fs + 2.0))
             );
@@ -1084,7 +1084,7 @@ impl App {
                 let page_n = page_s.len();
 
                 // Stats bar
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.add_space(12.0);
                     let active: usize = sorted.iter().filter(|r| r.seeders.unwrap_or(0) > 0).count();
                     let seeds: u32 = sorted.iter().map(|r| r.seeders.unwrap_or(0)).sum();
@@ -1108,7 +1108,7 @@ impl App {
                     let chips = App::cat_chips(&sorted);
                     if !chips.is_empty() {
                         ui.add_space(4.0);
-                        ui.horizontal(|ui| {
+                        ui.horizontal_wrapped(|ui| {
                             ui.add_space(12.0);
                             for (cat, count, col) in &chips {
                                 let sel = self.f_text == *cat;
@@ -1181,7 +1181,7 @@ impl App {
                             .stroke(Stroke::new(1.0_f32, self.pal.border))
                             .inner_margin(egui::Margin::symmetric(12, 5)))
                         .show(ui, |ui| {
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 if ui.add_enabled(pg > 0,
                                     egui::Button::new(RichText::new("← Prev")
                                         .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
@@ -1267,7 +1267,7 @@ impl App {
                         .inner_margin(egui::Margin::symmetric(10, 8))
                         .show(ui, |ui| {
                             ui.set_width(w.max(280.0));
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 lbl(ui, "Recent searches", self.pal.dim, 11.0);
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.add(egui::Button::new(
@@ -1279,7 +1279,7 @@ impl App {
                             });
                             ui.add_space(4.0);
                             for h in hist.iter().take(10) {
-                                ui.horizontal(|ui| {
+                                ui.horizontal_wrapped(|ui| {
                                     if ui.add(egui::Button::new(
                                         RichText::new(h.as_str()).font(FontId::proportional(fs))
                                             .color(self.pal.text))
@@ -1313,7 +1313,7 @@ impl App {
             .outer_margin(egui::Margin::symmetric(12, 0))
             .show(ui, |ui| {
                 // Row 1
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     lbl(ui, "Filter", self.pal.dim, fs);
                     ui.add_space(3.0);
                     ui.add(egui::TextEdit::singleline(&mut self.f_text)
@@ -1350,7 +1350,7 @@ impl App {
                 });
                 ui.add_space(5.0);
                 // Row 2 — select mode + health + sort
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     // Batch select toggle
                     if ui.add(egui::Button::selectable(self.sel_mode,
                         RichText::new("☑ Select").font(FontId::proportional(fs - 1.0))

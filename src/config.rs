@@ -54,10 +54,7 @@ impl Default for Config {
             col_ratio: true, col_health: true, col_date: true,
             rss_feeds: vec![],
             accent: None,
-            col_order: vec![
-                "Name".into(), "Tracker".into(), "Size".into(), "Seeds".into(),
-                "Leech".into(), "Ratio".into(), "Health".into(), "Date".into(),
-            ],
+            col_order: default_col_order(),
         }
     }
 }
@@ -83,10 +80,23 @@ pub(crate) fn cfg_path() -> std::path::PathBuf {
 }
 
 pub(crate) fn load_cfg() -> Config {
-    fs::read_to_string(cfg_path())
+    let mut c: Config = fs::read_to_string(cfg_path())
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // Heal old configs: empty col_order (pre-column-reorder) → default order.
+    if c.col_order.is_empty() {
+        c.col_order = default_col_order();
+    }
+    c
+}
+
+/// The canonical column order, used as the default and to heal old configs.
+pub(crate) fn default_col_order() -> Vec<String> {
+    vec![
+        "Name".into(), "Tracker".into(), "Size".into(), "Seeds".into(),
+        "Leech".into(), "Ratio".into(), "Health".into(), "Date".into(),
+    ]
 }
 
 pub(crate) fn save_cfg(c: &Config) {
