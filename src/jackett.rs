@@ -201,18 +201,15 @@ pub(crate) fn category_id(label: &str) -> Option<&'static str> {
 }
 
 /// Fetch the list of *configured* Jackett indexers (id slugs).
-/// Uses the Torznab `t=indexers` endpoint; returns empty vec on any failure.
-pub(crate) fn fetch_indexers(url: &str, key: &str) -> Vec<String> {
+/// Uses the Torznab `t=indexers` endpoint. Returns `None` if Jackett is
+/// unreachable, `Some(list)` (possibly empty) on success.
+pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<Vec<String>> {
     let ep = format!(
         "{}/api/v2.0/indexers/all/results/torznab/api?apikey={}&t=indexers",
         url.trim_end_matches('/'), key
     );
-    let Ok(resp) = shared_client()
-        .get(&ep)
-        .timeout(Duration::from_secs(15))
-        .send()
-    else { return vec![] };
-    let Ok(body) = resp.text() else { return vec![] };
+    let resp = shared_client().get(&ep).timeout(Duration::from_secs(15)).send().ok()?;
+    let body = resp.text().ok()?;
     // Parse `<indexer id="..." configured="true"><title>...</title>` entries
     let mut out = vec![];
     let mut pos = 0;
@@ -231,7 +228,7 @@ pub(crate) fn fetch_indexers(url: &str, key: &str) -> Vec<String> {
     }
     out.sort();
     out.dedup();
-    out
+    Some(out)
 }
 
 #[allow(clippy::too_many_arguments)]

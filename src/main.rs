@@ -64,11 +64,13 @@ struct App {
     indexers: Vec<String>,
     indexer: String,
     indexers_loading: bool,
-    indexers_handle: std::sync::mpsc::Sender<Vec<String>>,
-    indexers_rx: std::sync::mpsc::Receiver<Vec<String>>,
+    indexers_handle: std::sync::mpsc::Sender<Option<Vec<String>>>,
+    indexers_rx: std::sync::mpsc::Receiver<Option<Vec<String>>>,
     update_checked: bool,
     update_tx: std::sync::mpsc::Sender<Option<String>>,
     update_rx: std::sync::mpsc::Receiver<Option<String>>,
+    // Jackett reachability (checked in background)
+    jackett_ok: Option<bool>,
     // ui
     tab: Tab,
     show_settings: bool,
@@ -107,7 +109,7 @@ impl Default for App {
         let n_feeds = cfg.rss_feeds.len();
         let feeds: Vec<RssFeedState> = cfg.rss_feeds.iter().map(|c| RssFeedState::new(c.clone())).collect();
         let (rss_tx, rss_rx) = std::sync::mpsc::channel();
-        let (indexers_handle, indexers_rx) = std::sync::mpsc::channel::<Vec<String>>();
+        let (indexers_handle, indexers_rx) = std::sync::mpsc::channel::<Option<Vec<String>>>();
         let (update_tx, update_rx) = std::sync::mpsc::channel::<Option<String>>();
         Self {
             cfg, pal,
@@ -125,6 +127,7 @@ impl Default for App {
             indexers_handle, indexers_rx,
             update_checked: false,
             update_tx, update_rx,
+            jackett_ok: None,
             tab: Tab::Search, show_settings: false, key_vis: false,
             selected: None, detail_open: false, detail_width: 295.0, show_hist: false,
             page: 0, last_query: String::new(), toasts: vec![],
@@ -465,7 +468,10 @@ impl eframe::App for App {
         // Drain indexer fetch result
         if self.indexers_loading {
             if let Ok(list) = self.indexers_rx.try_recv() {
-                self.indexers = list;
+                self.jackett_ok = Some(list.is_some()); // None = Jackett unreachable
+                if let Some(l) = list {
+                    self.indexers = l;
+                }
                 self.indexers_loading = false;
             }
         }
@@ -619,7 +625,12 @@ impl App {
                     ui.add_space(8.0);
 
                     // Tabs
-                    for (label, tab) in [("🔍", Tab::Search), ("★", Tab::Favorites), ("📡", Tab::Rss), ("ℹ", Tab::About)] {
+                    for (label, tip, tab) in [
+                        ("🔍 Search", "Search torrents", Tab::Search),
+                        ("★ Favorites", "Saved torrents", Tab::Favorites),
+                        ("📡 RSS", "RSS feed reader", Tab::Rss),
+                        ("ℹ About", "About TorrentX", Tab::About),
+                    ] {
                         let active = self.tab == tab;
                         let badge = if tab == Tab::Favorites && !self.cfg.favorites.is_empty() {
                             format!(" {}", self.cfg.favorites.len())
@@ -630,7 +641,7 @@ impl App {
                             .fill(if active { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
                             .stroke(Stroke::new(if active { 1.0_f32 } else { 0.0_f32 }, self.pal.accent))
                             .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
-                        ).clicked() {
+                        ).on_hover_text(tip).clicked() {
                             self.tab = tab;
                             self.detail_open = false;
                             self.selected = None;
@@ -641,6 +652,23 @@ impl App {
                     // Right side controls
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add_space(12.0);
+
+                        // Jackett connection status dot
+                        if let Some(ok) = self.jackett_ok {
+                            let (col, txt, tip) = if ok {
+                                (self.pal.green, "●", "Jackett connected")
+                            } else {
+                                (self.pal.red, "●", "Jackett unreachable — check Settings")
+                            };
+                            ui.add(egui::Label::new(RichText::new(txt).color(col).size(13.0)))
+                                .on_hover_text(tip);
+                            ui.add_space(6.0);
+                        } else {
+                            ui.add(egui::Label::new(RichText::new("◌").color(self.pal.dim).size(13.0)))
+                                .on_hover_text("Checking Jackett…");
+                            ui.add_space(6.0);
+                        }
+
                         let sa = self.show_settings;
                         if ui.add(egui::Button::new(
                             RichText::new("⚙ Settings").size(13.0)
