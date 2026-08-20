@@ -1285,6 +1285,24 @@ impl App {
                             self.copy_selected_magnets(ui);
                         }
                         ui.add_space(4.0);
+                        // Select all visible / clear
+                        if ui.add(egui::Button::new(
+                            RichText::new("☑ All").font(FontId::proportional(fs - 1.0)).color(self.pal.accent))
+                            .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, self.pal.border))
+                            .corner_radius(4.0)
+                        ).on_hover_text("Select all filtered results").clicked() {
+                            let raw = self.all_results();
+                            let sorted = self.filtered(&raw);
+                            self.sel_set = (0..sorted.len()).collect();
+                        }
+                        if !self.sel_set.is_empty() && ui.add(egui::Button::new(
+                            RichText::new("✕ Clear").font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
+                            .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, self.pal.border))
+                            .corner_radius(4.0)
+                        ).clicked() {
+                            self.sel_set.clear();
+                        }
+                        ui.add_space(4.0);
                     }
                     ui.add_space(6.0);
                     lbl(ui, "Health", self.pal.dim, fs);
