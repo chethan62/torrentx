@@ -8,7 +8,7 @@ mod rss;
 mod themes;
 
 use config::{load_cfg, save_cfg, Config, Favorite, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_ROOMY};
-use jackett::{cat_col, fmt_size, hlth_lbl, normalize, now_str, pub_year, seed_col, set_err, start_search, time_ago, Hlth, SearchState, SortCol, SortDir, Tab, TorrentResult};
+use jackett::{cat_col, fmt_size, hlth_lbl, is_magnet, normalize, now_str, pub_year, seed_col, set_err, start_search, time_ago, Hlth, SearchState, SortCol, SortDir, Tab, TorrentResult};
 use rss::{start_rss_fetch, FeedStatus, RssFeedConfig, RssFeedState, RssItem};
 use themes::{rgb, rgba, tint, Pal, Theme};
 
@@ -1477,7 +1477,7 @@ impl App {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                             ui.horizontal(|ui| {
                                 ui.add_space(2.0);
-                                if r.magnet_uri.is_some() {
+                                if r.magnet_uri.as_deref().map(is_magnet).unwrap_or(false) {
                                     if act_btn(ui, "Mag", "Open in torrent client", pal.accent) { actions.push((i, "mag")); }
                                     if act_btn(ui, "Copy", "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
                                 }
@@ -1827,7 +1827,7 @@ impl App {
                                 if act_btn(ui, "Del", "Remove", self.pal.red) { remove = Some(i); }
                                 if fav.link.is_some()
                                     && act_btn(ui, "DL", "Download .torrent", self.pal.green) { open_link = fav.link.clone(); }
-                                if fav.magnet.is_some()
+                                if fav.magnet.as_deref().map(is_magnet).unwrap_or(false)
                                     && act_btn(ui, "Mag", "Open magnet", self.pal.accent) { open_mag = fav.magnet.clone(); }
                             });
                         });
@@ -2079,7 +2079,7 @@ impl App {
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                             ui.horizontal(|ui| {
-                                if item.magnet.is_some() {
+                                if item.magnet.as_deref().map(is_magnet).unwrap_or(false) {
                                     if act_btn(ui, "Mag", "Open magnet", pal.accent) { actions.push((i, "mag")); }
                                     if act_btn(ui, "Copy", "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
                                 }

@@ -184,6 +184,22 @@ pub(crate) fn check_update(current: &str) -> Option<String> {
     if newer { Some(latest.to_string()) } else { None }
 }
 
+/// Validate a magnet link: must start with `magnet:?xt=urn:btih:` and carry
+/// a 32- or 40-char hex/base32 info-hash. Rejects empty / malformed strings.
+pub(crate) fn is_magnet(s: &str) -> bool {
+    let s = s.trim();
+    if !s.starts_with("magnet:?xt=urn:btih:") { return false; }
+    // Grab the xt=urn:btih:<hash> value (may be followed by &dn=... etc.)
+    let rest = &s["magnet:?xt=urn:btih:".len()..];
+    let hash = rest.split('&').next().unwrap_or("");
+    let hash = hash.trim_end_matches(';');
+    match hash.len() {
+        40 => hash.chars().all(|c| c.is_ascii_hexdigit()),
+        32 => hash.chars().all(|c| c.is_ascii_alphanumeric()), // base32
+        _ => false,
+    }
+}
+
 /// Map UI category labels to Jackett/Torznab numeric category IDs.
 /// The API expects numbers (2000=Movies, 5000=TV, …), not English labels.
 pub(crate) fn category_id(label: &str) -> Option<&'static str> {
@@ -288,7 +304,7 @@ pub(crate) fn start_search(
 
 #[cfg(test)]
 mod tests {
-    use super::category_id;
+    use super::{category_id, is_magnet};
 
     #[test]
     fn category_mapping() {
@@ -302,5 +318,20 @@ mod tests {
         assert_eq!(category_id("XXX"), Some("6000"));
         assert_eq!(category_id("All"), None);
         assert_eq!(category_id("Nonsense"), None);
+    }
+
+    #[test]
+    fn magnet_validation() {
+        // Valid: 40-char hex info-hash
+        let ok = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=ubuntu.iso";
+        assert!(is_magnet(ok));
+        // Valid: 32-char base32
+        let b32 = "magnet:?xt=urn:btih:JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+        assert!(is_magnet(b32));
+        // Invalid: not a magnet / short hash / wrong scheme
+        assert!(!is_magnet(""));
+        assert!(!is_magnet("magnet:?xt=urn:btih:1234"));
+        assert!(!is_magnet("http://example.com/file.torrent"));
+        assert!(!is_magnet("magnet:?xt=urn:sha1:deadbeef"));
     }
 }
