@@ -698,6 +698,9 @@ impl App {
                         let active = self.tab == tab;
                         let badge = if tab == Tab::Favorites && !self.cfg.favorites.is_empty() {
                             format!(" {}", self.cfg.favorites.len())
+                        } else if tab == Tab::Search {
+                            let n = self.count.lock().map(|c| *c).unwrap_or(0);
+                            if n > 0 { format!(" {n}") } else { String::new() }
                         } else { String::new() };
                         if ui.add(egui::Button::new(
                             RichText::new(format!("{label}{badge}")).font(FontId::proportional(14.0))

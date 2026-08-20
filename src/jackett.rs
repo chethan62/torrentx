@@ -103,10 +103,9 @@ impl Hlth {
 // ─── Pure helpers ──────────────────────────────────────────────────────────
 
 pub(crate) fn fmt_size(b: u64) -> String {
-    let b = b as f64;
-    if b >= 1_073_741_824.0 { format!("{:.2} GB", b / 1_073_741_824.0) }
-    else if b >= 1_048_576.0 { format!("{:.0} MB", b / 1_048_576.0) }
-    else if b >= 1_024.0 { format!("{:.0} KB", b / 1_024.0) }
+    if b >= 1_073_741_824 { format!("{:.2} GB", b as f64 / 1_073_741_824.0) }
+    else if b >= 1_048_576 { format!("{:.0} MB", b as f64 / 1_048_576.0) }
+    else if b >= 1_024 { format!("{:.0} KB", b as f64 / 1_024.0) }
     else { format!("{b} B") }
 }
 
@@ -338,7 +337,7 @@ pub(crate) fn start_search(
 
 #[cfg(test)]
 mod tests {
-    use super::{category_id, is_magnet};
+    use super::{category_id, fmt_size, is_magnet};
 
     #[test]
     fn category_mapping() {
@@ -367,5 +366,14 @@ mod tests {
         assert!(!is_magnet("magnet:?xt=urn:btih:1234"));
         assert!(!is_magnet("http://example.com/file.torrent"));
         assert!(!is_magnet("magnet:?xt=urn:sha1:deadbeef"));
+    }
+
+    #[test]
+    fn size_formatting() {
+        assert_eq!(fmt_size(0), "0 B");
+        assert_eq!(fmt_size(512), "512 B");
+        assert_eq!(fmt_size(1_024), "1 KB");
+        assert_eq!(fmt_size(1_048_576), "1 MB");
+        assert_eq!(fmt_size(5_784_123_904), "5.39 GB");
     }
 }
