@@ -71,7 +71,17 @@ pub(crate) struct Favorite {
     pub(crate) saved_at: String,
 }
 
+/// Optional config-file override set by `--config <path>` (parsed in main()).
+static CONFIG_OVERRIDE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+pub(crate) fn set_config_override(p: std::path::PathBuf) {
+    let _ = CONFIG_OVERRIDE.set(p);
+}
+
 pub(crate) fn cfg_path() -> std::path::PathBuf {
+    if let Some(p) = CONFIG_OVERRIDE.get() {
+        return p.clone();
+    }
     let d = dirs_next::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("torrentx");

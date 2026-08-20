@@ -1175,8 +1175,12 @@ impl App {
                     if let Some(i) = self.selected {
                         if let Some(r) = page_s.get(i) {
                             if let Some(m) = &r.magnet_uri {
-                                let _ = open::that(m);
-                                self.toast("Opening magnet…", self.pal.accent);
+                                if is_magnet(m) {
+                                    let _ = open::that(m);
+                                    self.toast("Opening magnet…", self.pal.accent);
+                                } else {
+                                    self.toast("No valid magnet link", self.pal.yellow);
+                                }
                             }
                         }
                     }
@@ -1192,8 +1196,12 @@ impl App {
                     if let Some(i) = self.selected {
                         if let Some(r) = page_s.get(i) {
                             if let Some(m) = &r.magnet_uri {
-                                let _ = open::that(m);
-                                self.toast("Opening magnet…", self.pal.accent);
+                                if is_magnet(m) {
+                                    let _ = open::that(m);
+                                    self.toast("Opening magnet…", self.pal.accent);
+                                } else {
+                                    self.toast("No valid magnet link", self.pal.yellow);
+                                }
                             }
                         }
                     }
@@ -2456,6 +2464,7 @@ impl App {
                     ("Esc", "Close detail panel / clear search"),
                     ("Ctrl+F", "Focus search bar"),
                     ("Ctrl+R", "Re-run last search"),
+                    ("Ctrl+C", "Copy magnet (detail panel open)"),
                 ] {
                     ui.horizontal(|ui| {
                         ui.add_space(ui.available_width() * 0.12);
@@ -2594,6 +2603,14 @@ fn setup_tray() {
 }
 
 fn main() -> eframe::Result<()> {
+    // Optional --config <path> override (before any config is loaded).
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--config") {
+        if let Some(p) = args.get(i + 1) {
+            config::set_config_override(std::path::PathBuf::from(p));
+        }
+    }
+
     // System tray on a dedicated GTK thread (optional; non-fatal if unavailable).
     setup_tray();
 
