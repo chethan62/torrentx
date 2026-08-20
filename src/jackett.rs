@@ -40,6 +40,40 @@ pub(crate) enum SortDir { Asc, Desc }
 #[derive(Clone, PartialEq)]
 pub(crate) enum Tab { Search, Favorites, Rss, About }
 
+/// Results-table columns (order is user-configurable via `Config::col_order`).
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum TableCol {
+    Name, Tracker, Size, Seeds, Leech, Ratio, Health, Date,
+}
+
+impl TableCol {
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            TableCol::Name => "Name", TableCol::Tracker => "Tracker",
+            TableCol::Size => "Size", TableCol::Seeds => "Seeds",
+            TableCol::Leech => "Leech", TableCol::Ratio => "Ratio",
+            TableCol::Health => "Health", TableCol::Date => "Date",
+        }
+    }
+    pub(crate) fn from_name(s: &str) -> Option<Self> {
+        Some(match s {
+            "Name" => TableCol::Name, "Tracker" => TableCol::Tracker,
+            "Size" => TableCol::Size, "Seeds" => TableCol::Seeds,
+            "Leech" => TableCol::Leech, "Ratio" => TableCol::Ratio,
+            "Health" => TableCol::Health, "Date" => TableCol::Date,
+            _ => return None,
+        })
+    }
+    pub(crate) fn width(&self) -> f32 {
+        match self {
+            TableCol::Name => 295.0, TableCol::Tracker => 88.0,
+            TableCol::Size => 76.0, TableCol::Seeds => 66.0,
+            TableCol::Leech => 66.0, TableCol::Ratio => 58.0,
+            TableCol::Health => 78.0, TableCol::Date => 88.0,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub(crate) enum SearchState { Idle, Searching, Done, Error(String) }
 

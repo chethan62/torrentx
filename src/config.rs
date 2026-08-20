@@ -31,6 +31,9 @@ pub(crate) struct Config {
     /// Custom accent color (RGB) overriding the theme default; None = theme default.
     #[serde(default)]
     pub(crate) accent: Option<[u8; 3]>,
+    /// Column display order (names of TableCol), left to right.
+    #[serde(default)]
+    pub(crate) col_order: Vec<String>,
 }
 
 impl Default for Config {
@@ -51,6 +54,10 @@ impl Default for Config {
             col_ratio: true, col_health: true, col_date: true,
             rss_feeds: vec![],
             accent: None,
+            col_order: vec![
+                "Name".into(), "Tracker".into(), "Size".into(), "Seeds".into(),
+                "Leech".into(), "Ratio".into(), "Health".into(), "Date".into(),
+            ],
         }
     }
 }

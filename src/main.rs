@@ -8,7 +8,7 @@ mod rss;
 mod themes;
 
 use config::{load_cfg, save_cfg, Config, Favorite, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_ROOMY};
-use jackett::{cat_col, fmt_size, hlth_lbl, is_magnet, normalize, now_str, pub_year, seed_col, set_err, start_search, time_ago, Hlth, SearchState, SortCol, SortDir, Tab, TorrentResult};
+use jackett::{cat_col, fmt_size, hlth_lbl, is_magnet, normalize, now_str, pub_year, seed_col, set_err, start_search, time_ago, Hlth, SearchState, SortCol, SortDir, Tab, TableCol, TorrentResult};
 use rss::{start_rss_fetch, FeedStatus, RssFeedConfig, RssFeedState, RssItem};
 use themes::{rgb, rgba, tint, Pal, Theme};
 
@@ -22,14 +22,6 @@ use std::time::{Duration, Instant};
 
 const MARGIN_DEFAULT: f32 = 12.0;
 
-const COL_NAME_WIDTH: f32 = 295.0;
-const COL_TRACKER_WIDTH: f32 = 88.0;
-const COL_SIZE_WIDTH: f32 = 76.0;
-const COL_SEEDS_WIDTH: f32 = 66.0;
-const COL_LEECH_WIDTH: f32 = 66.0;
-const COL_RATIO_WIDTH: f32 = 58.0;
-const COL_HEALTH_WIDTH: f32 = 78.0;
-const COL_DATE_WIDTH: f32 = 88.0;
 
 const CATS: &[&str] = &["All", "Movies", "TV", "Music", "PC Games", "Software", "Anime", "Books", "XXX"];
 const SPIN: &[&str] = &["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
@@ -895,6 +887,32 @@ impl App {
                         ui.add_space(2.0);
                     }
                     if col_changed { save_cfg(&self.cfg); }
+                    ui.add_space(10.0);
+                    // Column order (reorder via ↑/↓)
+                    ui.horizontal(|ui| {
+                        lbl(ui, "Order", self.pal.dim, 10.0);
+                        ui.add_space(4.0);
+                        let mut moved: Option<(usize, isize)> = None;
+                        for (idx, name) in self.cfg.col_order.clone().iter().enumerate() {
+                            let mut lbl_txt = RichText::new(name.as_str()).font(FontId::proportional(11.5));
+                            if idx == 0 { lbl_txt = lbl_txt.color(self.pal.accent); }
+                            ui.label(lbl_txt);
+                            ui.add_space(2.0);
+                            if idx > 0 && ui.small_button("↑").on_hover_text("Move left").clicked() {
+                                moved = Some((idx, -1));
+                            }
+                            if idx + 1 < self.cfg.col_order.len() && ui.small_button("↓").on_hover_text("Move right").clicked() {
+                                moved = Some((idx, 1));
+                            }
+                            ui.add_space(4.0);
+                        }
+                        if let Some((idx, d)) = moved {
+                            let j = (idx as isize + d) as usize;
+                            let name = self.cfg.col_order.remove(idx);
+                            self.cfg.col_order.insert(j, name);
+                            save_cfg(&self.cfg);
+                        }
+                    });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.add(egui::Button::new(
                             RichText::new("Save").font(FontId::proportional(12.0)).color(self.pal.green))
@@ -1424,67 +1442,46 @@ impl App {
                 .color(if on { pal.accent } else { pal.sub }).strong()
         };
 
-        TableBuilder::new(ui)
+        // Visible columns in user-configured order
+        let cols: Vec<TableCol> = self.cfg.col_order.iter()
+            .filter_map(|n| TableCol::from_name(n))
+            .filter(|c| match c {
+                TableCol::Name | TableCol::Seeds => true,
+                TableCol::Tracker => cfg.col_tracker,
+                TableCol::Size => cfg.col_size,
+                TableCol::Leech => cfg.col_leech,
+                TableCol::Ratio => cfg.col_ratio,
+                TableCol::Health => cfg.col_health,
+                TableCol::Date => cfg.col_date,
+            })
+            .collect();
+
+        let mut tb = TableBuilder::new(ui)
             .striped(false)
             .resizable(true)
-            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .column(Column::initial(COL_NAME_WIDTH).at_least(160.0).clip(true))
-            .columns(if cfg.col_tracker { Column::initial(COL_TRACKER_WIDTH).at_least(55.0) } else { Column::remainder() }, 1)
-            .columns(if cfg.col_size { Column::initial(COL_SIZE_WIDTH).at_least(50.0) } else { Column::remainder() }, 1)
-            .column(Column::initial(COL_SEEDS_WIDTH).at_least(44.0)) // Seeds always
-            .columns(if cfg.col_leech { Column::initial(COL_LEECH_WIDTH).at_least(44.0) } else { Column::remainder() }, 1)
-            .columns(if cfg.col_ratio { Column::initial(COL_RATIO_WIDTH).at_least(44.0) } else { Column::remainder() }, 1)
-            .columns(if cfg.col_health { Column::initial(COL_HEALTH_WIDTH).at_least(50.0) } else { Column::remainder() }, 1)
-            .columns(if cfg.col_date { Column::initial(COL_DATE_WIDTH).at_least(60.0) } else { Column::remainder() }, 1)
-            .column(Column::remainder().at_least(160.0)) // Actions always
+            .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
+        for c in &cols {
+            tb = tb.column(Column::initial(c.width()).at_least(44.0));
+        }
+        tb = tb.column(Column::remainder().at_least(160.0)); // Actions always
+        tb
             .header(30.0, |mut header| {
-                header.col(|ui| {
-                    if ui.add(egui::Label::new(hdr("Name", &SortCol::Name)).sense(egui::Sense::click())).clicked() {
-                        new_sort = Some((SortCol::Name, s_col == SortCol::Name));
-                    }
-                });
-                if cfg.col_tracker {
+                for c in &cols {
+                    let sortcol = match c {
+                        TableCol::Name => SortCol::Name,
+                        TableCol::Tracker => SortCol::Tracker,
+                        TableCol::Size => SortCol::Size,
+                        TableCol::Seeds => SortCol::Seeds,
+                        TableCol::Leech => SortCol::Leech,
+                        TableCol::Ratio => SortCol::Ratio,
+                        TableCol::Date => SortCol::Date,
+                        TableCol::Health => SortCol::Seeds, // non-sortable; reuse Seeds
+                    };
                     header.col(|ui| {
-                        if ui.add(egui::Label::new(hdr("Tracker", &SortCol::Tracker)).sense(egui::Sense::click())).clicked() {
-                            new_sort = Some((SortCol::Tracker, s_col == SortCol::Tracker));
-                        }
-                    });
-                }
-                if cfg.col_size {
-                    header.col(|ui| {
-                        if ui.add(egui::Label::new(hdr("Size", &SortCol::Size)).sense(egui::Sense::click())).clicked() {
-                            new_sort = Some((SortCol::Size, s_col == SortCol::Size));
-                        }
-                    });
-                }
-                header.col(|ui| {
-                    if ui.add(egui::Label::new(hdr("Seeds", &SortCol::Seeds)).sense(egui::Sense::click())).clicked() {
-                        new_sort = Some((SortCol::Seeds, s_col == SortCol::Seeds));
-                    }
-                });
-                if cfg.col_leech {
-                    header.col(|ui| {
-                        if ui.add(egui::Label::new(hdr("Leech", &SortCol::Leech)).sense(egui::Sense::click())).clicked() {
-                            new_sort = Some((SortCol::Leech, s_col == SortCol::Leech));
-                        }
-                    });
-                }
-                if cfg.col_ratio {
-                    header.col(|ui| {
-                        if ui.add(egui::Label::new(hdr("Ratio", &SortCol::Ratio)).sense(egui::Sense::click())).clicked() {
-                            new_sort = Some((SortCol::Ratio, s_col == SortCol::Ratio));
-                        }
-                    });
-                }
-                if cfg.col_health {
-                    header.col(|ui| {
-                        ui.label(RichText::new("Health").font(FontId::proportional(fsz)).color(pal.sub).strong());
-                    });
-                }
-                if cfg.col_date {
-                    header.col(|ui| {
-                        if ui.add(egui::Label::new(hdr("Date", &SortCol::Date)).sense(egui::Sense::click())).clicked() {
-                            new_sort = Some((SortCol::Date, s_col == SortCol::Date));
+                        if *c == TableCol::Health {
+                            ui.label(RichText::new("Health").font(FontId::proportional(fsz)).color(pal.sub).strong());
+                        } else if ui.add(egui::Label::new(hdr(c.label(), &sortcol.clone())).sense(egui::Sense::click())).clicked() {
+                            new_sort = Some((sortcol.clone(), s_col == sortcol));
                         }
                     });
                 }
@@ -1504,111 +1501,89 @@ impl App {
                              else { pal.row_even };
 
                     body.row(rh, |mut row| {
-                        // Name
-                        row.col(|ui| {
-                            ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                            ui.horizontal(|ui| {
-                                if self.sel_mode {
-                                    // Checkbox + click toggles batch selection
-                                    let mut checked = self.sel_set.contains(&i);
-                                    if ui.add(egui::Checkbox::without_text(&mut checked)).clicked() {
-                                        if checked { self.sel_set.insert(i); } else { self.sel_set.remove(&i); }
+                        for c in &cols {
+                            row.col(|ui| {
+                                ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
+                                match c {
+                                    TableCol::Name => {
+                                        ui.horizontal(|ui| {
+                                            if self.sel_mode {
+                                                let mut checked = self.sel_set.contains(&i);
+                                                if ui.add(egui::Checkbox::without_text(&mut checked)).clicked() {
+                                                    if checked { self.sel_set.insert(i); } else { self.sel_set.remove(&i); }
+                                                }
+                                            }
+                                            let resp = ui.add(egui::Label::new(
+                                                RichText::new(&r.title).font(FontId::proportional(fsz))
+                                                    .color(if is_sel { pal.accent } else { pal.text })
+                                            ).truncate().sense(egui::Sense::click()));
+                                            if resp.clicked() {
+                                                if self.sel_mode {
+                                                    if !self.sel_set.insert(i) { self.sel_set.remove(&i); }
+                                                } else {
+                                                    actions.push((i, "select"));
+                                                }
+                                            }
+                                            if resp.hovered() {
+                                                self.hovered = Some(i);
+                                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                            }
+                                        });
+                                        if rh >= 40.0 {
+                                            let cat = r.category_desc.as_deref().unwrap_or("Other");
+                                            ui.add(egui::Label::new(RichText::new(cat)
+                                                .font(FontId::proportional(fsz - 2.5))
+                                                .color(cat_col(cat))).truncate());
+                                        }
+                                    }
+                                    TableCol::Tracker => {
+                                        ui.add(egui::Label::new(RichText::new(
+                                            r.tracker.as_deref().unwrap_or("—"))
+                                            .font(FontId::proportional(fsz - 1.0)).color(pal.sub)).truncate());
+                                    }
+                                    TableCol::Size => {
+                                        ui.label(RichText::new(r.size.map(fmt_size).unwrap_or_else(||"—".into()))
+                                            .font(FontId::proportional(fsz)).color(pal.sub));
+                                    }
+                                    TableCol::Seeds => {
+                                        ui.label(RichText::new(seed.to_string())
+                                            .font(FontId::proportional(fsz)).color(seed_col(seed)).strong());
+                                    }
+                                    TableCol::Leech => {
+                                        ui.label(RichText::new(leech.to_string())
+                                            .font(FontId::proportional(fsz)).color(pal.red));
+                                    }
+                                    TableCol::Ratio => {
+                                        let tot = (seed + leech) as f32;
+                                        if tot > 0.0 {
+                                            let pct = (seed as f32 / tot).clamp(0.0, 1.0);
+                                            let rect = ui.available_rect_before_wrap();
+                                            let bar = egui::Rect::from_min_size(
+                                                rect.min + Vec2::new(2.0, (rect.height() - 7.0) / 2.0),
+                                                Vec2::new((rect.width() - 4.0).max(8.0), 7.0));
+                                            ui.painter().rect_filled(bar, 3.0, pal.border);
+                                            let mut filled = bar;
+                                            filled.max.x = bar.min.x + bar.width() * pct;
+                                            ui.painter().rect_filled(filled, 3.0, seed_col(seed));
+                                            ui.allocate_rect(bar, egui::Sense::hover())
+                                                .on_hover_text(format!("{:.0}% seeded", pct * 100.0));
+                                        } else {
+                                            ui.label(RichText::new("—")
+                                                .font(FontId::proportional(fsz - 1.0)).color(pal.dim));
+                                        }
+                                    }
+                                    TableCol::Health => {
+                                        let dot = if seed > 10 { "●" } else { "○" };
+                                        ui.label(RichText::new(format!("{dot} {}", hlth_lbl(seed)))
+                                            .font(FontId::proportional(fsz - 1.0)).strong().color(seed_col(seed)));
+                                    }
+                                    TableCol::Date => {
+                                        let d = r.publish_date.as_deref()
+                                            .map(time_ago).unwrap_or_else(||"—".into());
+                                        ui.label(RichText::new(d)
+                                            .font(FontId::proportional(fsz)).color(pal.dim));
                                     }
                                 }
-                                let resp = ui.add(egui::Label::new(
-                                    RichText::new(&r.title).font(FontId::proportional(fsz))
-                                        .color(if is_sel { pal.accent } else { pal.text })
-                                ).truncate().sense(egui::Sense::click()));
-                                if resp.clicked() {
-                                    if self.sel_mode {
-                                        if !self.sel_set.insert(i) { self.sel_set.remove(&i); }
-                                    } else {
-                                        actions.push((i, "select"));
-                                    }
-                                }
-                                if resp.hovered() {
-                                    self.hovered = Some(i);
-                                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                                }
-                            });
-                            if rh >= 40.0 {
-                                let cat = r.category_desc.as_deref().unwrap_or("Other");
-                                ui.add(egui::Label::new(RichText::new(cat)
-                                    .font(FontId::proportional(fsz - 2.5))
-                                    .color(cat_col(cat))).truncate());
-                            }
-                        });
-                        // Tracker
-                        if cfg.col_tracker {
-                            row.col(|ui| {
-                                ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                                ui.add(egui::Label::new(RichText::new(
-                                    r.tracker.as_deref().unwrap_or("—"))
-                                    .font(FontId::proportional(fsz - 1.0)).color(pal.sub)).truncate());
-                            });
-                        }
-                        // Size
-                        if cfg.col_size {
-                            row.col(|ui| {
-                                ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                                ui.label(RichText::new(r.size.map(fmt_size).unwrap_or_else(||"—".into()))
-                                    .font(FontId::proportional(fsz)).color(pal.sub));
-                            });
-                        }
-                        // Seeds
-                        row.col(|ui| {
-                            ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                            ui.label(RichText::new(seed.to_string())
-                                .font(FontId::proportional(fsz)).color(seed_col(seed)).strong());
-                        });
-                        // Leechers
-                        if cfg.col_leech {
-                            row.col(|ui| {
-                                ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                                ui.label(RichText::new(leech.to_string())
-                                    .font(FontId::proportional(fsz)).color(pal.red));
-                            });
-                        }
-                        // Ratio bar
-                        if cfg.col_ratio {
-                            row.col(|ui| {
-                                ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                                let tot = (seed + leech) as f32;
-                                if tot > 0.0 {
-                                    let pct = (seed as f32 / tot).clamp(0.0, 1.0);
-                                    let rect = ui.available_rect_before_wrap();
-                                    let bar = egui::Rect::from_min_size(
-                                        rect.min + Vec2::new(2.0, (rect.height() - 7.0) / 2.0),
-                                        Vec2::new((rect.width() - 4.0).max(8.0), 7.0));
-                                    ui.painter().rect_filled(bar, 3.0, pal.border);
-                                    let mut filled = bar;
-                                    filled.max.x = bar.min.x + bar.width() * pct;
-                                    ui.painter().rect_filled(filled, 3.0, seed_col(seed));
-                                    ui.allocate_rect(bar, egui::Sense::hover())
-                                        .on_hover_text(format!("{:.0}% seeded", pct * 100.0));
-                                } else {
-                                    ui.label(RichText::new("—")
-                                        .font(FontId::proportional(fsz - 1.0)).color(pal.dim));
-                                }
-                            });
-                        }
-                        // Health
-                        if cfg.col_health {
-                            row.col(|ui| {
-                                ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                                let dot = if seed > 10 { "●" } else { "○" };
-                                ui.label(RichText::new(format!("{dot} {}", hlth_lbl(seed)))
-                                    .font(FontId::proportional(fsz - 1.0)).strong().color(seed_col(seed)));
-                            });
-                        }
-                        // Date
-                        if cfg.col_date {
-                            row.col(|ui| {
-                                ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                                let d = r.publish_date.as_deref()
-                                    .map(time_ago).unwrap_or_else(||"—".into());
-                                ui.label(RichText::new(d)
-                                    .font(FontId::proportional(fsz)).color(pal.dim));
                             });
                         }
                         // Actions
