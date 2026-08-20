@@ -95,6 +95,7 @@ struct App {
     // timing / spinner
     t_start: Option<Instant>,
     t_done: Option<f64>,
+    notified: bool,
     spin_i: usize,
     spin_t: f32,
 }
@@ -137,7 +138,7 @@ impl Default for App {
             rss_selected: 0, rss_detail: None, rss_filter: String::new(),
             rss_add_mode: false, rss_edit_idx: None,
             rss_new_cfg: RssFeedConfig::new_default(),
-            t_start: None, t_done: None, spin_i: 0, spin_t: 0.0,
+            t_start: None, t_done: None, notified: false, spin_i: 0, spin_t: 0.0,
         }
     }
 }
@@ -204,6 +205,7 @@ impl App {
         self.sel_set.clear(); self.sel_mode = false;
         self.last_query = q.clone(); self.f_text.clear();
         self.hovered = None; self.t_start = Some(Instant::now()); self.t_done = None;
+        self.notified = false;
         if let Ok(mut r) = self.results.lock() { r.clear(); }
         if let Ok(mut c) = self.count.lock() { *c = 0; }
         start_search(
@@ -249,6 +251,22 @@ impl App {
     fn toast(&mut self, msg: &str, col: Color32) {
         self.toasts.retain(|t| t.msg != msg);
         self.toasts.push(Toast { msg: msg.into(), ttl: 3.0, col });
+    }
+
+    /// Fire a desktop notification when a search completes while the window
+    /// is hidden (minimized to tray). No-op on failure / missing daemon.
+    fn notify_search_done(&mut self) {
+        let n = self.count.lock().map(|c| *c).unwrap_or(0);
+        let q = self.last_query.clone();
+        if let Ok(h) = notify_rust::Notification::new()
+            .summary("TorrentX — search complete")
+            .body(&format!("{n} results for \u{201c}{q}\u{201d}"))
+            .appname("TorrentX")
+            .timeout(notify_rust::Timeout::Milliseconds(5000))
+            .show()
+        {
+            let _ = h;
+        }
     }
 
     fn set_theme(&mut self, t: Theme) {
@@ -1057,6 +1075,11 @@ impl App {
                     });
             }
             SearchState::Done => {
+                // Fire a desktop notification on transition (once per search).
+                if !self.notified {
+                    self.notified = true;
+                    self.notify_search_done();
+                }
                 let raw = self.all_results();
                 let sorted = self.filtered(&raw);
                 let total = sorted.len();
