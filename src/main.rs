@@ -236,7 +236,7 @@ impl eframe::App for App {
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        lbl(ui, "Ctrl+F  Ctrl+R  ↑↓  Enter  D=detail  F=fav  M=magnet  Esc=close",
+                        lbl(ui, "↑↓ Enter  D  F  M  Esc  Ctrl+F  Ctrl+R",
                             self.pal.dim, 10.5);
                     });
                 });

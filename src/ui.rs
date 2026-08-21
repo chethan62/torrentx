@@ -143,8 +143,6 @@ impl App {
                                 }
                             });
                         ui.add_space(10.0);
-                        let n = self.total_count();
-                        if n > 0 { lbl(ui, &format!("{n} results"), self.pal.dim, 12.0); }
                     });
                 });
             });
@@ -935,7 +933,7 @@ impl App {
         for c in &cols {
             tb = tb.column(Column::initial(c.width()).at_least(44.0));
         }
-        tb = tb.column(Column::remainder().at_least(160.0)); // Actions always
+        tb = tb.column(Column::remainder().at_least(210.0)); // Actions always
         tb
             .header(30.0, |mut header| {
                 for c in &cols {
