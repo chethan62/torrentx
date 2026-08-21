@@ -43,6 +43,145 @@ pub(crate) fn act_btn(ui: &mut egui::Ui, label: &str, tip: &str, color: Color32)
     ).on_hover_text(tip).clicked()
 }
 
+/// A high-quality SVG icon button — renders an embedded Lucide SVG via
+/// egui's image loader (resvg), tinted to the theme color. Professional
+/// icon design, vector-crisp, no glyphs, no tofu. egui caches the
+/// rasterized image by URI. Returns true when clicked.
+pub(crate) fn svg_btn(
+    ui: &mut egui::Ui,
+    icon: SvgIcon,
+    tip: &str,
+    color: Color32,
+) -> bool {
+    let size = egui::vec2(32.0, 28.0);
+    let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    let rounding = egui::CornerRadius::same(5);
+    let painter = ui.painter_at(rect);
+
+    if resp.hovered() || resp.clicked() {
+        painter.rect_filled(rect, rounding, tint(color, 26));
+    } else {
+        painter.rect_filled(rect, rounding, tint(color, 14));
+    }
+    painter.rect_stroke(rect.shrink(0.5), rounding, Stroke::new(1.0, tint(color, 70)), egui::StrokeKind::Outside);
+
+    // Draw the SVG tinted to the theme color (icon area centered in button).
+    // Lucide uses stroke="currentColor"; resvg renders that black, and egui's
+    // tint multiplies (black × color = black → invisible on dark themes). So
+    // rewrite currentColor→white so tint() yields the actual theme color.
+    let svg_white = icon.svg().replace("currentColor", "#fff");
+    let icon_size = 16.0;
+    let icon_rect = egui::Rect::from_center_size(rect.center(), egui::vec2(icon_size, icon_size));
+    let img = egui::Image::from_bytes(icon.uri(), svg_white.into_bytes())
+        .tint(color)
+        .fit_to_exact_size(egui::vec2(icon_size, icon_size));
+    ui.put(icon_rect, img);
+
+    resp.on_hover_text(tip).clicked()
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum SvgIcon {
+    Magnet, Copy, Download, Star, Info, Web,
+    Search, Rss, Settings, Close, Refresh, Bookmark,
+}
+
+impl SvgIcon {
+    fn uri(&self) -> &'static str {
+        match self {
+            SvgIcon::Magnet => "bytes://tx/magnet.svg",
+            SvgIcon::Copy => "bytes://tx/copy.svg",
+            SvgIcon::Download => "bytes://tx/download.svg",
+            SvgIcon::Star => "bytes://tx/star.svg",
+            SvgIcon::Info => "bytes://tx/info.svg",
+            SvgIcon::Web => "bytes://tx/web.svg",
+            SvgIcon::Search => "bytes://tx/search.svg",
+            SvgIcon::Rss => "bytes://tx/rss.svg",
+            SvgIcon::Settings => "bytes://tx/settings.svg",
+            SvgIcon::Close => "bytes://tx/x.svg",
+            SvgIcon::Refresh => "bytes://tx/refresh-cw.svg",
+            SvgIcon::Bookmark => "bytes://tx/bookmark.svg",
+        }
+    }
+    fn svg(&self) -> &'static str {
+        match self {
+            SvgIcon::Magnet => include_str!("../assets/icons/magnet.svg"),
+            SvgIcon::Copy => include_str!("../assets/icons/copy.svg"),
+            SvgIcon::Download => include_str!("../assets/icons/download.svg"),
+            SvgIcon::Star => include_str!("../assets/icons/star.svg"),
+            SvgIcon::Info => include_str!("../assets/icons/info.svg"),
+            SvgIcon::Web => include_str!("../assets/icons/web.svg"),
+            SvgIcon::Search => include_str!("../assets/icons/search.svg"),
+            SvgIcon::Rss => include_str!("../assets/icons/rss.svg"),
+            SvgIcon::Settings => include_str!("../assets/icons/settings.svg"),
+            SvgIcon::Close => include_str!("../assets/icons/x.svg"),
+            SvgIcon::Refresh => include_str!("../assets/icons/refresh-cw.svg"),
+            SvgIcon::Bookmark => include_str!("../assets/icons/bookmark.svg"),
+        }
+    }
+}
+
+/// Inline SVG icon (not a button) — renders the tinted icon at `size` px
+/// into the current Ui. For headers, labels, status dots, etc.
+pub(crate) fn svg_icon(ui: &mut egui::Ui, icon: SvgIcon, size: f32, color: Color32) {
+    ui.add(svg_image(icon, size, color));
+}
+
+/// Returns an egui::Image widget for an SVG icon (tinted, sized). Usable
+/// inside `Button::new(...)` or `ui.add(...)`.
+pub(crate) fn svg_image(icon: SvgIcon, size: f32, color: Color32) -> egui::Image<'static> {
+    let svg_white = icon.svg().replace("currentColor", "#fff");
+    egui::Image::from_bytes(icon.uri(), svg_white.into_bytes())
+        .tint(color)
+        .fit_to_exact_size(egui::vec2(size, size))
+}
+
+/// A high-quality vector checkbox — drawn with the Painter (rounded rect +
+/// check mark), NO font glyphs. Single allocation, whole-rect clickable.
+/// Uses the accent color when checked. Returns the Response.
+pub(crate) fn v_checkbox(ui: &mut egui::Ui, checked: bool, label: &str, accent: Color32) -> egui::Response {
+    let icon_size = 15.0;
+    let spacing = ui.spacing().item_spacing.x;
+
+    // Measure label
+    let font_id = egui::TextStyle::Body.resolve(ui.style());
+    let galley = ui.painter().layout_no_wrap(label.to_owned(), font_id, ui.visuals().text_color());
+
+    // Single allocation for the whole row (icon + spacing + text)
+    let desired = egui::vec2(icon_size + spacing + galley.size().x, icon_size.max(galley.size().y) + 2.0);
+    let (rect, response) = ui.allocate_exact_size(desired, egui::Sense::click());
+
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+
+    if ui.is_rect_visible(rect) {
+        let p = ui.painter_at(rect);
+        // Box
+        let box_rect = egui::Rect::from_min_size(
+            egui::pos2(rect.left(), rect.center().y - icon_size / 2.0),
+            egui::vec2(icon_size, icon_size),
+        );
+        let rounding = egui::CornerRadius::same(4);
+        if checked {
+            p.rect_filled(box_rect, rounding, accent);
+            // Check mark (two lines); contrast against the accent fill
+            let check_col = if ui.visuals().dark_mode { Color32::from_rgb(12, 12, 16) } else { Color32::WHITE };
+            let ck = egui::Stroke::new(2.2, check_col);
+            let cc = box_rect.center();
+            p.line_segment([egui::pos2(cc.x - 3.5, cc.y), egui::pos2(cc.x - 0.8, cc.y + 3.0)], ck);
+            p.line_segment([egui::pos2(cc.x - 0.8, cc.y + 3.0), egui::pos2(cc.x + 4.0, cc.y - 3.5)], ck);
+        } else {
+            p.rect_filled(box_rect, rounding, Color32::TRANSPARENT);
+            p.rect_stroke(box_rect, rounding, egui::Stroke::new(1.3, ui.visuals().text_color().gamma_multiply(0.6)), egui::StrokeKind::Inside);
+        }
+        // Label
+        let text_pos = egui::pos2(rect.left() + icon_size + spacing, rect.center().y - galley.size().y / 2.0);
+        p.galley(text_pos, galley, ui.visuals().text_color());
+    }
+    response
+}
+
 pub(crate) fn status_pill(ui: &mut egui::Ui, label: &str, col: Color32) {
     egui::Frame::NONE.fill(tint(col, 20)).corner_radius(6.0)
         .inner_margin(egui::Margin::symmetric(6, 2))
@@ -67,6 +206,43 @@ pub(crate) fn outline_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> boo
             .stroke(Stroke::new(1.0_f32, tint(color, 80)))
             .corner_radius(4.0)
     ).clicked()
+}
+
+/// Wide button with an SVG icon + text label (professional look, no glyphs).
+/// Built with allocate + painter + horizontal layout so icon and text never
+/// overlap and the whole button is clickable.
+pub(crate) fn wide_icon_btn(ui: &mut egui::Ui, icon: SvgIcon, label: &str, color: Color32) -> bool {
+    let w = ui.available_width().max(200.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 34.0), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter_at(rect);
+        let fill = if resp.hovered() { tint(color, 26) } else { tint(color, 18) };
+        painter.rect_filled(rect, egui::CornerRadius::same(6), fill);
+        painter.rect_stroke(rect.shrink(0.5), egui::CornerRadius::same(6), Stroke::new(1.0, tint(color, 80)), egui::StrokeKind::Outside);
+    }
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    child.horizontal_centered(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        svg_icon(ui, icon, 15.0, color);
+        ui.label(RichText::new(label).font(FontId::proportional(13.0)).color(color));
+    });
+    resp.clicked()
+}
+
+/// Outline button with an SVG icon + text label (professional, no glyphs).
+pub(crate) fn outline_icon_btn(ui: &mut egui::Ui, icon: SvgIcon, label: &str, color: Color32) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width().min(160.0), 26.0), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter_at(rect);
+        painter.rect_stroke(rect.shrink(0.5), egui::CornerRadius::same(4), Stroke::new(1.0, tint(color, 80)), egui::StrokeKind::Outside);
+    }
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    child.horizontal_centered(|ui| {
+        ui.spacing_mut().item_spacing.x = 5.0;
+        svg_icon(ui, icon, 13.0, color);
+        ui.label(RichText::new(label).font(FontId::proportional(12.0)).color(color));
+    });
+    resp.clicked()
 }
 
 pub(crate) fn lbl(ui: &mut egui::Ui, text: &str, color: Color32, fs: f32) {
@@ -267,12 +443,12 @@ impl eframe::App for App {
                 });
         }
 
-        // ── Detail panels — floating right-edge overlays (egui::Area) ─────
-        // Converted from Panel::right because egui 0.36 panels inside/around
-        // the central Ui caused invisible panels, below-table layout, and
-        // click-eating. Areas float above layout and interact correctly.
-        self.draw_detail_panel(&ctx);
-        self.draw_rss_detail_panel(&ctx);
+        // ── Detail panels — frame-level right panels ─────────────────────
+        // Added BEFORE CentralPanel so egui reserves the right strip and the
+        // table shrinks to fit (no overlap). A plain Panel::right at frame
+        // level is the correct egui pattern.
+        self.draw_detail_panel(ui);
+        self.draw_rss_detail_panel(ui);
 
         // ── Central panel ────────────────────────────────────────────────
         egui::CentralPanel::default()
@@ -314,7 +490,12 @@ fn native_options() -> eframe::NativeOptions {
 type AppCreator = Box<dyn FnOnce(&eframe::CreationContext) -> Result<Box<dyn eframe::App>, Box<dyn std::error::Error + Send + Sync>>>;
 
 fn app_creator() -> AppCreator {
-    Box::new(|_cc| Ok(Box::new(App::default()) as Box<dyn eframe::App>))
+    Box::new(|cc| {
+        // SVG icon support (egui_extras svg feature → resvg). Required for
+        // the Lucide SVG action buttons.
+        egui_extras::install_image_loaders(&cc.egui_ctx);
+        Ok(Box::new(App::default()) as Box<dyn eframe::App>)
+    })
 }
 
 /// Shared quit flag: set when the tray "Quit" is clicked, so the app exits

@@ -4,7 +4,7 @@
 // `app.rs`; the eframe entry point lives in `main.rs`.
 
 use crate::app::App;
-use crate::{act_btn, grid_row, labeled_input, lbl, outline_btn, status_pill, wide_btn, CATS, MARGIN_DEFAULT};
+use crate::{act_btn, grid_row, labeled_input, lbl, outline_btn, outline_icon_btn, status_pill, svg_btn, svg_icon, svg_image, v_checkbox, wide_btn, wide_icon_btn, SvgIcon, CATS, MARGIN_DEFAULT};
 use crate::config::{save_cfg, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_ROOMY};
 use crate::jackett::{cat_col, fmt_size, hlth_lbl, is_magnet, seed_col, time_ago, Hlth, SearchState, SortCol, SortDir, Tab, TableCol, TorrentResult};
 use crate::rss::{FeedStatus, RssFeedConfig, RssFeedState, RssItem};
@@ -12,15 +12,6 @@ use crate::themes::{rgb, rgba, tint, Pal, Theme};
 
 use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 use egui_extras::{Column, TableBuilder};
-
-// Phosphor icon glyphs (embedded Phosphor.ttf). These unicode chars render
-// via the "phosphor" fallback font registered in app.rs.
-const I_MAGNET: &str = "\u{E680}";
-const I_COPY: &str = "\u{E1CA}";
-const I_DOWNLOAD: &str = "\u{E20A}";
-const I_STAR: &str = "\u{E46A}";
-const I_INFO: &str = "\u{E2CE}";
-const I_GLOBE: &str = "\u{E288}";
 
 // ─── UI tuning constants ───────────────────────────────────────────────────
 /// Filter-bar input widths (px), in row order.
@@ -65,12 +56,12 @@ impl App {
                     ui.separator();
                     ui.add_space(8.0);
 
-                    // Tabs
-                    for (label, tip, tab) in [
-                        ("🔍 Search", "Search torrents", Tab::Search),
-                        ("★ Favorites", "Saved torrents", Tab::Favorites),
-                        ("📡 RSS", "RSS feed reader", Tab::Rss),
-                        ("ℹ About", "About TorrentX", Tab::About),
+                    // Tabs (SVG icon + label)
+                    for (icon, label, tip, tab) in [
+                        (SvgIcon::Search, "Search", "Search torrents", Tab::Search),
+                        (SvgIcon::Bookmark, "Favorites", "Saved torrents", Tab::Favorites),
+                        (SvgIcon::Rss, "RSS", "RSS feed reader", Tab::Rss),
+                        (SvgIcon::Info, "About", "About TorrentX", Tab::About),
                     ] {
                         let active = self.tab == tab;
                         let badge = if tab == Tab::Favorites && !self.cfg.favorites.is_empty() {
@@ -79,13 +70,19 @@ impl App {
                             let n = self.count.lock().map(|c| *c).unwrap_or(0);
                             if n > 0 { format!(" {n}") } else { String::new() }
                         } else { String::new() };
-                        if ui.add(egui::Button::new(
-                            RichText::new(format!("{label}{badge}")).font(FontId::proportional(14.0))
-                                .color(if active { self.pal.accent } else { self.pal.sub }))
-                            .fill(if active { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
-                            .stroke(Stroke::new(if active { 1.0_f32 } else { 0.0_f32 }, self.pal.accent))
-                            .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
-                        ).on_hover_text(tip).clicked() && self.tab != tab {
+                        let col = if active { self.pal.accent } else { self.pal.sub };
+                        let clicked = ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 5.0;
+                            svg_icon(ui, icon, 15.0, col);
+                            ui.add(
+                                egui::Button::new(RichText::new(format!("{label}{badge}"))
+                                    .font(FontId::proportional(14.0)).color(col))
+                                .fill(if active { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
+                                .stroke(Stroke::new(if active { 1.0_f32 } else { 0.0_f32 }, self.pal.accent))
+                                .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
+                            ).on_hover_text(tip).clicked()
+                        }).inner;
+                        if clicked && self.tab != tab {
                             if tab != Tab::Favorites { self.fav_search.clear(); }
                             self.tab = tab;
                             self.detail_open = false;
@@ -115,13 +112,16 @@ impl App {
                         }
 
                         let sa = self.show_settings;
-                        if ui.add(egui::Button::new(
-                            RichText::new("⚙ Settings").size(13.0)
-                                .color(if sa { self.pal.accent } else { self.pal.sub }))
-                            .fill(if sa { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
-                            .stroke(Stroke::new(1.0_f32, if sa { self.pal.accent } else { self.pal.border }))
-                            .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
-                        ).clicked() { self.show_settings = !self.show_settings; }
+                        let set_col = if sa { self.pal.accent } else { self.pal.sub };
+                        if ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 5.0;
+                            svg_icon(ui, SvgIcon::Settings, 14.0, set_col);
+                            ui.add(egui::Button::new(RichText::new("Settings").size(13.0).color(set_col))
+                                .fill(if sa { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
+                                .stroke(Stroke::new(1.0_f32, if sa { self.pal.accent } else { self.pal.border }))
+                                .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
+                            ).clicked()
+                        }).inner { self.show_settings = !self.show_settings; }
                         ui.add_space(10.0);
 
                         // Theme picker
@@ -259,7 +259,7 @@ impl App {
                     }
                     if self.cfg.accent.is_some() {
                         ui.add_space(4.0);
-                        if ui.add(egui::Button::new("✕")
+                        if ui.add(egui::Button::new(svg_image(SvgIcon::Close, 11.0, self.pal.sub))
                             .min_size(egui::vec2(18.0, 18.0))
                             .stroke(Stroke::new(1.0_f32, self.pal.border))
                         ).on_hover_text("Reset to theme accent").clicked() {
@@ -423,8 +423,11 @@ impl App {
             ).clicked() { self.do_search(); }
 
             if !self.query.is_empty()
-                && ui.add(egui::Button::new(RichText::new("✕").size(13.0).color(self.pal.sub))
-                    .fill(Color32::TRANSPARENT).corner_radius(4.0)).on_hover_text("Clear").clicked() {
+                && ui.add(egui::Button::new(svg_image(SvgIcon::Close, 14.0, self.pal.sub))
+                    .fill(tint(self.pal.sub, 12))
+                    .stroke(Stroke::new(1.0_f32, self.pal.border))
+                    .corner_radius(6.0).min_size(Vec2::new(0.0, 36.0)))
+                    .on_hover_text("Clear search").clicked() {
                     self.query.clear(); self.show_hist = false;
                 }
         });
@@ -661,7 +664,7 @@ impl App {
             });
     }
 
-    pub(crate) fn draw_detail_panel(&mut self, ctx: &egui::Context) {
+    pub(crate) fn draw_detail_panel(&mut self, ui: &mut egui::Ui) {
         if !self.detail_open || self.tab != Tab::Search { return; }
         let state = self.cur_state();
         if state != SearchState::Done { return; }
@@ -670,37 +673,25 @@ impl App {
         let page_s = self.page_slice(&sorted);
         if let Some(idx) = self.selected {
             if let Some(r) = page_s.get(idx).cloned() {
-                // Floating right-edge overlay (egui::Area). Panels inside the
-                // central Ui misbehave in egui 0.36 (below-table / invisible /
-                // click-eating); an Area floats above layout and handles
-                // interaction correctly.
+                // Frame-level right panel (reserves space — table shrinks,
+                // no overlap). Must be added BEFORE CentralPanel.
                 let w = self.detail_width.clamp(240.0, 520.0);
-                let scr = ctx.input(|i| i.viewport_rect());
-                let x = scr.max.x - w;
-                let top = scr.min.y + 50.0;
-                let max_h = (scr.height() - 80.0).max(200.0);
-                egui::Area::new(egui::Id::new("detail_pnl"))
-                    .fixed_pos(egui::pos2(x, top))
-                    .order(egui::Order::Foreground)
-                    .movable(false)
-                    .show(ctx, |ui| {
-                        // Explicit size so the Area never covers more than the
-                        // panel — an oversized/constrained Area eats clicks on
-                        // everything beneath it.
-                        ui.set_width(w);
-                        ui.set_max_height(max_h);
-                        egui::Frame::NONE
-                            .fill(self.pal.surface)
-                            .stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 8))
-                            .show(ui, |ui| { self.draw_detail(ui, &r); });
+                egui::Panel::right("detail_pnl")
+                    .resizable(true)
+                    .default_size(w)
+                    .size_range(220.0..=640.0)
+                    .frame(egui::Frame::NONE
+                        .fill(self.pal.surface)
+                        .stroke(Stroke::new(1.0_f32, self.pal.border))
+                        .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 8)))
+                    .show(ui, |ui| {
+                        egui::ScrollArea::vertical().show(ui, |ui| self.draw_detail(ui, &r));
                     });
             }
         }
     }
-    /// RSS item detail — floating right-edge overlay (same approach as the
-    /// search detail panel; Area avoids all nested-panel layout bugs).
-    pub(crate) fn draw_rss_detail_panel(&mut self, ctx: &egui::Context) {
+    /// RSS item detail — frame-level right panel (same approach).
+    pub(crate) fn draw_rss_detail_panel(&mut self, ui: &mut egui::Ui) {
         if self.tab != Tab::Rss { return; }
         let Some(di) = self.rss_detail else { return };
         // Items live in the active feed's state; rebuild the index the same
@@ -708,21 +699,16 @@ impl App {
         let Some(feed) = self.rss_feeds.get(self.rss_selected) else { return };
         let items = feed.items.clone();
         if let Some(item) = items.get(di).cloned() {
-            let scr = ctx.input(|i| i.viewport_rect());
-            let w = 300.0_f32.min(scr.width() * 0.4);
-            let x = scr.max.x - w;
-            let max_h = (scr.height() - 80.0).max(200.0);
-            egui::Area::new(egui::Id::new("rss_detail_pnl"))
-                .fixed_pos(egui::pos2(x, scr.min.y + 50.0))
-                .order(egui::Order::Foreground)
-                .movable(false)
-                .show(ctx, |ui| {
-                    ui.set_width(w);
-                    ui.set_max_height(max_h);
-                    egui::Frame::NONE
-                        .fill(self.pal.surface)
-                        .stroke(Stroke::new(1.0_f32, self.pal.border))
-                        .show(ui, |ui| { self.draw_rss_item_detail(ui, &item); });
+            egui::Panel::right("rss_detail_pnl")
+                .resizable(true)
+                .default_size(300.0)
+                .size_range(240.0..=640.0)
+                .frame(egui::Frame::NONE
+                    .fill(self.pal.surface)
+                    .stroke(Stroke::new(1.0_f32, self.pal.border))
+                    .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 8)))
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| self.draw_rss_item_detail(ui, &item));
                 });
         }
     }
@@ -773,8 +759,7 @@ impl App {
                                         .min_size(egui::vec2(w.max(280.0) - 50.0, 26.0))
                                     ).clicked() { clicked = Some(h.clone()); }
                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if ui.add(egui::Button::new(
-                                            RichText::new("✕").size(10.0).color(self.pal.dim))
+                                        if ui.add(egui::Button::new(svg_image(SvgIcon::Close, 10.0, self.pal.dim))
                                             .fill(Color32::TRANSPARENT).frame(false)
                                             .min_size(egui::vec2(18.0, 18.0))
                                         ).on_hover_text("Remove").clicked() {
@@ -836,7 +821,7 @@ impl App {
                         || !self.f_trk.is_empty() || self.f_hlth != Hlth::All;
                     if dirty {
                         ui.add_space(8.0);
-                        if outline_btn(ui, "✕ Reset", self.pal.red) {
+                        if outline_icon_btn(ui, SvgIcon::Close, "Reset", self.pal.red) {
                             self.f_text.clear(); self.f_seed.clear(); self.f_size.clear();
                             self.f_year.clear(); self.f_trk.clear(); self.f_hlth = Hlth::All;
                             self.page = 0;
@@ -847,11 +832,8 @@ impl App {
                 ui.add_space(5.0);
                 // Row 2 — select mode + health + sort
                 ui.horizontal_wrapped(|ui| {
-                    // Batch select toggle
-                    if ui.add(egui::Button::selectable(self.sel_mode,
-                        RichText::new("☑ Select").font(FontId::proportional(fs - 1.0))
-                            .color(if self.sel_mode { self.pal.accent } else { self.pal.sub })
-                    )).clicked() {
+                    // Batch select toggle (vector checkbox, no glyphs)
+                    if v_checkbox(ui, self.sel_mode, "Select", self.pal.accent).clicked() {
                         self.sel_mode = !self.sel_mode;
                         self.sel_set.clear();
                         self.detail_open = false;
@@ -868,12 +850,9 @@ impl App {
                             self.copy_selected_magnets(ui);
                         }
                         ui.add_space(4.0);
-                        // Select all visible / clear
-                        if ui.add(egui::Button::new(
-                            RichText::new("☑ All").font(FontId::proportional(fs - 1.0)).color(self.pal.accent))
-                            .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .corner_radius(4.0)
-                        ).on_hover_text("Select all results on this page").clicked() {
+                        // Select all visible / clear (no glyphs)
+                        let all_checked = !self.sel_set.is_empty();
+                        if v_checkbox(ui, all_checked, "All", self.pal.accent).on_hover_text("Select all results on this page").clicked() {
                             let raw = self.all_results();
                             let sorted = self.filtered(&raw);
                             if self.cfg.page_size == 0 {
@@ -885,7 +864,7 @@ impl App {
                             }
                         }
                         if !self.sel_set.is_empty() && ui.add(egui::Button::new(
-                            RichText::new("✕ Clear").font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
+                            RichText::new("  Clear").font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
                             .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, self.pal.border))
                             .corner_radius(4.0)
                         ).clicked() {
@@ -956,6 +935,7 @@ impl App {
         let fsz = self.cfg.font_size;
         let cfg = self.cfg.clone();
         let sel = self.selected;
+        let det_open = self.detail_open;
 
         let mut new_sort: Option<(SortCol, bool)> = None;
 
@@ -1043,9 +1023,9 @@ impl App {
                                     TableCol::Name => {
                                         ui.horizontal(|ui| {
                                             if self.sel_mode {
-                                                let mut checked = self.sel_set.contains(&gi);
-                                                if ui.add(egui::Checkbox::without_text(&mut checked)).clicked() {
-                                                    if checked { self.sel_set.insert(gi); } else { self.sel_set.remove(&gi); }
+                                                let checked = self.sel_set.contains(&gi);
+                                                if v_checkbox(ui, checked, "", self.pal.accent).clicked() {
+                                                    if checked { self.sel_set.remove(&gi); } else { self.sel_set.insert(gi); }
                                                 }
                                             }
                                             let resp = ui.add(egui::Label::new(
@@ -1102,28 +1082,36 @@ impl App {
                                 }
                             });
                         }
-                        // Actions — single "⋯" overflow menu (one button per
-                        // row instead of 5-6 repeated squares).
+                        // Actions — hover-reveal (Gmail pattern): one primary
+                        // icon (Magnet, or Download fallback) always visible;
+                        // the rest reveal on hover/selection. No duplicates.
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                            ui.horizontal(|ui| {
-                                ui.add_space(2.0);
-                                let resp = ui.menu_button(
-                                    RichText::new("⋯").size(15.0).color(pal.sub),
-                                    |ui| {
-                                        ui.set_min_width(150.0);
-                                        if r.magnet_uri.as_deref().map(is_magnet).unwrap_or(false) {
-                                            if ui.button(format!("{}  Open in client", I_MAGNET)).clicked() { ui.close(); actions.push((i, "mag")); }
-                                            if ui.button(format!("{}  Copy magnet", I_COPY)).clicked() { ui.close(); actions.push((i, "copy")); }
-                                        }
-                                        if r.link.is_some()
-                                            && ui.button(format!("{}  Download .torrent", I_DOWNLOAD)).clicked() { ui.close(); actions.push((i, "dl")); }
-                                        if ui.button(format!("{}  Favorite (F)", I_STAR)).clicked() { ui.close(); actions.push((i, "fav")); }
-                                        if ui.button(format!("{}  Details (D)", I_INFO)).clicked() { ui.close(); actions.push((i, "info")); }
-                                        if r.details.is_some()
-                                            && ui.button(format!("{}  Open in browser", I_GLOBE)).clicked() { ui.close(); actions.push((i, "web")); }
-                                    });
-                                if resp.response.hovered() {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.add_space(4.0);
+                                ui.spacing_mut().item_spacing.x = 5.0;
+                                let reveal = is_hov || is_sel;
+                                let has_mag = r.magnet_uri.as_deref().map(is_magnet).unwrap_or(false);
+                                let has_link = r.link.is_some();
+                                // Secondary actions — revealed on hover/select.
+                                if reveal {
+                                    if has_mag
+                                        && svg_btn(ui, SvgIcon::Copy, "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
+                                    if has_mag && has_link
+                                        && svg_btn(ui, SvgIcon::Download, "Download .torrent", pal.green) { actions.push((i, "dl")); }
+                                    if svg_btn(ui, SvgIcon::Star, "Add to Favorites (F)", pal.yellow) { actions.push((i, "fav")); }
+                                    if svg_btn(ui, SvgIcon::Info,
+                                        "Detail panel (D)",
+                                        if is_sel && det_open { pal.accent } else { pal.sub }) { actions.push((i, "info")); }
+                                }
+                                // Primary action — always visible, one icon only.
+                                if has_mag
+                                    && svg_btn(ui, SvgIcon::Magnet, "Open in torrent client", pal.accent) { actions.push((i, "mag")); }
+                                if !has_mag && has_link
+                                    && svg_btn(ui, SvgIcon::Download, "Download .torrent", pal.green) { actions.push((i, "dl")); }
+                                let cell_id = egui::Id::new(("rowhov", gi));
+                                let hover_resp = ui.interact(ui.max_rect(), cell_id, egui::Sense::hover());
+                                if hover_resp.hovered() {
                                     self.hovered = Some(i);
                                 }
                             });
@@ -1259,7 +1247,7 @@ impl App {
             lbl(ui, "Details", self.pal.text, fs + 2.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
-                if ui.add(egui::Button::new(RichText::new("✕").size(14.0).color(self.pal.sub))
+                if ui.add(egui::Button::new(svg_image(SvgIcon::Close, 14.0, self.pal.sub))
                     .fill(Color32::TRANSPARENT).corner_radius(4.0))
                     .on_hover_text("Close").clicked() {
                     self.detail_open = false; self.selected = None;
@@ -1353,28 +1341,28 @@ impl App {
 
             if let Some(mag) = r.magnet_uri.clone() {
                 let mc = mag.clone();
-                if wide_btn(ui, "▶  Open Magnet", self.pal.accent) {
+                if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", self.pal.accent) {
                     let _ = open::that(mag); self.toast("Opening magnet…", self.pal.accent);
                 }
                 ui.add_space(4.0);
-                if wide_btn(ui, "⎘  Copy Magnet Link", self.pal.sub) {
+                if wide_icon_btn(ui, SvgIcon::Copy, "Copy Magnet Link", self.pal.sub) {
                     ui.ctx().copy_text(mc);
                     self.toast("Copied ✓", self.pal.green);
                 }
                 ui.add_space(4.0);
             }
             if let Some(link) = r.link.clone() {
-                if wide_btn(ui, "↓  Download .torrent", self.pal.green) {
+                if wide_icon_btn(ui, SvgIcon::Download, "Download .torrent", self.pal.green) {
                     let _ = open::that(link); self.toast("Downloading…", self.pal.green);
                 }
                 ui.add_space(4.0);
             }
             if let Some(det) = r.details.clone() {
-                if wide_btn(ui, "🌐  Open in Browser", self.pal.sub) { let _ = open::that(det); }
+                if wide_icon_btn(ui, SvgIcon::Web, "Open in Browser", self.pal.sub) { let _ = open::that(det); }
                 ui.add_space(4.0);
             }
             let r2 = r.clone();
-            if wide_btn(ui, "★  Add to Favorites", self.pal.yellow) { self.add_fav(&r2); }
+            if wide_icon_btn(ui, SvgIcon::Star, "Add to Favorites", self.pal.yellow) { self.add_fav(&r2); }
         });
     }
 
@@ -1417,7 +1405,7 @@ impl App {
                 .desired_width(FAV_SEARCH_W).hint_text("filter favorites…")
                 .font(FontId::proportional(fs)));
             if !self.fav_search.is_empty()
-                && ui.add(egui::Button::new(RichText::new("✕").size(12.0).color(self.pal.sub))
+                && ui.add(egui::Button::new(svg_image(SvgIcon::Close, 12.0, self.pal.sub))
                     .fill(Color32::TRANSPARENT).frame(false)).clicked() {
                     self.fav_search.clear();
                 }
@@ -1465,11 +1453,12 @@ impl App {
                                 });
                             });
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if act_btn(ui, "Del", "Remove", self.pal.red) { remove = Some(i); }
-                                if fav.link.is_some()
-                                    && act_btn(ui, "DL", "Download .torrent", self.pal.green) { open_link = fav.link.clone(); }
+                                ui.spacing_mut().item_spacing.x = 5.0;
                                 if fav.magnet.as_deref().map(is_magnet).unwrap_or(false)
-                                    && act_btn(ui, "Mag", "Open magnet", self.pal.accent) { open_mag = fav.magnet.clone(); }
+                                    && svg_btn(ui, SvgIcon::Magnet, "Open magnet", self.pal.accent) { open_mag = fav.magnet.clone(); }
+                                if fav.link.is_some()
+                                    && svg_btn(ui, SvgIcon::Download, "Download .torrent", self.pal.green) { open_link = fav.link.clone(); }
+                                if svg_btn(ui, SvgIcon::Close, "Remove", self.pal.red) { remove = Some(i); }
                             });
                         });
                     });
@@ -1557,9 +1546,13 @@ impl App {
                     lbl(ui, "RSS Feeds", pal.accent, fs);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let sub = pal.sub;
-                        if ui.add(egui::Button::new(RichText::new("⟳ All").font(FontId::proportional(fs - 1.5)).color(sub))
-                            .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, pal.border)).corner_radius(4.0)
-                        ).on_hover_text("Refresh all feeds").clicked() { self.refresh_all_feeds(); }
+                        if ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 4.0;
+                            svg_icon(ui, SvgIcon::Refresh, 13.0, sub);
+                            ui.add(egui::Button::new(RichText::new("All").font(FontId::proportional(fs - 1.5)).color(sub))
+                                .fill(Color32::TRANSPARENT).stroke(Stroke::new(1.0_f32, pal.border)).corner_radius(4.0)
+                            ).on_hover_text("Refresh all feeds").clicked()
+                        }).inner { self.refresh_all_feeds(); }
                     });
                 });
                 ui.add_space(4.0);
@@ -1619,9 +1612,9 @@ impl App {
                         if is_sel {
                             ui.add_space(4.0);
                             ui.horizontal(|ui| {
-                                if act_btn(ui, "⟳", "Refresh", pal.accent) { refr = Some(i); }
+                                if svg_btn(ui, SvgIcon::Refresh, "Refresh", pal.accent) { refr = Some(i); }
                                 if act_btn(ui, "Edit", "Edit feed", pal.sub) { ed = Some(i); }
-                                if act_btn(ui, "✕", "Delete feed", pal.red) { del = Some(i); }
+                                if svg_btn(ui, SvgIcon::Close, "Delete feed", pal.red) { del = Some(i); }
                                 let ec = if en { pal.green } else { pal.dim };
                                 let el = if en { "On" } else { "Off" };
                                 if act_btn(ui, el, "Toggle enabled", ec) {
@@ -1665,7 +1658,11 @@ impl App {
                     status_pill(ui, dl, dc);
                     lbl(ui, &format!("  {} items", items.len()), pal.dim, fs - 1.0);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if outline_btn(ui, "⟳ Refresh", pal.accent) { self.refresh_feed(sel); }
+                        if ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 4.0;
+                            svg_icon(ui, SvgIcon::Refresh, 13.0, pal.accent);
+                            outline_btn(ui, "Refresh", pal.accent)
+                        }).inner { self.refresh_feed(sel); }
                         ui.add_space(6.0);
                         if outline_btn(ui, "Edit Feed", pal.sub) { self.rss_edit_idx = Some(sel); }
                     });
@@ -1740,20 +1737,18 @@ impl App {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                             ui.horizontal(|ui| {
                                 ui.add_space(2.0);
-                                let resp = ui.menu_button(
-                                    RichText::new("⋯").size(15.0).color(pal.sub),
-                                    |ui| {
-                                        ui.set_min_width(150.0);
-                                        if item.magnet.as_deref().map(is_magnet).unwrap_or(false) {
-                                            if ui.button(format!("{}  Open magnet", I_MAGNET)).clicked() { ui.close(); actions.push((i, "mag")); }
-                                            if ui.button(format!("{}  Copy magnet", I_COPY)).clicked() { ui.close(); actions.push((i, "copy")); }
-                                        }
-                                        if item.link.is_some()
-                                            && ui.button(format!("{}  Download .torrent", I_DOWNLOAD)).clicked() { ui.close(); actions.push((i, "dl")); }
-                                        if ui.button(format!("{}  Item details", I_INFO)).clicked() { ui.close(); actions.push((i, "detail")); }
-                                        if ui.button(format!("{}  Favorite", I_STAR)).clicked() { ui.close(); actions.push((i, "fav")); }
-                                    });
-                                if resp.response.hovered() {
+                                ui.spacing_mut().item_spacing.x = 5.0;
+                                if item.magnet.as_deref().map(is_magnet).unwrap_or(false) {
+                                    if  svg_btn(ui, SvgIcon::Magnet, "Open magnet", pal.accent) { actions.push((i, "mag")); }
+                                    if  svg_btn(ui, SvgIcon::Copy, "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
+                                }
+                                if item.link.is_some()
+                                    &&  svg_btn(ui, SvgIcon::Download, "Download .torrent", pal.green) { actions.push((i, "dl")); }
+                                if  svg_btn(ui, SvgIcon::Info, "Item details", pal.sub) { actions.push((i, "detail")); }
+                                if  svg_btn(ui, SvgIcon::Star, "Add to Favorites", pal.yellow) { actions.push((i, "fav")); }
+                                let cell_id = egui::Id::new(("rsshov", i));
+                                let hover_resp = ui.interact(ui.max_rect(), cell_id, egui::Sense::hover());
+                                if hover_resp.hovered() {
                                     self.hovered = Some(i);
                                 }
                             });
@@ -1784,7 +1779,7 @@ impl App {
             ui.horizontal(|ui| {
                 lbl(ui, "Item details", pal.accent, fs + 1.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add(egui::Button::new(RichText::new("✕").size(14.0).color(pal.sub))
+                    if ui.add(egui::Button::new(svg_image(SvgIcon::Close, 14.0, pal.sub))
                         .fill(Color32::TRANSPARENT).corner_radius(4.0))
                         .on_hover_text("Close").clicked() {
                         self.rss_detail = None;
@@ -1805,13 +1800,13 @@ impl App {
             });
             ui.add_space(12.0);
             if item.magnet.is_some() {
-                if wide_btn(ui, "⚡  Open Magnet", pal.accent) { if let Some(m) = &item.magnet { let _ = open::that(m); } }
+                if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", pal.accent) { if let Some(m) = &item.magnet { let _ = open::that(m); } }
                 ui.add_space(4.0);
-                if wide_btn(ui, "⎘  Copy Magnet", pal.sub) { if let Some(m) = &item.magnet { ui.ctx().copy_text(m.clone()); self.toast("Copied ✓", pal.green); } }
+                if wide_icon_btn(ui, SvgIcon::Copy, "Copy Magnet", pal.sub) { if let Some(m) = &item.magnet { ui.ctx().copy_text(m.clone()); self.toast("Copied ✓", pal.green); } }
                 ui.add_space(4.0);
             }
-            if item.link.is_some() { if wide_btn(ui, "↓  Download .torrent", pal.green) { if let Some(l) = &item.link { let _ = open::that(l); } } ui.add_space(4.0); }
-            if wide_btn(ui, "★  Save to Favorites", pal.yellow) { let it = item.clone(); self.add_fav_from_rss(&it); }
+            if item.link.is_some() { if wide_icon_btn(ui, SvgIcon::Download, "Download .torrent", pal.green) { if let Some(l) = &item.link { let _ = open::that(l); } } ui.add_space(4.0); }
+            if wide_icon_btn(ui, SvgIcon::Star, "Save to Favorites", pal.yellow) { let it = item.clone(); self.add_fav_from_rss(&it); }
         });
     }
 
