@@ -200,3 +200,97 @@ pub(crate) fn start_rss_fetch(
     });
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{build_rss_url, parse_torznab_xml, RssFeedConfig};
+
+    const SAMPLE: &str = r#"<?xml version="1.0"?>
+<rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
+  <channel>
+    <title>Test Feed</title>
+    <item>
+      <title>Ubuntu 24.04 ISO</title>
+      <link>http://tracker/download/1.torrent</link>
+      <enclosure url="http://tracker/download/1.torrent" length="5242880" type="application/x-bittorrent"/>
+      <category>PC</category>
+      <torznab:attr name="seeders" value="42"/>
+      <torznab:attr name="peers" value="10"/>
+      <torznab:attr name="magneturl" value="magnet:?xt=urn:btih:abc123"/>
+      <torznab:attr name="size" value="7340032"/>
+      <pubDate>Wed, 21 Aug 2024 10:00:00 +0000</pubDate>
+      <jackettindexer>mytracker</jackettindexer>
+    </item>
+  </channel>
+</rss>"#;
+
+    #[test]
+    fn parses_full_item() {
+        let items = parse_torznab_xml(SAMPLE).unwrap();
+        assert_eq!(items.len(), 1);
+        let it = &items[0];
+        assert_eq!(it.title, "Ubuntu 24.04 ISO");
+        assert_eq!(it.link.as_deref(), Some("http://tracker/download/1.torrent"));
+        assert_eq!(it.size, Some(5_242_880)); // from enclosure length
+        assert_eq!(it.seeders, Some(42));
+        assert_eq!(it.leechers, Some(10));
+        assert_eq!(it.magnet.as_deref(), Some("magnet:?xt=urn:btih:abc123"));
+        assert_eq!(it.category.as_deref(), Some("PC"));
+        assert_eq!(it.tracker.as_deref(), Some("mytracker"));
+        assert!(it.pub_date.is_some());
+    }
+
+    #[test]
+    fn parses_text_fallback_for_title_and_category() {
+        let xml = r#"<rss><channel><item>
+            <title>Fallback Title</title>
+            <category>TV</category>
+        </item></channel></rss>"#;
+        let items = parse_torznab_xml(xml).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Fallback Title");
+        assert_eq!(items[0].category.as_deref(), Some("TV"));
+    }
+
+    #[test]
+    fn ignores_items_without_title() {
+        let xml = r#"<rss><channel>
+            <item><link>http://x/1</link></item>
+            <item><title>Real</title></item>
+        </channel></rss>"#;
+        let items = parse_torznab_xml(xml).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Real");
+    }
+
+    #[test]
+    fn truncated_xml_returns_empty_not_error() {
+        // Quick-xml streams; an unclosed doc parses as "no complete items",
+        // which the feed UI treats as an empty feed — not a hard error.
+        assert!(parse_torznab_xml("<rss><channel><item>").unwrap().is_empty());
+        assert!(parse_torznab_xml("").unwrap().is_empty());
+    }
+
+    #[test]
+    fn build_url_uses_all_indexer_and_category() {
+        let cfg = RssFeedConfig {
+            indexer: "mytracker".into(),
+            query: "ubuntu iso".into(),
+            category: "2000".into(),
+            ..RssFeedConfig::new_default()
+        };
+        let url = build_rss_url("http://localhost:9117/", "KEY123", &cfg);
+        assert!(url.contains("/indexers/mytracker/results/torznab/api"));
+        assert!(url.contains("apikey=KEY123"));
+        assert!(url.contains("q=ubuntu+iso"));
+        assert!(url.contains("&cat=2000"));
+    }
+
+    #[test]
+    fn build_url_defaults_to_all_indexer_and_no_cat() {
+        let cfg = RssFeedConfig::new_default();
+        let url = build_rss_url("http://localhost:9117", "K", &cfg);
+        assert!(url.contains("/indexers/all/results/torznab/api"));
+        assert!(!url.contains("&cat="));
+    }
+}
+
