@@ -1182,6 +1182,9 @@ impl App {
                                             .on_hover_text("Click to filter by category").clicked() {
                                             if self.f_text == *cat { self.f_text.clear(); }
                                             else { self.f_text = cat.clone(); }
+                                            // Category filter changed the result set: drop batch selections.
+                                            self.sel_set.clear(); self.sel_mode = false;
+                                            self.page = 0;
                                         }
                                     });
                                 ui.add_space(3.0);
@@ -1379,6 +1382,12 @@ impl App {
             .show(ui, |ui| {
                 // Row 1
                 ui.horizontal_wrapped(|ui| {
+                    // Snapshot filter state before inputs so we can detect changes
+                    // and drop batch selections whose indices went stale.
+                    let prev = (
+                        self.f_text.clone(), self.f_seed.clone(), self.f_size.clone(),
+                        self.f_year.clone(), self.f_trk.clone(), self.f_hlth.clone(),
+                    );
                     lbl(ui, "Filter", self.pal.dim, fs);
                     ui.add_space(3.0);
                     ui.add(egui::TextEdit::singleline(&mut self.f_text)
@@ -1401,6 +1410,14 @@ impl App {
                     ui.add(egui::TextEdit::singleline(&mut self.f_trk)
                         .desired_width(86.0).hint_text("any").font(FontId::proportional(fs)));
 
+                    let changed = self.f_text != prev.0 || self.f_seed != prev.1
+                        || self.f_size != prev.2 || self.f_year != prev.3
+                        || self.f_trk != prev.4 || self.f_hlth != prev.5;
+                    if changed && self.sel_mode {
+                        self.sel_set.clear(); self.sel_mode = false;
+                        self.toast("Selection cleared (filters changed)", self.pal.yellow);
+                    }
+
                     let dirty = !self.f_text.is_empty() || !self.f_seed.is_empty()
                         || !self.f_size.is_empty() || !self.f_year.is_empty()
                         || !self.f_trk.is_empty() || self.f_hlth != Hlth::All;
@@ -1410,6 +1427,7 @@ impl App {
                             self.f_text.clear(); self.f_seed.clear(); self.f_size.clear();
                             self.f_year.clear(); self.f_trk.clear(); self.f_hlth = Hlth::All;
                             self.page = 0;
+                            self.sel_set.clear(); self.sel_mode = false;
                         }
                     }
                 });
@@ -1470,7 +1488,13 @@ impl App {
                         if ui.add(egui::Button::selectable(on,
                             RichText::new(hf.label()).font(FontId::proportional(fs - 1.0))
                                 .color(if on { self.pal.accent } else { self.pal.sub })
-                        )).clicked() { self.f_hlth = hf; self.page = 0; }
+                        )).clicked() {
+                            if self.f_hlth != hf {
+                                self.f_hlth = hf;
+                                self.sel_set.clear(); self.sel_mode = false; // filter changed
+                            }
+                            self.page = 0;
+                        }
                         ui.add_space(2.0);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
