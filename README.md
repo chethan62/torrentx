@@ -30,6 +30,8 @@
 - **RSS feeds** — Jackett Torznab indexer feeds with auto-refresh (10 min), deduped
 - **Custom accent color** — override any theme's accent
 - **System tray** — minimize-to-tray with Show/Hide + Quit
+- **Desktop notifications** — alerted when a search completes
+- **`--config <path>`** — portable config for multiple profiles/installs
 - **Update checker** — notifies when a new release is out
 - **Toast notifications** — animated, per-theme colored
 - **egui 0.36** — modern rendering, GPU-accelerated
@@ -38,8 +40,8 @@
 
 | Platform | File | Size |
 |----------|------|------|
-| Linux (AppImage) | [TorrentX-18.0.0-x86_64.AppImage](https://github.com/chethan62/torrentx/releases/tag/v18.0.0) | ~9 MB |
-| Linux (binary) | [torrentx](https://github.com/chethan62/torrentx/releases/tag/v18.0.0) | ~19 MB |
+| Linux (AppImage) | [TorrentX-18.1.0-x86_64.AppImage](https://github.com/chethan62/torrentx/releases/tag/v18.1.0) | ~9 MB |
+| Linux (binary) | [torrentx](https://github.com/chethan62/torrentx/releases/tag/v18.1.0) | ~20 MB |
 
 ## Build from source
 
