@@ -352,6 +352,9 @@ impl App {
     }
 
     fn add_fav_from_rss(&mut self, item: &RssItem) {
+        if self.cfg.favorites.iter().any(|f| f.title == item.title) {
+            self.toast("Already in Favorites", self.pal.yellow); return;
+        }
         let now = chrono::Local::now().format("%Y-%m-%d").to_string();
         self.cfg.favorites.push(Favorite {
             title: item.title.clone(), magnet: item.magnet.clone(),
@@ -722,7 +725,8 @@ impl App {
                             .fill(if active { tint(self.pal.accent, 22) } else { Color32::TRANSPARENT })
                             .stroke(Stroke::new(if active { 1.0_f32 } else { 0.0_f32 }, self.pal.accent))
                             .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
-                        ).on_hover_text(tip).clicked() {
+                        ).on_hover_text(tip).clicked() && self.tab != tab {
+                            if tab != Tab::Favorites { self.fav_search.clear(); }
                             self.tab = tab;
                             self.detail_open = false;
                             self.selected = None;
