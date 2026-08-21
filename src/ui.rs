@@ -13,6 +13,15 @@ use crate::themes::{rgb, rgba, tint, Pal, Theme};
 use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 use egui_extras::{Column, TableBuilder};
 
+// Phosphor icon glyphs (embedded Phosphor.ttf). These unicode chars render
+// via the "phosphor" fallback font registered in app.rs.
+const I_MAGNET: &str = "\u{E680}";
+const I_COPY: &str = "\u{E1CA}";
+const I_DOWNLOAD: &str = "\u{E20A}";
+const I_STAR: &str = "\u{E46A}";
+const I_INFO: &str = "\u{E2CE}";
+const I_GLOBE: &str = "\u{E288}";
+
 // ─── UI tuning constants ───────────────────────────────────────────────────
 /// Filter-bar input widths (px), in row order.
 const FILTER_TEXT_W: f32 = 115.0; // "within results"
@@ -672,9 +681,12 @@ impl App {
                 let max_h = (scr.height() - 80.0).max(200.0);
                 egui::Area::new(egui::Id::new("detail_pnl"))
                     .fixed_pos(egui::pos2(x, top))
-                    .constrain_to(scr)
                     .order(egui::Order::Foreground)
+                    .movable(false)
                     .show(ctx, |ui| {
+                        // Explicit size so the Area never covers more than the
+                        // panel — an oversized/constrained Area eats clicks on
+                        // everything beneath it.
                         ui.set_width(w);
                         ui.set_max_height(max_h);
                         egui::Frame::NONE
@@ -702,8 +714,8 @@ impl App {
             let max_h = (scr.height() - 80.0).max(200.0);
             egui::Area::new(egui::Id::new("rss_detail_pnl"))
                 .fixed_pos(egui::pos2(x, scr.min.y + 50.0))
-                .constrain_to(scr)
                 .order(egui::Order::Foreground)
+                .movable(false)
                 .show(ctx, |ui| {
                     ui.set_width(w);
                     ui.set_max_height(max_h);
@@ -944,7 +956,6 @@ impl App {
         let fsz = self.cfg.font_size;
         let cfg = self.cfg.clone();
         let sel = self.selected;
-        let det_open = self.detail_open;
 
         let mut new_sort: Option<(SortCol, bool)> = None;
 
@@ -1076,26 +1087,45 @@ impl App {
                                     | TableCol::Leech | TableCol::Ratio | TableCol::Health
                                     | TableCol::Date => {
                                         draw_cell_content(ui, c, r, seed, leech, fsz, &pal);
+                                        // Click anywhere in these cells selects the row
+                                        // (the Name cell handles its own label clicks).
+                                        let cell_id = egui::Id::new(("rowcell", gi, c.label()));
+                                        let cell_resp = ui.interact(ui.max_rect(), cell_id, egui::Sense::click());
+                                        if cell_resp.clicked() && !self.sel_mode {
+                                            actions.push((i, "select"));
+                                        }
+                                        if cell_resp.hovered() {
+                                            self.hovered = Some(i);
+                                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                        }
                                     }
                                 }
                             });
                         }
-                        // Actions
+                        // Actions — single "⋯" overflow menu (one button per
+                        // row instead of 5-6 repeated squares).
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                             ui.horizontal(|ui| {
                                 ui.add_space(2.0);
-                                if r.magnet_uri.as_deref().map(is_magnet).unwrap_or(false) {
-                                    if act_btn(ui, "Mag", "Open in torrent client", pal.accent) { actions.push((i, "mag")); }
-                                    if act_btn(ui, "Copy", "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
+                                let resp = ui.menu_button(
+                                    RichText::new("⋯").size(15.0).color(pal.sub),
+                                    |ui| {
+                                        ui.set_min_width(150.0);
+                                        if r.magnet_uri.as_deref().map(is_magnet).unwrap_or(false) {
+                                            if ui.button(format!("{}  Open in client", I_MAGNET)).clicked() { ui.close(); actions.push((i, "mag")); }
+                                            if ui.button(format!("{}  Copy magnet", I_COPY)).clicked() { ui.close(); actions.push((i, "copy")); }
+                                        }
+                                        if r.link.is_some()
+                                            && ui.button(format!("{}  Download .torrent", I_DOWNLOAD)).clicked() { ui.close(); actions.push((i, "dl")); }
+                                        if ui.button(format!("{}  Favorite (F)", I_STAR)).clicked() { ui.close(); actions.push((i, "fav")); }
+                                        if ui.button(format!("{}  Details (D)", I_INFO)).clicked() { ui.close(); actions.push((i, "info")); }
+                                        if r.details.is_some()
+                                            && ui.button(format!("{}  Open in browser", I_GLOBE)).clicked() { ui.close(); actions.push((i, "web")); }
+                                    });
+                                if resp.response.hovered() {
+                                    self.hovered = Some(i);
                                 }
-                                if r.link.is_some()
-                                    && act_btn(ui, "DL", "Download .torrent", pal.green) { actions.push((i, "dl")); }
-                                if act_btn(ui, "Fav", "Add to Favorites (F)", pal.yellow) { actions.push((i, "fav")); }
-                                if act_btn(ui, "Info", "Detail panel (D)",
-                                    if is_sel && det_open { pal.accent } else { pal.dim }) { actions.push((i, "info")); }
-                                if r.details.is_some()
-                                    && act_btn(ui, "Web", "Open in browser", pal.dim) { actions.push((i, "web")); }
                             });
                         });
                     });
@@ -1124,8 +1154,6 @@ impl App {
                     "dl" => { if let Some(l) = &r.link { let _ = open::that(l); self.toast("Downloading…", self.pal.green); } }
                     "fav" => { self.add_fav(&r); }
                     "info" => {
-                        // TEMP DEBUG
-                        eprintln!("[dbg] info action fired, i={}, detail_open={}", i, self.detail_open);
                         // Idempotent open: clicking Info always opens the detail
                         // panel for this row. (The row's own click may have already
                         // set selected+detail_open — don't toggle it closed here,
@@ -1491,15 +1519,23 @@ impl App {
             // Sidebar as a fixed-width Frame (NOT egui::Panel::left — panels
             // inside a Ui don't reserve space in egui 0.36 and collapse/push
             // content; a plain frame in a horizontal layout is reliable).
-            egui::Frame::NONE
-                .fill(pal.surface)
-                .stroke(Stroke::new(1.0_f32, pal.border))
-                .inner_margin(egui::Margin::symmetric(2, 0))
-                .show(ui, |ui| {
-                    ui.set_width(215.0);
-                    ui.set_max_height(ui.available_height());
-                    self.draw_rss_sidebar(ui);
-                });
+            // allocate_ui with an exact size forces the 215px width; plain
+            // set_width() lets inner content expand the frame.
+            let sb_w = 215.0_f32;
+            let sb_h = ui.available_height();
+            ui.allocate_ui_with_layout(
+                egui::vec2(sb_w, sb_h),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    egui::Frame::NONE
+                        .fill(pal.surface)
+                        .stroke(Stroke::new(1.0_f32, pal.border))
+                        .inner_margin(egui::Margin::symmetric(2, 0))
+                        .show(ui, |ui| {
+                            self.draw_rss_sidebar(ui);
+                        });
+                },
+            );
 
             ui.add_space(6.0);
             ui.vertical(|ui| {
@@ -1531,7 +1567,10 @@ impl App {
                     .desired_width(ui.available_width()).hint_text("Filter feeds…").font(FontId::proportional(fs)));
             });
 
-        egui::ScrollArea::vertical().id_salt("rss_feed_list").show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt("rss_feed_list")
+            .max_height(ui.available_height())
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
             let filter = self.rss_filter.to_lowercase();
             let len = self.rss_feeds.len();
             let mut sel: Option<usize> = None;
@@ -1700,13 +1739,23 @@ impl App {
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                             ui.horizontal(|ui| {
-                                if item.magnet.as_deref().map(is_magnet).unwrap_or(false) {
-                                    if act_btn(ui, "Mag", "Open magnet", pal.accent) { actions.push((i, "mag")); }
-                                    if act_btn(ui, "Copy", "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
+                                ui.add_space(2.0);
+                                let resp = ui.menu_button(
+                                    RichText::new("⋯").size(15.0).color(pal.sub),
+                                    |ui| {
+                                        ui.set_min_width(150.0);
+                                        if item.magnet.as_deref().map(is_magnet).unwrap_or(false) {
+                                            if ui.button(format!("{}  Open magnet", I_MAGNET)).clicked() { ui.close(); actions.push((i, "mag")); }
+                                            if ui.button(format!("{}  Copy magnet", I_COPY)).clicked() { ui.close(); actions.push((i, "copy")); }
+                                        }
+                                        if item.link.is_some()
+                                            && ui.button(format!("{}  Download .torrent", I_DOWNLOAD)).clicked() { ui.close(); actions.push((i, "dl")); }
+                                        if ui.button(format!("{}  Item details", I_INFO)).clicked() { ui.close(); actions.push((i, "detail")); }
+                                        if ui.button(format!("{}  Favorite", I_STAR)).clicked() { ui.close(); actions.push((i, "fav")); }
+                                    });
+                                if resp.response.hovered() {
+                                    self.hovered = Some(i);
                                 }
-                                if item.link.is_some() && act_btn(ui, "DL", "Download .torrent", pal.green) { actions.push((i, "dl")); }
-                                if act_btn(ui, "Info", "Item details", pal.dim) { actions.push((i, "detail")); }
-                                if act_btn(ui, "★", "Add to Favorites", pal.yellow) { actions.push((i, "fav")); }
                             });
                         });
                     });

@@ -15,6 +15,41 @@ use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+/// Load the embedded Noto Sans CJK JP subset so Japanese/Korean/Chinese
+/// torrent titles render instead of showing □□□□. The font is embedded in
+/// the binary (include_bytes!) — egui can't load system .ttc collections
+/// (ab_glyph can't select a face index), so we embed a single-face .otf
+/// subset (CJK ideographs + kana + punctuation). Runs once.
+pub(crate) fn load_cjk_fonts(ctx: &egui::Context) {
+    use std::sync::OnceLock;
+    static LOADED: OnceLock<bool> = OnceLock::new();
+    if LOADED.get().is_some() {
+        return;
+    }
+    let data: &'static [u8] = include_bytes!("../assets/NotoSansCJKjp-subset.otf");
+    let phosphor: &'static [u8] = include_bytes!("../assets/Phosphor.ttf");
+    let mut fonts = egui::FontDefinitions::default();
+    fonts
+        .font_data
+        .insert("cjk".to_owned(), egui::FontData::from_static(data).into());
+    // Phosphor icon font for the row action buttons (square icon buttons).
+    fonts
+        .font_data
+        .insert("phosphor".to_owned(), egui::FontData::from_static(phosphor).into());
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        if let Some(list) = fonts.families.get_mut(&family) {
+            if !list.contains(&"cjk".to_owned()) {
+                list.push("cjk".to_owned());
+            }
+            if !list.contains(&"phosphor".to_owned()) {
+                list.push("phosphor".to_owned());
+            }
+        }
+    }
+    ctx.set_fonts(fonts);
+    let _ = LOADED.set(true);
+}
+
 /// A transient toast notification (message + color + ttl in seconds).
 #[derive(Clone)]
 pub(crate) struct Toast {
@@ -415,6 +450,7 @@ impl App {
     }
 
     pub(crate) fn apply_theme(&self, ctx: &egui::Context) {
+        load_cjk_fonts(ctx); // once (OnceLock inside)
         let p = &self.pal;
         let mut vis = if p.light { Visuals::light() } else { Visuals::dark() };
         vis.panel_fill = p.bg;

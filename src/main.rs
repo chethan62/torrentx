@@ -103,12 +103,6 @@ impl eframe::App for App {
         self.apply_theme(&ctx);
         let state = self.cur_state();
 
-        // Minimize-to-tray: intercept window close (unless tray "Quit" was used).
-        if ctx.input(|i| i.viewport().close_requested())
-            && !QUIT.load(std::sync::atomic::Ordering::SeqCst) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-        }
         // Tray "Quit" → exit the whole app.
         if QUIT.load(std::sync::atomic::Ordering::SeqCst) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -163,6 +157,19 @@ impl eframe::App for App {
             let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.1);
             self.spin_t += dt;
             if self.spin_t > 0.1 { self.spin_t = 0.0; self.spin_i = (self.spin_i + 1) % SPIN.len(); }
+
+            // Watchdog: if the search thread never completes (dead thread,
+            // hung connection), force Error so the spinner stops and the UI
+            // recovers instead of spinning at 12fps forever.
+            if let Some(t) = self.t_start {
+                let budget = Duration::from_secs(self.cfg.timeout_secs.max(10) + 15);
+                if t.elapsed() > budget {
+                    jackett::set_err(&self.state,
+                        format!("Search timed out after {}s — check Jackett is running", budget.as_secs()));
+                    self.t_start = None;
+                    ctx.request_repaint();
+                }
+            }
         }
         if matches!(state, SearchState::Done | SearchState::Error(_)) {
             if let Some(t) = self.t_start.take() { self.t_done = Some(t.elapsed().as_secs_f64()); }
