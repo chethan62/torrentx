@@ -4,7 +4,7 @@
 // `app.rs`; the eframe entry point lives in `main.rs`.
 
 use crate::app::App;
-use crate::{act_btn, grid_row, lbl, outline_btn, status_pill, wide_btn, CATS, MARGIN_DEFAULT};
+use crate::{act_btn, grid_row, labeled_input, lbl, outline_btn, status_pill, wide_btn, CATS, MARGIN_DEFAULT};
 use crate::config::{save_cfg, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_ROOMY};
 use crate::jackett::{cat_col, fmt_size, hlth_lbl, is_magnet, seed_col, time_ago, Hlth, SearchState, SortCol, SortDir, Tab, TableCol, TorrentResult};
 use crate::rss::{FeedStatus, RssFeedConfig, RssFeedState, RssItem};
@@ -12,6 +12,25 @@ use crate::themes::{rgb, rgba, tint, Pal, Theme};
 
 use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 use egui_extras::{Column, TableBuilder};
+
+// ─── UI tuning constants ───────────────────────────────────────────────────
+/// Filter-bar input widths (px), in row order.
+const FILTER_TEXT_W: f32 = 115.0; // "within results"
+const FILTER_NUM_W: f32 = 38.0;   // Seeds ≥ / Max GB
+const FILTER_YEAR_W: f32 = 44.0;  // Year ≥
+const FILTER_TRK_W: f32 = 86.0;   // Tracker
+/// Settings-panel input widths (px).
+const SETTINGS_URL_W: f32 = 172.0;
+const SETTINGS_KEY_W: f32 = 210.0;
+const SETTINGS_SMALL_W: f32 = 40.0;
+/// RSS form input width (px).
+const RSS_FORM_W: f32 = 260.0;
+/// Favorites search input width (px).
+const FAV_SEARCH_W: f32 = 220.0;
+/// Standard panel corner radius (px).
+const PANEL_RADIUS: f32 = 8.0;
+/// Standard panel side margin (px, i8 for egui Margin).
+const PANEL_MARGIN_X: i8 = 12;
 
 // ─── Header ────────────────────────────────────────────────────────────────
 
@@ -145,11 +164,11 @@ impl App {
                     ui.add_space(6.0);
                     lbl(ui, "Jackett URL", self.pal.sub, 12.0);
                     ui.add(egui::TextEdit::singleline(&mut self.cfg.jackett_url)
-                        .desired_width(172.0).font(FontId::monospace(12.0)));
+                        .desired_width(SETTINGS_URL_W).font(FontId::monospace(12.0)));
                     ui.add_space(6.0);
                     lbl(ui, "API Key", self.pal.sub, 12.0);
                     ui.add(egui::TextEdit::singleline(&mut self.cfg.api_key)
-                        .desired_width(210.0).password(!self.key_vis)
+                        .desired_width(SETTINGS_KEY_W).password(!self.key_vis)
                         .hint_text("from Jackett dashboard (top-right)")
                         .font(FontId::monospace(12.0)));
                     if ui.small_button(if self.key_vis { "hide" } else { "show" }).clicked() {
@@ -167,7 +186,7 @@ impl App {
                     lbl(ui, "RSS", self.pal.sub, 12.0);
                     let mut rs = self.cfg.rss_refresh_secs.to_string();
                     if ui.add(egui::TextEdit::singleline(&mut rs)
-                        .desired_width(40.0).font(FontId::monospace(12.0))
+                        .desired_width(SETTINGS_SMALL_W).font(FontId::monospace(12.0))
                         .hint_text("600")).changed() {
                         if let Ok(v) = rs.parse::<u64>() { self.cfg.rss_refresh_secs = v.clamp(0, 86_400); }
                     }
@@ -431,9 +450,9 @@ impl App {
                 egui::Frame::NONE
                     .fill(tint(self.pal.red, 10))
                     .stroke(Stroke::new(1.0_f32, tint(self.pal.red, 70)))
-                    .corner_radius(8.0)
+                    .corner_radius(PANEL_RADIUS)
                     .inner_margin(egui::Margin::symmetric(20, 14))
-                    .outer_margin(egui::Margin::symmetric(12, 0))
+                    .outer_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 0))
                     .show(ui, |ui| {
                         for line in err.lines() {
                             lbl(ui, line, self.pal.red, fs);
@@ -581,53 +600,58 @@ impl App {
                 }
 
                 // Pagination
-                if max_p > 1 {
-                    egui::Panel::bottom("pages")
-                        .default_size(34.0)
-                        .frame(egui::Frame::NONE.fill(self.pal.bg)
-                            .stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .inner_margin(egui::Margin::symmetric(12, 5)))
-                        .show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                if ui.add_enabled(pg > 0,
-                                    egui::Button::new(RichText::new("← Prev")
-                                        .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
-                                    .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0)
-                                ).clicked() { self.page -= 1; self.selected = None; }
-                                ui.add_space(6.0);
-                                for p in 0..max_p {
-                                    let near = p == 0 || p == max_p - 1 || p.abs_diff(pg) <= 2;
-                                    if !near {
-                                        if p == 1 || p == max_p - 2 {
-                                            lbl(ui, "…", self.pal.dim, fs - 1.0);
-                                        }
-                                        continue;
-                                    }
-                                    let on = p == pg;
-                                    if ui.add(egui::Button::selectable(on,
-                                        RichText::new(format!("{}", p + 1))
-                                            .font(FontId::proportional(fs - 1.0))
-                                            .color(if on { self.pal.accent } else { self.pal.sub })
-                                    )).clicked() { self.page = p; self.selected = None; }
-                                }
-                                ui.add_space(6.0);
-                                if ui.add_enabled(pg + 1 < max_p,
-                                    egui::Button::new(RichText::new("Next →")
-                                        .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
-                                    .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0)
-                                ).clicked() { self.page += 1; self.selected = None; }
-                                lbl(ui, &format!("  Page {} of {max_p}", pg + 1), self.pal.dim, fs - 1.0);
-                            });
-                        });
-                }
+                self.draw_pagination(ui, max_p, pg, fs);
 
                 // Results table
                 let base = if self.cfg.page_size == 0 { 0 } else { pg * self.cfg.page_size };
                 self.draw_results_table(ui, &page_s, base);
             }
         }
+    }
+
+    /// Bottom pagination bar (Prev / page numbers / Next). Shown only when
+    /// there's more than one page. Mutates `self.page` and clears selection.
+    fn draw_pagination(&mut self, ui: &mut egui::Ui, max_p: usize, pg: usize, fs: f32) {
+        if max_p <= 1 { return; }
+        egui::Panel::bottom("pages")
+            .default_size(34.0)
+            .frame(egui::Frame::NONE.fill(self.pal.bg)
+                .stroke(Stroke::new(1.0_f32, self.pal.border))
+                .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 5)))
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.add_enabled(pg > 0,
+                        egui::Button::new(RichText::new("← Prev")
+                            .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
+                        .fill(Color32::TRANSPARENT)
+                        .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0)
+                    ).clicked() { self.page -= 1; self.selected = None; }
+                    ui.add_space(6.0);
+                    for p in 0..max_p {
+                        let near = p == 0 || p == max_p - 1 || p.abs_diff(pg) <= 2;
+                        if !near {
+                            if p == 1 || p == max_p - 2 {
+                                lbl(ui, "…", self.pal.dim, fs - 1.0);
+                            }
+                            continue;
+                        }
+                        let on = p == pg;
+                        if ui.add(egui::Button::selectable(on,
+                            RichText::new(format!("{}", p + 1))
+                                .font(FontId::proportional(fs - 1.0))
+                                .color(if on { self.pal.accent } else { self.pal.sub })
+                        )).clicked() { self.page = p; self.selected = None; }
+                    }
+                    ui.add_space(6.0);
+                    if ui.add_enabled(pg + 1 < max_p,
+                        egui::Button::new(RichText::new("Next →")
+                            .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
+                        .fill(Color32::TRANSPARENT)
+                        .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0)
+                    ).clicked() { self.page += 1; self.selected = None; }
+                    lbl(ui, &format!("  Page {} of {max_p}", pg + 1), self.pal.dim, fs - 1.0);
+                });
+            });
     }
 
     pub(crate) fn draw_detail_panel(&mut self, ui: &mut egui::Ui) {
@@ -644,7 +668,7 @@ impl App {
                     .frame(egui::Frame::NONE
                         .fill(self.pal.surface)
                         .stroke(Stroke::new(1.0_f32, self.pal.border))
-                        .inner_margin(egui::Margin::symmetric(12, 8)))
+                        .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 8)))
                     .show(ui, |ui| { self.draw_detail(ui, &r); });
             }
         }
@@ -664,7 +688,7 @@ impl App {
                 .show(ctx, |ui| {
                     egui::Frame::NONE
                         .fill(self.pal.surface)
-                        .corner_radius(8.0)
+                        .corner_radius(PANEL_RADIUS)
                         .stroke(Stroke::new(1.0_f32, self.pal.accent))
                         .shadow(egui::epaint::Shadow {
                             offset: [0, 4],
@@ -715,45 +739,40 @@ impl App {
 
     pub(crate) fn draw_filter_bar(&mut self, ui: &mut egui::Ui, fs: f32) {
         egui::Frame::NONE
-            .fill(self.pal.surface).corner_radius(8.0)
+            .fill(self.pal.surface).corner_radius(PANEL_RADIUS)
             .stroke(Stroke::new(1.0_f32, self.pal.border))
-            .inner_margin(egui::Margin::symmetric(12, 7))
-            .outer_margin(egui::Margin::symmetric(12, 0))
+            .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 7))
+            .outer_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 0))
             .show(ui, |ui| {
                 // Row 1
                 ui.horizontal_wrapped(|ui| {
-                    // Snapshot filter state before inputs so we can detect changes
-                    // and drop batch selections whose indices went stale.
-                    let prev = (
-                        self.f_text.clone(), self.f_seed.clone(), self.f_size.clone(),
-                        self.f_year.clone(), self.f_trk.clone(), self.f_hlth.clone(),
-                    );
+                    // Track whether any filter input changed this frame so we can
+                    // drop batch selections whose indices went stale. TextEdit
+                    // responses report .changed() — no per-frame string clones.
+                    let mut filter_changed = false;
                     lbl(ui, "Filter", self.pal.dim, fs);
                     ui.add_space(3.0);
-                    ui.add(egui::TextEdit::singleline(&mut self.f_text)
-                        .desired_width(115.0).hint_text("within results")
-                        .font(FontId::proportional(fs)));
+                    filter_changed |= ui.add(egui::TextEdit::singleline(&mut self.f_text)
+                        .desired_width(FILTER_TEXT_W).hint_text("within results")
+                        .font(FontId::proportional(fs))).changed();
                     ui.add_space(8.0);
                     lbl(ui, "Seeds ≥", self.pal.dim, fs);
-                    ui.add(egui::TextEdit::singleline(&mut self.f_seed)
-                        .desired_width(38.0).hint_text("0").font(FontId::proportional(fs)));
+                    filter_changed |= ui.add(egui::TextEdit::singleline(&mut self.f_seed)
+                        .desired_width(FILTER_NUM_W).hint_text("0").font(FontId::proportional(fs))).changed();
                     ui.add_space(8.0);
                     lbl(ui, "Max GB", self.pal.dim, fs);
-                    ui.add(egui::TextEdit::singleline(&mut self.f_size)
-                        .desired_width(38.0).hint_text("∞").font(FontId::proportional(fs)));
+                    filter_changed |= ui.add(egui::TextEdit::singleline(&mut self.f_size)
+                        .desired_width(FILTER_NUM_W).hint_text("∞").font(FontId::proportional(fs))).changed();
                     ui.add_space(8.0);
                     lbl(ui, "Year ≥", self.pal.dim, fs);
-                    ui.add(egui::TextEdit::singleline(&mut self.f_year)
-                        .desired_width(44.0).hint_text("any").font(FontId::proportional(fs)));
+                    filter_changed |= ui.add(egui::TextEdit::singleline(&mut self.f_year)
+                        .desired_width(FILTER_YEAR_W).hint_text("any").font(FontId::proportional(fs))).changed();
                     ui.add_space(8.0);
                     lbl(ui, "Tracker", self.pal.dim, fs);
-                    ui.add(egui::TextEdit::singleline(&mut self.f_trk)
-                        .desired_width(86.0).hint_text("any").font(FontId::proportional(fs)));
+                    filter_changed |= ui.add(egui::TextEdit::singleline(&mut self.f_trk)
+                        .desired_width(FILTER_TRK_W).hint_text("any").font(FontId::proportional(fs))).changed();
 
-                    let changed = self.f_text != prev.0 || self.f_seed != prev.1
-                        || self.f_size != prev.2 || self.f_year != prev.3
-                        || self.f_trk != prev.4 || self.f_hlth != prev.5;
-                    if changed && self.sel_mode {
+                    if filter_changed && self.sel_mode {
                         self.sel_set.clear(); self.sel_mode = false;
                         self.toast("Selection cleared (filters changed)", self.pal.yellow);
                     }
@@ -1002,52 +1021,10 @@ impl App {
                                                 .color(cat_col(cat))).truncate());
                                         }
                                     }
-                                    TableCol::Tracker => {
-                                        ui.add(egui::Label::new(RichText::new(
-                                            r.tracker.as_deref().unwrap_or("—"))
-                                            .font(FontId::proportional(fsz - 1.0)).color(pal.sub)).truncate());
-                                    }
-                                    TableCol::Size => {
-                                        ui.label(RichText::new(r.size.map(fmt_size).unwrap_or_else(||"—".into()))
-                                            .font(FontId::proportional(fsz)).color(pal.sub));
-                                    }
-                                    TableCol::Seeds => {
-                                        ui.label(RichText::new(seed.to_string())
-                                            .font(FontId::proportional(fsz)).color(seed_col(seed)).strong());
-                                    }
-                                    TableCol::Leech => {
-                                        ui.label(RichText::new(leech.to_string())
-                                            .font(FontId::proportional(fsz)).color(pal.red));
-                                    }
-                                    TableCol::Ratio => {
-                                        let tot = (seed + leech) as f32;
-                                        if tot > 0.0 {
-                                            let pct = (seed as f32 / tot).clamp(0.0, 1.0);
-                                            let rect = ui.available_rect_before_wrap();
-                                            let bar = egui::Rect::from_min_size(
-                                                rect.min + Vec2::new(2.0, (rect.height() - 7.0) / 2.0),
-                                                Vec2::new((rect.width() - 4.0).max(8.0), 7.0));
-                                            ui.painter().rect_filled(bar, 3.0, pal.border);
-                                            let mut filled = bar;
-                                            filled.max.x = bar.min.x + bar.width() * pct;
-                                            ui.painter().rect_filled(filled, 3.0, seed_col(seed));
-                                            ui.allocate_rect(bar, egui::Sense::hover())
-                                                .on_hover_text(format!("{:.0}% seeded", pct * 100.0));
-                                        } else {
-                                            ui.label(RichText::new("—")
-                                                .font(FontId::proportional(fsz - 1.0)).color(pal.dim));
-                                        }
-                                    }
-                                    TableCol::Health => {
-                                        let dot = if seed > 10 { "●" } else { "○" };
-                                        ui.label(RichText::new(format!("{dot} {}", hlth_lbl(seed)))
-                                            .font(FontId::proportional(fsz - 1.0)).strong().color(seed_col(seed)));
-                                    }
-                                    TableCol::Date => {
-                                        let d = r.publish_date.as_deref()
-                                            .map(time_ago).unwrap_or_else(||"—".into());
-                                        ui.label(RichText::new(d)
-                                            .font(FontId::proportional(fsz)).color(pal.dim));
+                                    TableCol::Tracker | TableCol::Size | TableCol::Seeds
+                                    | TableCol::Leech | TableCol::Ratio | TableCol::Health
+                                    | TableCol::Date => {
+                                        draw_cell_content(ui, c, r, seed, leech, fsz, &pal);
                                     }
                                 }
                             });
@@ -1115,6 +1092,7 @@ impl App {
             self.hovered = None;
         }
     }
+
 
     // ─── Idle / welcome ────────────────────────────────────────────────────
 
@@ -1216,7 +1194,7 @@ impl App {
 
             let cat = r.category_desc.as_deref().unwrap_or("Unknown");
             egui::Frame::NONE
-                .fill(tint(cat_col(cat), 25)).corner_radius(8.0)
+                .fill(tint(cat_col(cat), 25)).corner_radius(PANEL_RADIUS)
                 .inner_margin(egui::Margin::symmetric(8, 3))
                 .show(ui, |ui| {
                     ui.label(RichText::new(cat).font(FontId::proportional(fs - 1.0)).color(cat_col(cat)));
@@ -1353,7 +1331,7 @@ impl App {
             lbl(ui, "Search:", self.pal.dim, fs);
             ui.add_space(4.0);
             ui.add(egui::TextEdit::singleline(&mut self.fav_search)
-                .desired_width(220.0).hint_text("filter favorites…")
+                .desired_width(FAV_SEARCH_W).hint_text("filter favorites…")
                 .font(FontId::proportional(fs)));
             if !self.fav_search.is_empty()
                 && ui.add(egui::Button::new(RichText::new("✕").size(12.0).color(self.pal.sub))
@@ -1530,7 +1508,7 @@ impl App {
                             }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if n > 0 {
-                                    egui::Frame::NONE.fill(tint(pal.accent, 25)).corner_radius(8.0)
+                                    egui::Frame::NONE.fill(tint(pal.accent, 25)).corner_radius(PANEL_RADIUS)
                                         .inner_margin(egui::Margin::symmetric(5, 1))
                                         .show(ui, |ui| { ui.label(RichText::new(n.to_string()).font(FontId::proportional(fs - 3.0)).color(pal.accent)); });
                                 }
@@ -1688,7 +1666,7 @@ impl App {
     pub(crate) fn draw_rss_item_detail(&mut self, ui: &mut egui::Ui, item: &RssItem) {
         let pal = self.pal.clone(); let fs = self.cfg.font_size;
         ui.add_space(10.0);
-        egui::Frame::NONE.inner_margin(egui::Margin::symmetric(12, 0)).show(ui, |ui| {
+        egui::Frame::NONE.inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 0)).show(ui, |ui| {
             ui.add(egui::Label::new(RichText::new(&item.title).font(FontId::proportional(fs)).color(pal.text).strong()).wrap());
             ui.add_space(12.0);
             egui::Grid::new("rss_item_grid").num_columns(2).spacing([8.0, 5.0]).show(ui, |ui| {
@@ -1729,21 +1707,13 @@ impl App {
             lbl(ui, "Connects to a Jackett Torznab indexer endpoint", pal.dim, fs - 1.0);
             ui.add_space(20.0);
 
-            ui.horizontal(|ui| { ui.add_space(4.0); lbl(ui, "Name:", pal.dim, fs); ui.add_space(4.0);
-                ui.add(egui::TextEdit::singleline(&mut self.rss_new_cfg.name)
-                    .desired_width(260.0).hint_text("My Feed").font(FontId::proportional(fs))); });
+            labeled_input(ui, "Name:", &mut self.rss_new_cfg.name, RSS_FORM_W, "My Feed", fs, pal.dim);
             ui.add_space(6.0);
-            ui.horizontal(|ui| { ui.add_space(4.0); lbl(ui, "Indexer:", pal.dim, fs); ui.add_space(4.0);
-                ui.add(egui::TextEdit::singleline(&mut self.rss_new_cfg.indexer)
-                    .desired_width(260.0).hint_text("all (Jackett slug)").font(FontId::proportional(fs))); });
+            labeled_input(ui, "Indexer:", &mut self.rss_new_cfg.indexer, RSS_FORM_W, "all (Jackett slug)", fs, pal.dim);
             ui.add_space(6.0);
-            ui.horizontal(|ui| { ui.add_space(4.0); lbl(ui, "Query:", pal.dim, fs); ui.add_space(4.0);
-                ui.add(egui::TextEdit::singleline(&mut self.rss_new_cfg.query)
-                    .desired_width(260.0).hint_text("empty = latest torrents").font(FontId::proportional(fs))); });
+            labeled_input(ui, "Query:", &mut self.rss_new_cfg.query, RSS_FORM_W, "empty = latest torrents", fs, pal.dim);
             ui.add_space(6.0);
-            ui.horizontal(|ui| { ui.add_space(4.0); lbl(ui, "Category:", pal.dim, fs); ui.add_space(4.0);
-                ui.add(egui::TextEdit::singleline(&mut self.rss_new_cfg.category)
-                    .desired_width(260.0).hint_text("Torznab cat numbers").font(FontId::proportional(fs))); });
+            labeled_input(ui, "Category:", &mut self.rss_new_cfg.category, RSS_FORM_W, "Torznab cat numbers", fs, pal.dim);
             ui.add_space(10.0);
 
             ui.horizontal(|ui| {
@@ -1806,7 +1776,7 @@ impl App {
 
                 // Theme swatches
                 ui.add_space(24.0);
-                lbl(ui, "19 Themes", self.pal.accent, fs + 1.0);
+                lbl(ui, &format!("{} Themes", Theme::all().len()), self.pal.accent, fs + 1.0);
                 ui.add_space(10.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
@@ -1905,7 +1875,7 @@ impl App {
                     egui::Frame::NONE
                         .fill(tint(self.pal.surface, a))
                         .stroke(Stroke::new(1.5_f32, tint(toast.col, a)))
-                        .corner_radius(8.0)
+                        .corner_radius(PANEL_RADIUS)
                         .inner_margin(egui::Margin::symmetric(14, 9))
                         .shadow(egui::epaint::Shadow {
                             offset: [0, 2],
@@ -1920,6 +1890,67 @@ impl App {
                 });
             y -= 46.0;
         }
+    }
+}
+
+fn draw_cell_content(
+    ui: &mut egui::Ui,
+    c: &TableCol,
+    r: &TorrentResult,
+    seed: u32,
+    leech: u32,
+    fsz: f32,
+    pal: &Pal,
+) {
+    match c {
+        TableCol::Tracker => {
+            ui.add(egui::Label::new(RichText::new(
+                r.tracker.as_deref().unwrap_or("—"))
+                .font(FontId::proportional(fsz - 1.0)).color(pal.sub)).truncate());
+        }
+        TableCol::Size => {
+            ui.label(RichText::new(r.size.map(fmt_size).unwrap_or_else(||"—".into()))
+                .font(FontId::proportional(fsz)).color(pal.sub));
+        }
+        TableCol::Seeds => {
+            ui.label(RichText::new(seed.to_string())
+                .font(FontId::proportional(fsz)).color(seed_col(seed)).strong());
+        }
+        TableCol::Leech => {
+            ui.label(RichText::new(leech.to_string())
+                .font(FontId::proportional(fsz)).color(pal.red));
+        }
+        TableCol::Ratio => {
+            let tot = (seed + leech) as f32;
+            if tot > 0.0 {
+                let pct = (seed as f32 / tot).clamp(0.0, 1.0);
+                let rect = ui.available_rect_before_wrap();
+                let bar = egui::Rect::from_min_size(
+                    rect.min + Vec2::new(2.0, (rect.height() - 7.0) / 2.0),
+                    Vec2::new((rect.width() - 4.0).max(8.0), 7.0));
+                ui.painter().rect_filled(bar, 3.0, pal.border);
+                let mut filled = bar;
+                filled.max.x = bar.min.x + bar.width() * pct;
+                ui.painter().rect_filled(filled, 3.0, seed_col(seed));
+                ui.allocate_rect(bar, egui::Sense::hover())
+                    .on_hover_text(format!("{:.0}% seeded", pct * 100.0));
+            } else {
+                ui.label(RichText::new("—")
+                    .font(FontId::proportional(fsz - 1.0)).color(pal.dim));
+            }
+        }
+        TableCol::Health => {
+            let dot = if seed > 10 { "●" } else { "○" };
+            ui.label(RichText::new(format!("{dot} {}", hlth_lbl(seed)))
+                .font(FontId::proportional(fsz - 1.0)).strong().color(seed_col(seed)));
+        }
+        TableCol::Date => {
+            let d = r.publish_date.as_deref()
+                .map(time_ago).unwrap_or_else(||"—".into());
+            ui.label(RichText::new(d)
+                .font(FontId::proportional(fsz)).color(pal.dim));
+        }
+        TableCol::Name => {} // handled inline (interaction)
     }
 }
 

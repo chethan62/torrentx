@@ -73,6 +73,25 @@ pub(crate) fn lbl(ui: &mut egui::Ui, text: &str, color: Color32, fs: f32) {
     ui.label(RichText::new(text).font(FontId::proportional(fs)).color(color));
 }
 
+/// A labeled single-line input: `Label: [input]` on one row.
+pub(crate) fn labeled_input(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut String,
+    width: f32,
+    hint: &str,
+    fs: f32,
+    dim: Color32,
+) {
+    ui.horizontal(|ui| {
+        ui.add_space(4.0);
+        lbl(ui, label, dim, fs);
+        ui.add_space(4.0);
+        ui.add(egui::TextEdit::singleline(value)
+            .desired_width(width).hint_text(hint).font(FontId::proportional(fs)));
+    });
+}
+
 // ─── App methods ───────────────────────────────────────────────────────────
 
 // ─── (logic methods moved to app.rs) ──────────────────────────────
