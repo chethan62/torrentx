@@ -260,11 +260,12 @@ impl eframe::App for App {
                 });
         }
 
-        // ── Detail panel (right side) — MUST be added BEFORE CentralPanel:
-        // egui ignores side panels created after the central panel has
-        // consumed the remaining space, which is why the Info button set
-        // detail_open but no panel ever appeared.
-        self.draw_detail_panel(ui);
+        // ── Detail panels — floating right-edge overlays (egui::Area) ─────
+        // Converted from Panel::right because egui 0.36 panels inside/around
+        // the central Ui caused invisible panels, below-table layout, and
+        // click-eating. Areas float above layout and interact correctly.
+        self.draw_detail_panel(&ctx);
+        self.draw_rss_detail_panel(&ctx);
 
         // ── Central panel ────────────────────────────────────────────────
         egui::CentralPanel::default()

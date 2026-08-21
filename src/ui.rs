@@ -652,7 +652,7 @@ impl App {
             });
     }
 
-    pub(crate) fn draw_detail_panel(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn draw_detail_panel(&mut self, ctx: &egui::Context) {
         if !self.detail_open || self.tab != Tab::Search { return; }
         let state = self.cur_state();
         if state != SearchState::Done { return; }
@@ -661,16 +661,60 @@ impl App {
         let page_s = self.page_slice(&sorted);
         if let Some(idx) = self.selected {
             if let Some(r) = page_s.get(idx).cloned() {
-                egui::Panel::right("detail_pnl")
-                    .resizable(true).default_size(self.detail_width).size_range(240.0..)
-                    .frame(egui::Frame::NONE
-                        .fill(self.pal.surface)
-                        .stroke(Stroke::new(1.0_f32, self.pal.border))
-                        .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 8)))
-                    .show(ui, |ui| { self.draw_detail(ui, &r); });
+                // Floating right-edge overlay (egui::Area). Panels inside the
+                // central Ui misbehave in egui 0.36 (below-table / invisible /
+                // click-eating); an Area floats above layout and handles
+                // interaction correctly.
+                let w = self.detail_width.clamp(240.0, 520.0);
+                let scr = ctx.input(|i| i.viewport_rect());
+                let x = scr.max.x - w;
+                let top = scr.min.y + 50.0;
+                let max_h = (scr.height() - 80.0).max(200.0);
+                egui::Area::new(egui::Id::new("detail_pnl"))
+                    .fixed_pos(egui::pos2(x, top))
+                    .constrain_to(scr)
+                    .order(egui::Order::Foreground)
+                    .show(ctx, |ui| {
+                        ui.set_width(w);
+                        ui.set_max_height(max_h);
+                        egui::Frame::NONE
+                            .fill(self.pal.surface)
+                            .stroke(Stroke::new(1.0_f32, self.pal.border))
+                            .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 8))
+                            .show(ui, |ui| { self.draw_detail(ui, &r); });
+                    });
             }
         }
     }
+    /// RSS item detail — floating right-edge overlay (same approach as the
+    /// search detail panel; Area avoids all nested-panel layout bugs).
+    pub(crate) fn draw_rss_detail_panel(&mut self, ctx: &egui::Context) {
+        if self.tab != Tab::Rss { return; }
+        let Some(di) = self.rss_detail else { return };
+        // Items live in the active feed's state; rebuild the index the same
+        // way draw_rss does so the panel and table agree.
+        let Some(feed) = self.rss_feeds.get(self.rss_selected) else { return };
+        let items = feed.items.clone();
+        if let Some(item) = items.get(di).cloned() {
+            let scr = ctx.input(|i| i.viewport_rect());
+            let w = 300.0_f32.min(scr.width() * 0.4);
+            let x = scr.max.x - w;
+            let max_h = (scr.height() - 80.0).max(200.0);
+            egui::Area::new(egui::Id::new("rss_detail_pnl"))
+                .fixed_pos(egui::pos2(x, scr.min.y + 50.0))
+                .constrain_to(scr)
+                .order(egui::Order::Foreground)
+                .show(ctx, |ui| {
+                    ui.set_width(w);
+                    ui.set_max_height(max_h);
+                    egui::Frame::NONE
+                        .fill(self.pal.surface)
+                        .stroke(Stroke::new(1.0_f32, self.pal.border))
+                        .show(ui, |ui| { self.draw_rss_item_detail(ui, &item); });
+                });
+        }
+    }
+
     pub(crate) fn draw_history_dropdown(&mut self, ctx: &egui::Context, bar_rect: egui::Rect, fs: f32) {
         if self.show_hist && !self.cfg.history.is_empty() {
             let pos = egui::pos2(bar_rect.min.x, bar_rect.max.y + 4.0);
@@ -1080,6 +1124,8 @@ impl App {
                     "dl" => { if let Some(l) = &r.link { let _ = open::that(l); self.toast("Downloading…", self.pal.green); } }
                     "fav" => { self.add_fav(&r); }
                     "info" => {
+                        // TEMP DEBUG
+                        eprintln!("[dbg] info action fired, i={}, detail_open={}", i, self.detail_open);
                         // Idempotent open: clicking Info always opens the detail
                         // panel for this row. (The row's own click may have already
                         // set selected+detail_open — don't toggle it closed here,
@@ -1442,18 +1488,26 @@ impl App {
         }
 
         ui.horizontal_top(|ui| {
-            egui::Panel::left("rss_sidebar")
-                .resizable(true).default_size(220.0).size_range(160.0..)
-                .frame(egui::Frame::NONE.fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)))
-                .show(ui, |ui| { self.draw_rss_sidebar(ui); });
-
-            egui::CentralPanel::default()
-                .frame(egui::Frame::NONE.fill(pal.bg))
+            // Sidebar as a fixed-width Frame (NOT egui::Panel::left — panels
+            // inside a Ui don't reserve space in egui 0.36 and collapse/push
+            // content; a plain frame in a horizontal layout is reliable).
+            egui::Frame::NONE
+                .fill(pal.surface)
+                .stroke(Stroke::new(1.0_f32, pal.border))
+                .inner_margin(egui::Margin::symmetric(2, 0))
                 .show(ui, |ui| {
-                    if self.rss_add_mode { self.draw_rss_form(ui, None); }
-                    else if let Some(idx) = self.rss_edit_idx { self.draw_rss_form(ui, Some(idx)); }
-                    else { self.draw_rss_items(ui); }
+                    ui.set_width(215.0);
+                    ui.set_max_height(ui.available_height());
+                    self.draw_rss_sidebar(ui);
                 });
+
+            ui.add_space(6.0);
+            ui.vertical(|ui| {
+                ui.set_width(ui.available_width());
+                if self.rss_add_mode { self.draw_rss_form(ui, None); }
+                else if let Some(idx) = self.rss_edit_idx { self.draw_rss_form(ui, Some(idx)); }
+                else { self.draw_rss_items(ui); }
+            });
         });
     }
 
@@ -1591,16 +1645,16 @@ impl App {
 
         if let Some(di) = self.rss_detail {
             if let Some(item) = items.get(di).cloned() {
-                egui::Panel::right("rss_detail_pnl")
-                    .resizable(true).default_size(280.0).size_range(220.0..)
-                    .frame(egui::Frame::NONE.fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)))
-                    .show(ui, |ui| { self.draw_rss_item_detail(ui, &item); });
+                // NOTE: rendering moved to draw_rss_detail_panel() (frame
+                // level, before CentralPanel) so it appears BESIDE the table.
+                let _ = (di, item);
             }
         }
 
         use egui_extras::{Column, TableBuilder};
         let mut actions: Vec<(usize, &'static str)> = vec![];
         ui.add_space(2.0);
+        egui::ScrollArea::vertical().id_salt("rss_items_scroll").auto_shrink([false, true]).show(ui, |ui| {
         TableBuilder::new(ui).striped(false).resizable(true)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .column(Column::remainder().at_least(180.0).clip(true))
@@ -1651,6 +1705,7 @@ impl App {
                                     if act_btn(ui, "Copy", "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
                                 }
                                 if item.link.is_some() && act_btn(ui, "DL", "Download .torrent", pal.green) { actions.push((i, "dl")); }
+                                if act_btn(ui, "Info", "Item details", pal.dim) { actions.push((i, "detail")); }
                                 if act_btn(ui, "★", "Add to Favorites", pal.yellow) { actions.push((i, "fav")); }
                             });
                         });
@@ -1670,12 +1725,25 @@ impl App {
                 }
             }
         }
+        }); // end ScrollArea
     }
 
     pub(crate) fn draw_rss_item_detail(&mut self, ui: &mut egui::Ui, item: &RssItem) {
         let pal = self.pal.clone(); let fs = self.cfg.font_size;
         ui.add_space(10.0);
         egui::Frame::NONE.inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 0)).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                lbl(ui, "Item details", pal.accent, fs + 1.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.add(egui::Button::new(RichText::new("✕").size(14.0).color(pal.sub))
+                        .fill(Color32::TRANSPARENT).corner_radius(4.0))
+                        .on_hover_text("Close").clicked() {
+                        self.rss_detail = None;
+                    }
+                });
+            });
+            ui.separator();
+            ui.add_space(8.0);
             ui.add(egui::Label::new(RichText::new(&item.title).font(FontId::proportional(fs)).color(pal.text).strong()).wrap());
             ui.add_space(12.0);
             egui::Grid::new("rss_item_grid").num_columns(2).spacing([8.0, 5.0]).show(ui, |ui| {
