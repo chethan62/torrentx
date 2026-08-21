@@ -260,6 +260,12 @@ impl eframe::App for App {
                 });
         }
 
+        // ── Detail panel (right side) — MUST be added BEFORE CentralPanel:
+        // egui ignores side panels created after the central panel has
+        // consumed the remaining space, which is why the Info button set
+        // detail_open but no panel ever appeared.
+        self.draw_detail_panel(ui);
+
         // ── Central panel ────────────────────────────────────────────────
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(self.pal.bg))
@@ -271,9 +277,6 @@ impl eframe::App for App {
                     Tab::About => self.draw_about(ui),
                 }
             });
-
-        // Detail panel (top-level Panel::right, resizable)
-        self.draw_detail_panel(ui);
 
         self.draw_toasts(&ctx);
     }
