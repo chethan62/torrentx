@@ -989,8 +989,12 @@ impl App {
                             .fill(tint(self.pal.green, 18))
                             .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 80))).corner_radius(4.0)
                         ).clicked() {
-                            save_cfg(&self.cfg);
-                            self.toast("Settings saved ✓", self.pal.green);
+                            if let Some(err) = jackett::validate_jackett_url(&self.cfg.jackett_url) {
+                                self.toast(&format!("Jackett URL invalid: {err}"), self.pal.red);
+                            } else {
+                                save_cfg(&self.cfg);
+                                self.toast("Settings saved ✓", self.pal.green);
+                            }
                         }
                     });
                 });

@@ -184,13 +184,15 @@ pub(crate) fn set_err(st: &Arc<Mutex<SearchState>>, msg: String) {
 // ─── Search thread ─────────────────────────────────────────────────────────
 
 /// Shared HTTP client, built once. Avoids re-handshaking per request.
+/// Falls back to a bare default client if a custom-builder client fails
+/// (can't happen in practice, but never panic on startup over this).
 pub(crate) fn shared_client() -> &'static Client {
     static CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
     CLIENT.get_or_init(|| {
         Client::builder()
             .timeout(Duration::from_secs(120))
             .build()
-            .expect("failed to build HTTP client")
+            .unwrap_or_else(|_| Client::new())
     })
 }
 
@@ -209,12 +211,11 @@ pub(crate) fn check_update(current: &str) -> Option<String> {
         .timeout(Duration::from_secs(10))
         .send()
         .ok()?;
-    if !resp.status().is_success() { return None; }
+    if !resp.status().is_success() {
+        return None;
+    }
     let body = resp.text().ok()?;
-    // Parse "tag_name":"vX.Y.Z" (char-safe: avoid byte slicing on multibyte)
-    let tag = body.find("\"tag_name\":\"")?;
-    let rest = &body[tag + "\"tag_name\":\"".len()..];
-    let latest = rest.split('"').next()?;
+    let latest = parse_latest_tag(&body)?;
     let latest_trim = latest.trim_start_matches('v');
     let cur_trim = current.trim_start_matches('v');
     // Compare dotted versions
@@ -226,6 +227,32 @@ pub(crate) fn check_update(current: &str) -> Option<String> {
         .map(|(a, b)| a > b)
         .unwrap_or(l.len() > c.len());
     if newer { Some(latest.to_string()) } else { None }
+}
+
+/// Pull `tag_name` out of a GitHub "latest release" JSON body via serde_json.
+/// Split out so the network call (`check_update`) and the parsing are separable
+/// and unit-testable without a live server.
+fn parse_latest_tag(body: &str) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct Latest { tag_name: String }
+    let l: Latest = serde_json::from_str(body).ok()?;
+    Some(l.tag_name)
+}
+
+/// Validate a Jackett base URL: http/https scheme, non-empty host.
+/// Returns an error message, or None if the URL is acceptable.
+pub(crate) fn validate_jackett_url(s: &str) -> Option<&'static str> {
+    let t = s.trim();
+    if t.is_empty() { return Some("URL is empty"); }
+    let lower = t.to_lowercase();
+    if lower.starts_with("http://") {
+        // Allowed (Jackett commonly runs on plain http locally), but warn.
+        None
+    } else if lower.starts_with("https://") {
+        None
+    } else {
+        Some("URL must start with http:// or https://")
+    }
 }
 
 /// Validate a magnet link: must start with `magnet:?xt=urn:btih:` and carry
@@ -270,21 +297,44 @@ pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<Vec<String>> {
     );
     let resp = shared_client().get(&ep).timeout(Duration::from_secs(15)).send().ok()?;
     let body = resp.text().ok()?;
-    // Parse `<indexer id="..." configured="true"><title>...</title>` entries
+    parse_indexers_xml(&body)
+}
+
+/// Pull configured indexer ids out of a Jackett `t=indexers` Torznab XML body.
+/// Pure and unit-testable without a live server.
+fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+    let mut reader = Reader::from_str(body);
+    reader.trim_text(true);
     let mut out = vec![];
-    let mut pos = 0;
-    while let Some(start) = body[pos..].find("<indexer ") {
-        let seg = &body[pos + start..];
-        // Extract id="..." — safe against attribute order / malformed XML
-        if let Some(i0) = seg.find("id=\"") {
-            let i0 = i0 + 4;
-            if let Some(i1) = seg[i0..].find('"') {
-                let id = &seg[i0..i0 + i1];
-                let configured = seg.contains("configured=\"true\"");
-                if configured && !id.is_empty() { out.push(id.to_string()); }
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_lowercase();
+                if tag != "indexer" { continue; }
+                let mut id = None;
+                let mut configured = false;
+                for attr in e.attributes().flatten() {
+                    let k = String::from_utf8_lossy(attr.key.as_ref()).to_lowercase();
+                    if let Ok(v) = attr.unescape_value() {
+                        match k.as_str() {
+                            "id" => id = Some(v.to_string()),
+                            "configured" => configured = v == "true",
+                            _ => {}
+                        }
+                    }
+                }
+                if configured {
+                    if let Some(id) = id { if !id.is_empty() { out.push(id); } }
+                }
             }
+            Ok(Event::Eof) => break,
+            Err(_) => return None,
+            _ => {}
         }
-        pos += start + 10;
+        buf.clear();
     }
     out.sort();
     out.dedup();
@@ -348,7 +398,7 @@ pub(crate) fn start_search(
 
 #[cfg(test)]
 mod tests {
-    use super::{category_id, fmt_size, is_magnet, normalize, pub_year, urlenc};
+    use super::{category_id, fmt_size, is_magnet, normalize, parse_indexers_xml, parse_latest_tag, pub_year, urlenc, validate_jackett_url};
 
     #[test]
     fn category_mapping() {
@@ -413,5 +463,41 @@ mod tests {
         assert_eq!(pub_year("1999-01-01T00:00:00Z"), 1999);
         assert_eq!(pub_year("garbage"), 0);
         assert_eq!(pub_year(""), 0);
+    }
+
+    #[test]
+    fn parses_latest_release_tag() {
+        // Real GitHub "latest release" shape (with unrelated fields).
+        let body = r#"{"url":"https://api.github.com/repos/x/y/releases/1",
+            "tag_name":"v18.2.0","name":"Release","draft":false}"#;
+        assert_eq!(parse_latest_tag(body).as_deref(), Some("v18.2.0"));
+        assert_eq!(parse_latest_tag("not json"), None);
+        assert_eq!(parse_latest_tag(r#"{"tag_name":42}"#), None);
+    }
+
+    #[test]
+    fn validates_jackett_url_scheme() {
+        assert_eq!(validate_jackett_url("http://localhost:9117"), None);
+        assert_eq!(validate_jackett_url("https://jackett.example.com"), None);
+        assert_eq!(validate_jackett_url("localhost:9117"), Some("URL must start with http:// or https://"));
+        assert_eq!(validate_jackett_url("ftp://host"), Some("URL must start with http:// or https://"));
+        assert_eq!(validate_jackett_url(""), Some("URL is empty"));
+        assert_eq!(validate_jackett_url("   "), Some("URL is empty"));
+    }
+
+    #[test]
+    fn parses_indexer_list() {
+        let xml = r#"<?xml version="1.0"?>
+<indexers>
+  <indexer id="yts" configured="true"><title>YTS</title></indexer>
+  <indexer id="thepiratebay" configured="false"><title>TPB</title></indexer>
+  <indexer id="rarbg" configured="true"/>
+  <indexer configured="true"><title>No ID</title></indexer>
+</indexers>"#;
+        let ids = parse_indexers_xml(xml).unwrap();
+        // Only configured ones, sorted+deduped; missing-id ones skipped.
+        assert_eq!(ids, vec!["rarbg", "yts"]);
+        // Forgiving parser: malformed XML yields empty list, not an error.
+        assert!(parse_indexers_xml("<broken>").unwrap().is_empty());
     }
 }

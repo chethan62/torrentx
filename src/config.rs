@@ -142,7 +142,14 @@ fn default_rss_refresh() -> u64 {
 
 pub(crate) fn save_cfg(c: &Config) {
     if let Ok(j) = serde_json::to_string_pretty(c) {
-        let _ = fs::write(cfg_path(), j);
+        let p = cfg_path();
+        let _ = fs::write(&p, j);
+        // Config holds the Jackett API key — keep it private to this user.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&p, fs::Permissions::from_mode(0o600));
+        }
     }
 }
 
