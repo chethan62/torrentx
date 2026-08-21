@@ -355,11 +355,10 @@ impl App {
         if self.cfg.favorites.iter().any(|f| f.title == item.title) {
             self.toast("Already in Favorites", self.pal.yellow); return;
         }
-        let now = chrono::Local::now().format("%Y-%m-%d").to_string();
         self.cfg.favorites.push(Favorite {
             title: item.title.clone(), magnet: item.magnet.clone(),
             link: item.link.clone(), tracker: item.tracker.clone(),
-            size: item.size, seeders: item.seeders, saved_at: now,
+            size: item.size, seeders: item.seeders, saved_at: now_str(),
         });
         save_cfg(&self.cfg);
         self.toast("Saved to Favorites ★", self.pal.yellow);
