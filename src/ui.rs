@@ -1021,40 +1021,47 @@ impl App {
                                 ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                                 match c {
                                     TableCol::Name => {
+                                        // Full-cell click layer — clicking ANYWHERE
+                                        // in the Name cell (not just the text)
+                                        // selects the row. Double-click opens magnet.
+                                        let cell_id = egui::Id::new(("namecell", gi));
+                                        let cell_resp = ui.interact(ui.max_rect(), cell_id, egui::Sense::click());
+                                        if cell_resp.double_clicked() {
+                                            if let Some(m) = r.magnet_uri.as_deref() {
+                                                if is_magnet(m) {
+                                                    let _ = open::that(m);
+                                                    self.toast("Opening in torrent client…", self.pal.accent);
+                                                } else {
+                                                    self.toast("Invalid magnet link", self.pal.yellow);
+                                                }
+                                            } else {
+                                                self.toast("No magnet link", self.pal.yellow);
+                                            }
+                                        } else if cell_resp.clicked() {
+                                            if self.sel_mode {
+                                                if !self.sel_set.insert(gi) { self.sel_set.remove(&gi); }
+                                            } else {
+                                                actions.push((i, "select"));
+                                            }
+                                        }
+                                        if cell_resp.hovered() {
+                                            self.hovered = Some(i);
+                                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                        }
+                                        // Draw the content (non-interactive label)
                                         ui.horizontal(|ui| {
+                                            ui.add_space(6.0);
                                             if self.sel_mode {
                                                 let checked = self.sel_set.contains(&gi);
                                                 if v_checkbox(ui, checked, "", self.pal.accent).clicked() {
                                                     if checked { self.sel_set.remove(&gi); } else { self.sel_set.insert(gi); }
                                                 }
+                                                ui.add_space(4.0);
                                             }
-                                            let resp = ui.add(egui::Label::new(
+                                            ui.add(egui::Label::new(
                                                 RichText::new(&r.title).font(FontId::proportional(fsz))
                                                     .color(if is_sel { pal.accent } else { pal.text })
-                                            ).truncate().sense(egui::Sense::click()));
-                                            if resp.double_clicked() {
-                                                // Double-click = primary action: open the magnet
-                                                if let Some(m) = r.magnet_uri.as_deref() {
-                                                    if is_magnet(m) {
-                                                        let _ = open::that(m);
-                                                        self.toast("Opening in torrent client…", self.pal.accent);
-                                                    } else {
-                                                        self.toast("Invalid magnet link", self.pal.yellow);
-                                                    }
-                                                } else {
-                                                    self.toast("No magnet link", self.pal.yellow);
-                                                }
-                                            } else if resp.clicked() {
-                                                if self.sel_mode {
-                                                    if !self.sel_set.insert(gi) { self.sel_set.remove(&gi); }
-                                                } else {
-                                                    actions.push((i, "select"));
-                                                }
-                                            }
-                                            if resp.hovered() {
-                                                self.hovered = Some(i);
-                                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                                            }
+                                            ).truncate());
                                         });
                                         if rh >= 40.0 {
                                             let cat = r.category_desc.as_deref().unwrap_or("Other");
@@ -1082,33 +1089,25 @@ impl App {
                                 }
                             });
                         }
-                        // Actions — hover-reveal (Gmail pattern): one primary
-                        // icon (Magnet, or Download fallback) always visible;
-                        // the rest reveal on hover/selection. No duplicates.
+                        // Actions — fixed (always-visible) icon buttons, right-aligned.
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 ui.add_space(4.0);
                                 ui.spacing_mut().item_spacing.x = 5.0;
-                                let reveal = is_hov || is_sel;
                                 let has_mag = r.magnet_uri.as_deref().map(is_magnet).unwrap_or(false);
                                 let has_link = r.link.is_some();
-                                // Secondary actions — revealed on hover/select.
-                                if reveal {
-                                    if has_mag
-                                        && svg_btn(ui, SvgIcon::Copy, "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
-                                    if has_mag && has_link
-                                        && svg_btn(ui, SvgIcon::Download, "Download .torrent", pal.green) { actions.push((i, "dl")); }
-                                    if svg_btn(ui, SvgIcon::Star, "Add to Favorites (F)", pal.yellow) { actions.push((i, "fav")); }
-                                    if svg_btn(ui, SvgIcon::Info,
-                                        "Detail panel (D)",
-                                        if is_sel && det_open { pal.accent } else { pal.sub }) { actions.push((i, "info")); }
-                                }
-                                // Primary action — always visible, one icon only.
+                                // All actions always visible (no hover-reveal).
                                 if has_mag
                                     && svg_btn(ui, SvgIcon::Magnet, "Open in torrent client", pal.accent) { actions.push((i, "mag")); }
-                                if !has_mag && has_link
+                                if has_mag
+                                    && svg_btn(ui, SvgIcon::Copy, "Copy magnet link", pal.sub) { actions.push((i, "copy")); }
+                                if has_link
                                     && svg_btn(ui, SvgIcon::Download, "Download .torrent", pal.green) { actions.push((i, "dl")); }
+                                if svg_btn(ui, SvgIcon::Star, "Add to Favorites (F)", pal.yellow) { actions.push((i, "fav")); }
+                                if svg_btn(ui, SvgIcon::Info,
+                                    "Detail panel (D)",
+                                    if is_sel && det_open { pal.accent } else { pal.sub }) { actions.push((i, "info")); }
                                 let cell_id = egui::Id::new(("rowhov", gi));
                                 let hover_resp = ui.interact(ui.max_rect(), cell_id, egui::Sense::hover());
                                 if hover_resp.hovered() {
@@ -1711,25 +1710,44 @@ impl App {
                     body.row(rh, |mut row| {
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
-                            let resp = ui.add(egui::Label::new(RichText::new(&item.title).font(FontId::proportional(fs)).color(if is_sel { pal.accent } else { pal.text }))
-                                .truncate().sense(egui::Sense::click()));
-                            if resp.clicked() { actions.push((i, "detail")); }
+                            // Full-cell click — anywhere in the row opens detail.
+                            let cell_resp = ui.interact(ui.max_rect(), egui::Id::new(("rsscell", i)), egui::Sense::click());
+                            if cell_resp.clicked() { actions.push((i, "detail")); }
+                            if cell_resp.hovered() {
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                            }
+                            ui.add_space(6.0);
+                            ui.add(egui::Label::new(RichText::new(&item.title).font(FontId::proportional(fs)).color(if is_sel { pal.accent } else { pal.text }))
+                                .truncate());
                         });
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
+                            // Full-cell click — every column opens detail.
+                            let cell_resp = ui.interact(ui.max_rect(), egui::Id::new(("rsstracker", i)), egui::Sense::click());
+                            if cell_resp.clicked() { actions.push((i, "detail")); }
+                            ui.add_space(4.0);
                             ui.add(egui::Label::new(RichText::new(item.tracker.as_deref().unwrap_or("—")).font(FontId::proportional(fs - 1.0)).color(pal.sub)).truncate());
                         });
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
+                            let cell_resp = ui.interact(ui.max_rect(), egui::Id::new(("rsssize", i)), egui::Sense::click());
+                            if cell_resp.clicked() { actions.push((i, "detail")); }
+                            ui.add_space(4.0);
                             ui.label(RichText::new(item.size.map(fmt_size).unwrap_or_else(|| "—".into())).font(FontId::proportional(fs)).color(pal.sub));
                         });
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
+                            let cell_resp = ui.interact(ui.max_rect(), egui::Id::new(("rssseeds", i)), egui::Sense::click());
+                            if cell_resp.clicked() { actions.push((i, "detail")); }
+                            ui.add_space(4.0);
                             let s = item.seeders.unwrap_or(0);
                             ui.label(RichText::new(s.to_string()).font(FontId::proportional(fs)).color(seed_col(s)).strong());
                         });
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
+                            let cell_resp = ui.interact(ui.max_rect(), egui::Id::new(("rssdate", i)), egui::Sense::click());
+                            if cell_resp.clicked() { actions.push((i, "detail")); }
+                            ui.add_space(4.0);
                             let d = item.pub_date.as_deref().map(time_ago).unwrap_or_else(|| "—".into());
                             ui.label(RichText::new(d).font(FontId::proportional(fs)).color(pal.dim));
                         });
@@ -2023,6 +2041,8 @@ fn draw_cell_content(
     fsz: f32,
     pal: &Pal,
 ) {
+    // Not flush against the cell's left edge — consistent leading padding.
+    ui.add_space(4.0);
     match c {
         TableCol::Tracker => {
             ui.add(egui::Label::new(RichText::new(
