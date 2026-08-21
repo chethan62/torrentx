@@ -40,8 +40,8 @@
 
 | Platform | File | Size |
 |----------|------|------|
-| Linux (AppImage) | [TorrentX-18.1.0-x86_64.AppImage](https://github.com/chethan62/torrentx/releases/tag/v18.1.0) | ~9 MB |
-| Linux (binary) | [torrentx](https://github.com/chethan62/torrentx/releases/tag/v18.1.0) | ~20 MB |
+| Linux (AppImage) | [TorrentX-18.1.1-x86_64.AppImage](https://github.com/chethan62/torrentx/releases/tag/v18.1.1) | ~9 MB |
+| Linux (binary) | [torrentx](https://github.com/chethan62/torrentx/releases/tag/v18.1.1) | ~20 MB |
 
 ## Build from source
 
