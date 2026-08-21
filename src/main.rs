@@ -327,20 +327,21 @@ impl App {
     }
 
     /// Auto-refresh enabled feeds whose `auto_refresh` flag is set.
-    /// Re-checks every `RSS_AUTO_REFRESH_SECS`; skips feeds already loading.
+    /// Re-checks every `cfg.rss_refresh_secs`; skips feeds already loading.
     fn auto_refresh_feeds(&mut self) {
-        const RSS_AUTO_REFRESH_SECS: u64 = 600; // 10 min
         // Keep timestamps in sync with the feed list (add/remove).
         while self.rss_last_refresh.len() < self.rss_feeds.len() {
             self.rss_last_refresh.push(Instant::now());
         }
         self.rss_last_refresh.truncate(self.rss_feeds.len());
+        let interval = self.cfg.rss_refresh_secs;
         for i in 0..self.rss_feeds.len() {
             let cfg = self.rss_feeds[i].config.clone();
             if !cfg.enabled || !cfg.auto_refresh { continue; }
             if self.rss_feeds[i].status == FeedStatus::Loading { continue; }
+            if interval == 0 { continue; }
             let due = self.rss_last_refresh[i].elapsed()
-                >= Duration::from_secs(RSS_AUTO_REFRESH_SECS);
+                >= Duration::from_secs(interval);
             if due { self.refresh_feed(i); }
         }
     }
@@ -813,6 +814,19 @@ impl App {
                         if let Ok(v) = ts.parse::<u64>() { self.cfg.timeout_secs = v.clamp(5, 120); }
                     }
                     lbl(ui, "s", self.pal.dim, 11.0);
+                    ui.add_space(8.0);
+                    lbl(ui, "RSS", self.pal.sub, 12.0);
+                    let mut rs = self.cfg.rss_refresh_secs.to_string();
+                    if ui.add(egui::TextEdit::singleline(&mut rs)
+                        .desired_width(40.0).font(FontId::monospace(12.0))
+                        .hint_text("600")).changed() {
+                        if let Ok(v) = rs.parse::<u64>() { self.cfg.rss_refresh_secs = v.clamp(0, 86_400); }
+                    }
+                    lbl(ui, "s", self.pal.dim, 11.0);
+                    ui.add_space(2.0);
+                    ui.add(egui::Label::new(RichText::new("ⓘ").font(FontId::proportional(12.0)).color(self.pal.dim))
+                        .sense(egui::Sense::hover()))
+                        .on_hover_text("RSS auto-refresh interval (seconds). 0 disables auto-refresh.");
                 });
                 ui.add_space(5.0);
 
@@ -2123,7 +2137,7 @@ impl App {
                                 let ac = if en { pal.accent } else { pal.dim };
                                 ui.add(egui::Label::new(RichText::new("⟳").font(FontId::proportional(fs - 2.0)).color(ac))
                                     .sense(egui::Sense::hover()))
-                                    .on_hover_text("Auto-refreshes every 10 min");
+                                    .on_hover_text(format!("Auto-refreshes every {} min", self.cfg.rss_refresh_secs / 60));
                             }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if n > 0 {
@@ -2443,7 +2457,7 @@ impl App {
                     "Favorites with search filter, timestamps, persistent storage",
                     "Detail side panel with seeder/leecher ratio bar",
                     "Deduplication across trackers",
-                    "RSS feeds with background auto-refresh (10 min)",
+                    "RSS feeds with background auto-refresh (configurable)",
                     "Per-indexer search — pick one Jackett indexer",
                     "Automatic update check on startup",
                     "Export filtered results to CSV",
@@ -2606,8 +2620,27 @@ fn setup_tray() {
 }
 
 fn main() -> eframe::Result<()> {
-    // Optional --config <path> override (before any config is loaded).
+    // Parse CLI flags before any GUI/config work.
     let args: Vec<String> = std::env::args().collect();
+
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!(
+            "TorrentX {} — native Jackett torrent-search GUI\n\n\
+             USAGE:\n  torrentx [OPTIONS]\n\n\
+             OPTIONS:\n  \
+             --config <path>   Use an alternate config file (default: ~/.config/torrentx/config.json)\n  \
+             -h, --help        Print this help and exit\n  \
+             -V, --version     Print the version and exit\n",
+            env!("CARGO_PKG_VERSION")
+        );
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("TorrentX {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    // Optional --config <path> override (before any config is loaded).
     if let Some(i) = args.iter().position(|a| a == "--config") {
         if let Some(p) = args.get(i + 1) {
             config::set_config_override(std::path::PathBuf::from(p));

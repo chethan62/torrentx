@@ -28,6 +28,9 @@ pub(crate) struct Config {
     pub(crate) col_date: bool,
     #[serde(default)]
     pub(crate) rss_feeds: Vec<RssFeedConfig>,
+    /// RSS auto-refresh interval in seconds (0 = never auto-refresh).
+    #[serde(default = "default_rss_refresh")]
+    pub(crate) rss_refresh_secs: u64,
     /// Custom accent color (RGB) overriding the theme default; None = theme default.
     #[serde(default)]
     pub(crate) accent: Option<[u8; 3]>,
@@ -53,6 +56,7 @@ impl Default for Config {
             col_tracker: true, col_size: true, col_leech: true,
             col_ratio: true, col_health: true, col_date: true,
             rss_feeds: vec![],
+            rss_refresh_secs: default_rss_refresh(),
             accent: None,
             col_order: default_col_order(),
         }
@@ -90,10 +94,25 @@ pub(crate) fn cfg_path() -> std::path::PathBuf {
 }
 
 pub(crate) fn load_cfg() -> Config {
-    let mut c: Config = fs::read_to_string(cfg_path())
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default();
+    let path = cfg_path();
+    let raw = fs::read_to_string(&path).ok();
+    let mut c: Config = match &raw {
+        Some(s) => match serde_json::from_str(s) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("torrentx: failed to parse {} ({e}); using defaults", path.display());
+                Config::default()
+            }
+        },
+        None => {
+            // Warn only for an explicit --config that's missing/unreadable, not
+            // the normal first-run (no config yet) case.
+            if CONFIG_OVERRIDE.get().is_some() {
+                eprintln!("torrentx: config file {} not found; using defaults", path.display());
+            }
+            Config::default()
+        }
+    };
     // Heal old configs: empty col_order (pre-column-reorder) → default order.
     if c.col_order.is_empty() {
         c.col_order = default_col_order();
@@ -107,6 +126,11 @@ pub(crate) fn default_col_order() -> Vec<String> {
         "Name".into(), "Tracker".into(), "Size".into(), "Seeds".into(),
         "Leech".into(), "Ratio".into(), "Health".into(), "Date".into(),
     ]
+}
+
+/// Default RSS auto-refresh interval (10 minutes, in seconds).
+fn default_rss_refresh() -> u64 {
+    600
 }
 
 pub(crate) fn save_cfg(c: &Config) {

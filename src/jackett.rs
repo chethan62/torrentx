@@ -153,16 +153,22 @@ pub(crate) fn cat_col(cat: &str) -> Color32 {
 }
 
 pub(crate) fn urlenc(s: &str) -> String {
-    s.chars().map(|c| match c {
-        'A'..='Z'|'a'..='z'|'0'..='9'|'-'|'_'|'.'|'~' => c.to_string(),
-        ' ' => "+".into(),
-        c => format!("%{:02X}", c as u32),
-    }).collect()
+    // Percent-encode UTF-8 bytes (not code points) so non-ASCII queries
+    // reach Jackett correctly. Space → '+' (application/x-www-form-urlencoded).
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b' ' => out.push('+'),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 pub(crate) fn normalize(t: &str) -> String {
-    let stop = ["1080p","720p","480p","4k","bluray","bdrip","webrip",
-                "x264","x265","hevc","10bit","hdr","yify","yts","rarbg",
+    let stop = ["2160p","1080p","720p","480p","4k","uhd","bluray","bdrip","webrip",
+                "webdl","x264","x265","hevc","10bit","hdr","dolby","yify","yts","rarbg",
                 "mkv","mp4","avi","remux"];
     let mut s = t.to_lowercase();
     for w in &stop { s = s.replace(w, " "); }
@@ -188,10 +194,15 @@ pub(crate) fn shared_client() -> &'static Client {
     })
 }
 
+/// GitHub repo to check for updates (override with `TORRENTX_UPDATE_REPO`).
+const UPDATE_REPO: &str = "chethan62/torrentx";
+
 /// Check GitHub releases for a newer version. Returns the latest release tag
 /// (e.g. "v17.0.0") or None on failure / no newer version.
 pub(crate) fn check_update(current: &str) -> Option<String> {
-    let ep = "https://api.github.com/repos/chethan62/torrentx/releases/latest";
+    let repo = std::env::var("TORRENTX_UPDATE_REPO")
+        .unwrap_or_else(|_| UPDATE_REPO.to_string());
+    let ep = format!("https://api.github.com/repos/{repo}/releases/latest");
     let resp = shared_client()
         .get(ep)
         .header("User-Agent", "TorrentX")
@@ -337,7 +348,7 @@ pub(crate) fn start_search(
 
 #[cfg(test)]
 mod tests {
-    use super::{category_id, fmt_size, is_magnet};
+    use super::{category_id, fmt_size, is_magnet, normalize, pub_year, urlenc};
 
     #[test]
     fn category_mapping() {
@@ -375,5 +386,32 @@ mod tests {
         assert_eq!(fmt_size(1_024), "1 KB");
         assert_eq!(fmt_size(1_048_576), "1 MB");
         assert_eq!(fmt_size(5_784_123_904), "5.39 GB");
+    }
+
+    #[test]
+    fn normalize_strips_quality_and_case() {
+        // Quality tags and file extensions are removed; case is lowered.
+        assert_eq!(normalize("Ubuntu 22.04 1080p BluRay x264"), "ubuntu 22.04");
+        // 2160p / UHD 4K releases dedupe with their 1080p counterparts.
+        assert_eq!(normalize("Dune 2024 2160p UHD WEBRip"), "dune 2024");
+        // Stops after 4 words.
+        assert_eq!(normalize("one two three four five six"), "one two three four");
+        assert_eq!(normalize(""), "");
+    }
+
+    #[test]
+    fn urlenc_basics() {
+        assert_eq!(urlenc("hello world"), "hello+world");
+        assert_eq!(urlenc("ubuntu-22.04"), "ubuntu-22.04");
+        assert_eq!(urlenc("café"), "caf%C3%A9");
+        assert_eq!(urlenc("a b/c"), "a+b%2Fc");
+    }
+
+    #[test]
+    fn pub_year_extracts_year() {
+        assert_eq!(pub_year("2024-05-01T10:00:00+00:00"), 2024);
+        assert_eq!(pub_year("1999-01-01T00:00:00Z"), 1999);
+        assert_eq!(pub_year("garbage"), 0);
+        assert_eq!(pub_year(""), 0);
     }
 }
