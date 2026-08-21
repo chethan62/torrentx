@@ -26,6 +26,11 @@ const MARGIN_DEFAULT: f32 = 12.0;
 const CATS: &[&str] = &["All", "Movies", "TV", "Music", "PC Games", "Software", "Anime", "Books", "XXX"];
 const SPIN: &[&str] = &["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
 
+/// CSV field escaping: wrap in quotes, double any embedded quotes.
+fn csv_esc(s: &str) -> String {
+    format!("\"{}\"", s.replace('"', "\"\""))
+}
+
 
 #[derive(Clone)]
 struct Toast { msg: String, ttl: f32, col: Color32 }
@@ -444,10 +449,6 @@ impl App {
     }
 
     fn export_csv(&self, rows: &[TorrentResult]) {
-        // Proper CSV escaping: wrap in quotes, double any embedded quotes.
-        fn esc(s: &str) -> String {
-            format!("\"{}\"", s.replace('"', "\"\""))
-        }
         let path = dirs_next::download_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join(format!("torrentx_{}.csv",
@@ -456,12 +457,12 @@ impl App {
         for r in rows {
             out.push_str(&format!(
                 "{},{},{},{},{},{},{}\n",
-                esc(&r.title),
-                esc(r.tracker.as_deref().unwrap_or("")),
-                esc(r.category_desc.as_deref().unwrap_or("")),
-                esc(&r.size.map(fmt_size).unwrap_or_default()),
+                csv_esc(&r.title),
+                csv_esc(r.tracker.as_deref().unwrap_or("")),
+                csv_esc(r.category_desc.as_deref().unwrap_or("")),
+                csv_esc(&r.size.map(fmt_size).unwrap_or_default()),
                 r.seeders.unwrap_or(0), r.peers.unwrap_or(0),
-                esc(&r.publish_date.as_deref().map(time_ago).unwrap_or_default()),
+                csv_esc(&r.publish_date.as_deref().map(time_ago).unwrap_or_default()),
             ));
         }
         if fs::write(&path, out).is_ok() { let _ = open::that(&path); }
@@ -575,6 +576,18 @@ impl eframe::App for App {
             ctx.memory_mut(|m| m.request_focus(egui::Id::new("q")));
         }
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::R)) { self.do_search(); }
+        // Ctrl+A — select all visible results (batch mode auto-enables)
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::A)) {
+            let raw = self.all_results();
+            let sorted = self.filtered(&raw);
+            if !sorted.is_empty() {
+                self.sel_mode = true;
+                let page_s = self.page_slice(&sorted);
+                let base = self.page * self.cfg.page_size;
+                self.sel_set = (0..page_s.len()).map(|i| base + i).collect();
+                self.toast(&format!("Selected {} results", page_s.len()), self.pal.green);
+            }
+        }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             if self.detail_open { self.detail_open = false; } else { self.query.clear(); self.show_hist = false; }
         }
@@ -1594,7 +1607,19 @@ impl App {
                                                 RichText::new(&r.title).font(FontId::proportional(fsz))
                                                     .color(if is_sel { pal.accent } else { pal.text })
                                             ).truncate().sense(egui::Sense::click()));
-                                            if resp.clicked() {
+                                            if resp.double_clicked() {
+                                                // Double-click = primary action: open the magnet
+                                                if let Some(m) = r.magnet_uri.as_deref() {
+                                                    if is_magnet(m) {
+                                                        let _ = open::that(m);
+                                                        self.toast("Opening in torrent client…", self.pal.accent);
+                                                    } else {
+                                                        self.toast("Invalid magnet link", self.pal.yellow);
+                                                    }
+                                                } else {
+                                                    self.toast("No magnet link", self.pal.yellow);
+                                                }
+                                            } else if resp.clicked() {
                                                 if self.sel_mode {
                                                     if !self.sel_set.insert(gi) { self.sel_set.remove(&gi); }
                                                 } else {
@@ -2661,5 +2686,19 @@ fn main() -> eframe::Result<()> {
             std::env::set_var("GALLIUM_DRIVER", "llvmpipe");
             eframe::run_native("TorrentX", native_options(), app_creator())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::csv_esc;
+
+    #[test]
+    fn csv_esc_quotes_and_doubles_embedded_quotes() {
+        assert_eq!(csv_esc("plain"), "\"plain\"");
+        assert_eq!(csv_esc("has \"quotes\""), "\"has \"\"quotes\"\"\"");
+        assert_eq!(csv_esc(""), "\"\"");
+        // Commas are harmless inside quotes.
+        assert_eq!(csv_esc("a,b,c"), "\"a,b,c\"");
     }
 }

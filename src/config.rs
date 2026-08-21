@@ -114,6 +114,13 @@ pub(crate) fn load_cfg() -> Config {
         }
     };
     // Heal old configs: empty col_order (pre-column-reorder) → default order.
+    c = heal_col_order(c);
+    c
+}
+
+/// Heal a config that's missing the column-order field (old configs).
+/// Pure and testable: returns the config with a default col_order if empty.
+pub(crate) fn heal_col_order(mut c: Config) -> Config {
     if c.col_order.is_empty() {
         c.col_order = default_col_order();
     }
@@ -136,6 +143,35 @@ fn default_rss_refresh() -> u64 {
 pub(crate) fn save_cfg(c: &Config) {
     if let Ok(j) = serde_json::to_string_pretty(c) {
         let _ = fs::write(cfg_path(), j);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{default_col_order, heal_col_order, Config};
+
+    #[test]
+    fn heal_fills_empty_col_order() {
+        let mut c = Config::default();
+        c.col_order.clear();
+        let healed = heal_col_order(c);
+        assert_eq!(healed.col_order, default_col_order());
+        assert_eq!(healed.col_order.len(), 8);
+        assert_eq!(healed.col_order[0], "Name");
+    }
+
+    #[test]
+    fn heal_preserves_custom_order() {
+        let healed = heal_col_order(Config {
+            col_order: vec!["Seeds".into(), "Name".into()],
+            ..Config::default()
+        });
+        assert_eq!(healed.col_order, vec!["Seeds", "Name"]);
+    }
+
+    #[test]
+    fn default_config_has_full_col_order() {
+        assert_eq!(Config::default().col_order, default_col_order());
     }
 }
 
