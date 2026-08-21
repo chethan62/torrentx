@@ -930,10 +930,19 @@ impl App {
             .striped(false)
             .resizable(true)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
+        // The Name column is the flexible one (absorbs window slack); all
+        // other data columns are fixed-width. Actions is a normal resizable
+        // column — NOT remainder — because egui pins a trailing remainder
+        // column to fill all leftover space, which makes its separator
+        // undraggable once moved (the stuck-drag bug).
         for c in &cols {
-            tb = tb.column(Column::initial(c.width()).at_least(44.0));
+            if *c == TableCol::Name {
+                tb = tb.column(Column::remainder().at_least(295.0));
+            } else {
+                tb = tb.column(Column::initial(c.width()).at_least(44.0));
+            }
         }
-        tb = tb.column(Column::remainder().at_least(210.0)); // Actions always
+        tb = tb.column(Column::initial(210.0)); // Actions always (resizable)
         tb
             .header(30.0, |mut header| {
                 for c in &cols {
