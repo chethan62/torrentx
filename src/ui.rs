@@ -1080,9 +1080,11 @@ impl App {
                     "dl" => { if let Some(l) = &r.link { let _ = open::that(l); self.toast("Downloading…", self.pal.green); } }
                     "fav" => { self.add_fav(&r); }
                     "info" => {
-                        if self.selected == Some(i) && self.detail_open {
-                            self.detail_open = false; self.selected = None;
-                        } else { self.selected = Some(i); self.detail_open = true; }
+                        // Idempotent open: clicking Info always opens the detail
+                        // panel for this row. (The row's own click may have already
+                        // set selected+detail_open — don't toggle it closed here,
+                        // or the button would flash-open/close in the same frame.)
+                        self.selected = Some(i); self.detail_open = true;
                     }
                     "web" => { if let Some(d) = &r.details { let _ = open::that(d); } }
                     _ => {}
