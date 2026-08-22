@@ -40,13 +40,13 @@ impl App {
             ui.add_space(14.0);
             lbl(ui, "Search:", self.pal.dim, fs);
             ui.add_space(4.0);
-            ui.add(egui::TextEdit::singleline(&mut self.fav_search)
+            ui.add(egui::TextEdit::singleline(&mut self.ui.fav_search)
                 .desired_width(FAV_SEARCH_W).hint_text("filter favorites…")
                 .font(FontId::proportional(fs)));
-            if !self.fav_search.is_empty()
+            if !self.ui.fav_search.is_empty()
                 && ui.add(egui::Button::new(svg_image(SvgIcon::Close, 12.0, self.pal.sub))
                     .fill(Color32::TRANSPARENT).frame(false)).clicked() {
-                    self.fav_search.clear();
+                    self.ui.fav_search.clear();
                 }
         });
         ui.add_space(8.0);
@@ -54,7 +54,7 @@ impl App {
         let mut remove: Option<usize> = None;
         let mut open_mag: Option<String> = None;
         let mut open_link: Option<String> = None;
-        let fq = self.fav_search.to_lowercase();
+        let fq = self.ui.fav_search.to_lowercase();
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             let favs = self.cfg.favorites.clone();

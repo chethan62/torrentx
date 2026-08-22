@@ -6,6 +6,7 @@
 mod about;
 mod favorites;
 mod header;
+mod results;
 mod rss;
 mod search;
 mod widgets;

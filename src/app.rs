@@ -58,29 +58,55 @@ pub(crate) struct Toast {
     pub(crate) col: Color32,
 }
 
-/// The main application state: config, search, filters, sorting, favorites,
-/// RSS feeds, and all the little UI toggles.
+/// The main application state: config + theme, then four focused sub-structs
+/// (search, network, ui, rss). Each sub-struct groups the fields that change
+/// together so individual UI/logic modules can borrow only their slice.
 pub(crate) struct App {
     pub(crate) cfg: Config,
     pub(crate) pal: Pal,
-    // search
+    pub(crate) search: SearchUi,
+    pub(crate) net: NetState,
+    pub(crate) ui: UiState,
+    pub(crate) rss: RssUi,
+}
+
+/// Search + filter + sort + results + pagination state.
+pub(crate) struct SearchUi {
     pub(crate) query: String,
     pub(crate) cat: String,
-    // filters
     pub(crate) f_text: String,
     pub(crate) f_seed: String,
     pub(crate) f_size: String,
     pub(crate) f_year: String,
     pub(crate) f_trk: String,
     pub(crate) f_hlth: Hlth,
-    // sort
     pub(crate) s_col: SortCol,
     pub(crate) s_dir: SortDir,
-    // async search
     pub(crate) results: Arc<Mutex<Vec<TorrentResult>>>,
     pub(crate) state: Arc<Mutex<SearchState>>,
     pub(crate) count: Arc<Mutex<usize>>,
-    // indexers (from Jackett)
+    pub(crate) last_query: String,
+    pub(crate) page: usize,
+}
+
+impl Default for SearchUi {
+    fn default() -> Self {
+        Self {
+            query: String::new(), cat: "All".into(),
+            f_text: String::new(), f_seed: String::new(),
+            f_size: String::new(), f_year: String::new(),
+            f_trk: String::new(), f_hlth: Hlth::All,
+            s_col: SortCol::Seeds, s_dir: SortDir::Desc,
+            results: Arc::new(Mutex::new(vec![])),
+            state: Arc::new(Mutex::new(SearchState::Idle)),
+            count: Arc::new(Mutex::new(0)),
+            last_query: String::new(), page: 0,
+        }
+    }
+}
+
+/// Indexer list + app-update check (background network state).
+pub(crate) struct NetState {
     pub(crate) indexers: Vec<String>,
     pub(crate) indexer: String,
     pub(crate) indexers_loading: bool,
@@ -89,9 +115,23 @@ pub(crate) struct App {
     pub(crate) update_checked: bool,
     pub(crate) update_tx: std::sync::mpsc::Sender<Option<String>>,
     pub(crate) update_rx: std::sync::mpsc::Receiver<Option<String>>,
-    // Jackett reachability (checked in background)
     pub(crate) jackett_ok: Option<bool>,
-    // ui
+}
+
+impl Default for NetState {
+    fn default() -> Self {
+        let (indexers_handle, indexers_rx) = std::sync::mpsc::channel::<Option<Vec<String>>>();
+        let (update_tx, update_rx) = std::sync::mpsc::channel::<Option<String>>();
+        Self {
+            indexers: vec![], indexer: "All".into(), indexers_loading: false,
+            indexers_handle, indexers_rx,
+            update_checked: false, update_tx, update_rx, jackett_ok: None,
+        }
+    }
+}
+
+/// UI chrome state: tabs, panels, selection, batch mode, toasts, spinner.
+pub(crate) struct UiState {
     pub(crate) tab: crate::jackett::Tab,
     pub(crate) show_settings: bool,
     pub(crate) key_vis: bool,
@@ -99,17 +139,34 @@ pub(crate) struct App {
     pub(crate) detail_open: bool,
     pub(crate) detail_width: f32,
     pub(crate) show_hist: bool,
-    pub(crate) page: usize,
-    pub(crate) last_query: String,
     pub(crate) toasts: Vec<Toast>,
     pub(crate) hovered: Option<usize>,
     pub(crate) fav_search: String,
-    // batch selection mode
     pub(crate) sel_mode: bool,
     pub(crate) sel_set: std::collections::HashSet<usize>,
-    // accent color picker
     pub(crate) show_color_picker: bool,
-    // RSS
+    pub(crate) t_start: Option<Instant>,
+    pub(crate) t_done: Option<f64>,
+    pub(crate) notified: bool,
+    pub(crate) spin_i: usize,
+    pub(crate) spin_t: f32,
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self {
+            tab: crate::jackett::Tab::Search, show_settings: false, key_vis: false,
+            selected: None, detail_open: false, detail_width: 295.0, show_hist: false,
+            toasts: vec![], hovered: None, fav_search: String::new(),
+            sel_mode: false, sel_set: std::collections::HashSet::new(),
+            show_color_picker: false,
+            t_start: None, t_done: None, notified: false, spin_i: 0, spin_t: 0.0,
+        }
+    }
+}
+
+/// RSS feed list + detail + add/edit form state.
+pub(crate) struct RssUi {
     pub(crate) rss_feeds: Vec<crate::rss::RssFeedState>,
     pub(crate) rss_last_refresh: Vec<Instant>,
     pub(crate) rss_tx: std::sync::mpsc::Sender<(usize, Result<Vec<RssItem>, String>)>,
@@ -120,82 +177,62 @@ pub(crate) struct App {
     pub(crate) rss_add_mode: bool,
     pub(crate) rss_edit_idx: Option<usize>,
     pub(crate) rss_new_cfg: RssFeedConfig,
-    // timing / spinner
-    pub(crate) t_start: Option<Instant>,
-    pub(crate) t_done: Option<f64>,
-    pub(crate) notified: bool,
-    pub(crate) spin_i: usize,
-    pub(crate) spin_t: f32,
+}
+
+impl RssUi {
+    pub(crate) fn new(feeds: &[RssFeedConfig]) -> Self {
+        let (rss_tx, rss_rx) = std::sync::mpsc::channel();
+        let n = feeds.len();
+        Self {
+            rss_feeds: feeds.iter().map(|c| crate::rss::RssFeedState::new(c.clone())).collect(),
+            rss_last_refresh: vec![Instant::now(); n],
+            rss_tx, rss_rx,
+            rss_selected: 0, rss_detail: None, rss_filter: String::new(),
+            rss_add_mode: false, rss_edit_idx: None,
+            rss_new_cfg: crate::rss::RssFeedConfig::new_default(),
+        }
+    }
 }
 
 impl Default for App {
     fn default() -> Self {
         let cfg = crate::config::load_cfg();
         let pal = Pal::from(&cfg.theme, cfg.accent);
-        let n_feeds = cfg.rss_feeds.len();
-        let feeds: Vec<crate::rss::RssFeedState> = cfg.rss_feeds.iter().map(|c| crate::rss::RssFeedState::new(c.clone())).collect();
-        let (rss_tx, rss_rx) = std::sync::mpsc::channel();
-        let (indexers_handle, indexers_rx) = std::sync::mpsc::channel::<Option<Vec<String>>>();
-        let (update_tx, update_rx) = std::sync::mpsc::channel::<Option<String>>();
+        let rss = RssUi::new(&cfg.rss_feeds);
         Self {
             cfg, pal,
-            query: String::new(), cat: "All".into(),
-            f_text: String::new(), f_seed: String::new(),
-            f_size: String::new(), f_year: String::new(),
-            f_trk: String::new(), f_hlth: Hlth::All,
-            s_col: SortCol::Seeds, s_dir: SortDir::Desc,
-            results: Arc::new(Mutex::new(vec![])),
-            state: Arc::new(Mutex::new(SearchState::Idle)),
-            count: Arc::new(Mutex::new(0)),
-            indexers: vec![],
-            indexer: "All".into(),
-            indexers_loading: false,
-            indexers_handle, indexers_rx,
-            update_checked: false,
-            update_tx, update_rx,
-            jackett_ok: None,
-            tab: crate::jackett::Tab::Search, show_settings: false, key_vis: false,
-            selected: None, detail_open: false, detail_width: 295.0, show_hist: false,
-            page: 0, last_query: String::new(), toasts: vec![],
-            hovered: None, fav_search: String::new(),
-            sel_mode: false, sel_set: std::collections::HashSet::new(),
-            show_color_picker: false,
-            rss_feeds: feeds,
-            rss_last_refresh: vec![Instant::now(); n_feeds],
-            rss_tx, rss_rx,
-            rss_selected: 0, rss_detail: None, rss_filter: String::new(),
-            rss_add_mode: false, rss_edit_idx: None,
-            rss_new_cfg: crate::rss::RssFeedConfig::new_default(),
-            t_start: None, t_done: None, notified: false, spin_i: 0, spin_t: 0.0,
+            search: SearchUi::default(),
+            net: NetState::default(),
+            ui: UiState::default(),
+            rss,
         }
     }
 }
-
 impl App {
     pub(crate) fn do_search(&mut self) {
-        let q = self.query.trim().to_string();
+        let q = self.search.query.trim().to_string();
         if q.is_empty() { return; }
         if self.cfg.api_key.trim().is_empty() {
-            set_err(&self.state, "No API key — open Settings and paste your Jackett API key.".into());
-            self.show_settings = true;
+            set_err(&self.search.state, "No API key — open Settings and paste your Jackett API key.".into());
+            self.ui.show_settings = true;
             return;
         }
         self.cfg.history.retain(|h| h != &q);
         self.cfg.history.insert(0, q.clone());
         self.cfg.history.truncate(20);
         save_cfg(&self.cfg);
-        self.selected = None; self.detail_open = false;
-        self.show_hist = false; self.page = 0;
-        self.sel_set.clear(); self.sel_mode = false;
-        self.last_query = q.clone(); self.f_text.clear();
-        self.hovered = None; self.t_start = Some(Instant::now()); self.t_done = None;
-        self.notified = false;
-        if let Ok(mut r) = self.results.lock() { r.clear(); }
-        if let Ok(mut c) = self.count.lock() { *c = 0; }
+        self.ui.selected = None; self.ui.detail_open = false;
+        self.ui.show_hist = false; self.search.page = 0;
+        self.ui.sel_set.clear(); self.ui.sel_mode = false;
+        self.search.last_query = q.clone(); self.search.f_text.clear();
+        self.ui.hovered = None; self.ui.t_start = Some(Instant::now()); self.ui.t_done = None;
+        self.ui.notified = false;
+        if let Ok(mut r) = self.search.results.lock() { r.clear(); }
+        if let Ok(mut c) = self.search.count.lock() { *c = 0; }
         start_search(
             self.cfg.jackett_url.clone(), self.cfg.api_key.clone(),
-            q, self.cat.clone(), self.indexer.clone(), self.cfg.timeout_secs,
-            Arc::clone(&self.results), Arc::clone(&self.state), Arc::clone(&self.count),
+            q, self.search.cat.clone(), self.net.indexer.clone(), self.cfg.timeout_secs,
+            Arc::clone(&self.search.results), Arc::clone(&self.search.state), Arc::clone(&self.search.count),
         );
     }
 
@@ -203,7 +240,7 @@ impl App {
     pub(crate) fn copy_selected_magnets(&mut self, ui: &egui::Ui) {
         let raw = self.all_results();
         let sorted = self.filtered(&raw);
-        let magnets: Vec<&str> = self.sel_set.iter()
+        let magnets: Vec<&str> = self.ui.sel_set.iter()
             .filter_map(|&i| sorted.get(i))
             .filter_map(|r| r.magnet_uri.as_deref())
             .filter(|m| is_magnet(m))
@@ -216,8 +253,8 @@ impl App {
         ui.ctx().copy_text(text);
         self.toast(&format!("Copied {} magnet{}", magnets.len(),
             if magnets.len() == 1 { "" } else { "s" }), self.pal.green);
-        self.sel_mode = false;
-        self.sel_set.clear();
+        self.ui.sel_mode = false;
+        self.ui.sel_set.clear();
     }
 
     pub(crate) fn add_fav(&mut self, r: &TorrentResult) {
@@ -233,15 +270,15 @@ impl App {
     }
 
     pub(crate) fn toast(&mut self, msg: &str, col: Color32) {
-        self.toasts.retain(|t| t.msg != msg);
-        self.toasts.push(Toast { msg: msg.into(), ttl: 3.0, col });
+        self.ui.toasts.retain(|t| t.msg != msg);
+        self.ui.toasts.push(Toast { msg: msg.into(), ttl: 3.0, col });
     }
 
     /// Fire a desktop notification when a search completes while the window
     /// is hidden (minimized to tray). No-op on failure / missing daemon.
     pub(crate) fn notify_search_done(&mut self) {
-        let n = self.count.lock().map(|c| *c).unwrap_or(0);
-        let q = self.last_query.clone();
+        let n = self.search.count.lock().map(|c| *c).unwrap_or(0);
+        let q = self.search.last_query.clone();
         if let Ok(h) = notify_rust::Notification::new()
             .summary("TorrentX — search complete")
             .body(&format!("{n} results for \u{201c}{q}\u{201d}"))
@@ -260,36 +297,36 @@ impl App {
     // ── RSS helpers ───────────────────────────────────────────────────────
 
     pub(crate) fn sync_rss_configs(&mut self) {
-        self.cfg.rss_feeds = self.rss_feeds.iter().map(|f| f.config.clone()).collect();
+        self.cfg.rss_feeds = self.rss.rss_feeds.iter().map(|f| f.config.clone()).collect();
         save_cfg(&self.cfg);
     }
 
     pub(crate) fn refresh_feed(&mut self, idx: usize) {
-        if idx >= self.rss_feeds.len() { return; }
-        if self.rss_feeds[idx].status == FeedStatus::Loading { return; } // already in flight
-        self.rss_feeds[idx].status = FeedStatus::Loading;
-        self.rss_feeds[idx].error = None;
-        if self.rss_last_refresh.len() == self.rss_feeds.len() {
-            self.rss_last_refresh[idx] = Instant::now();
+        if idx >= self.rss.rss_feeds.len() { return; }
+        if self.rss.rss_feeds[idx].status == FeedStatus::Loading { return; } // already in flight
+        self.rss.rss_feeds[idx].status = FeedStatus::Loading;
+        self.rss.rss_feeds[idx].error = None;
+        if self.rss.rss_last_refresh.len() == self.rss.rss_feeds.len() {
+            self.rss.rss_last_refresh[idx] = Instant::now();
         }
-        let tx = self.rss_tx.clone();
+        let tx = self.rss.rss_tx.clone();
         let base = self.cfg.jackett_url.clone();
         let key = self.cfg.api_key.clone();
-        let cfg = self.rss_feeds[idx].config.clone();
+        let cfg = self.rss.rss_feeds[idx].config.clone();
         let to = self.cfg.timeout_secs;
         start_rss_fetch(base, key, cfg, to, idx, tx);
     }
 
     pub(crate) fn refresh_all_feeds(&mut self) {
-        for i in 0..self.rss_feeds.len() {
-            if self.rss_feeds[i].config.enabled { self.refresh_feed(i); }
+        for i in 0..self.rss.rss_feeds.len() {
+            if self.rss.rss_feeds[i].config.enabled { self.refresh_feed(i); }
         }
     }
 
     pub(crate) fn poll_rss(&mut self) {
         // Drain completed background fetches (non-blocking; never touch the network on the UI thread)
-        while let Ok((idx, result)) = self.rss_rx.try_recv() {
-            if idx >= self.rss_feeds.len() { continue; }
+        while let Ok((idx, result)) = self.rss.rss_rx.try_recv() {
+            if idx >= self.rss.rss_feeds.len() { continue; }
             match result {
                 Ok(items) => {
                     // Dedupe by normalized title (same logic as main search):
@@ -298,13 +335,13 @@ impl App {
                     items.sort_by_key(|a| std::cmp::Reverse(a.seeders.unwrap_or(0)));
                     let mut seen = std::collections::HashSet::new();
                     items.retain(|it| seen.insert(normalize(&it.title)));
-                    self.rss_feeds[idx].items = items;
-                    self.rss_feeds[idx].status = FeedStatus::Ok;
-                    self.rss_feeds[idx].error = None;
+                    self.rss.rss_feeds[idx].items = items;
+                    self.rss.rss_feeds[idx].status = FeedStatus::Ok;
+                    self.rss.rss_feeds[idx].error = None;
                 }
                 Err(e) => {
-                    self.rss_feeds[idx].status = FeedStatus::Error;
-                    self.rss_feeds[idx].error = Some(e);
+                    self.rss.rss_feeds[idx].status = FeedStatus::Error;
+                    self.rss.rss_feeds[idx].error = Some(e);
                 }
             }
         }
@@ -314,17 +351,17 @@ impl App {
     /// Re-checks every `cfg.rss_refresh_secs`; skips feeds already loading.
     pub(crate) fn auto_refresh_feeds(&mut self) {
         // Keep timestamps in sync with the feed list (add/remove).
-        while self.rss_last_refresh.len() < self.rss_feeds.len() {
-            self.rss_last_refresh.push(Instant::now());
+        while self.rss.rss_last_refresh.len() < self.rss.rss_feeds.len() {
+            self.rss.rss_last_refresh.push(Instant::now());
         }
-        self.rss_last_refresh.truncate(self.rss_feeds.len());
+        self.rss.rss_last_refresh.truncate(self.rss.rss_feeds.len());
         let interval = self.cfg.rss_refresh_secs;
-        for i in 0..self.rss_feeds.len() {
-            let cfg = self.rss_feeds[i].config.clone();
+        for i in 0..self.rss.rss_feeds.len() {
+            let cfg = self.rss.rss_feeds[i].config.clone();
             if !cfg.enabled || !cfg.auto_refresh { continue; }
-            if self.rss_feeds[i].status == FeedStatus::Loading { continue; }
+            if self.rss.rss_feeds[i].status == FeedStatus::Loading { continue; }
             if interval == 0 { continue; }
-            let due = self.rss_last_refresh[i].elapsed()
+            let due = self.rss.rss_last_refresh[i].elapsed()
                 >= Duration::from_secs(interval);
             if due { self.refresh_feed(i); }
         }
@@ -344,22 +381,22 @@ impl App {
     }
 
     pub(crate) fn cur_state(&self) -> SearchState {
-        self.state.lock().map(|g| g.clone()).unwrap_or(SearchState::Idle)
+        self.search.state.lock().map(|g| g.clone()).unwrap_or(SearchState::Idle)
     }
     pub(crate) fn all_results(&self) -> Vec<TorrentResult> {
-        self.results.lock().map(|g| g.clone()).unwrap_or_default()
+        self.search.results.lock().map(|g| g.clone()).unwrap_or_default()
     }
     pub(crate) fn total_count(&self) -> usize {
-        self.count.lock().map(|g| *g).unwrap_or(0)
+        self.search.count.lock().map(|g| *g).unwrap_or(0)
     }
 
     pub(crate) fn filtered(&self, raw: &[TorrentResult]) -> Vec<TorrentResult> {
-        let min_s: u32 = self.f_seed.parse().unwrap_or(0);
-        let max_b: u64 = self.f_size.parse::<f64>().unwrap_or(0.0).max(0.0) as u64;
+        let min_s: u32 = self.search.f_seed.parse().unwrap_or(0);
+        let max_b: u64 = self.search.f_size.parse::<f64>().unwrap_or(0.0).max(0.0) as u64;
         let max_b = max_b.saturating_mul(1_073_741_824);
-        let min_y: u32 = self.f_year.parse().unwrap_or(0);
-        let trk = self.f_trk.to_lowercase();
-        let txt = self.f_text.to_lowercase();
+        let min_y: u32 = self.search.f_year.parse().unwrap_or(0);
+        let trk = self.search.f_trk.to_lowercase();
+        let txt = self.search.f_text.to_lowercase();
         let mut seen = std::collections::HashSet::new();
 
         let mut out: Vec<_> = raw.iter().filter(|r| {
@@ -375,13 +412,13 @@ impl App {
                     r.category_desc.as_deref().unwrap_or("").to_lowercase());
                 if !hay.contains(&txt) { return false; }
             }
-            if !self.f_hlth.ok(s) { return false; }
+            if !self.search.f_hlth.ok(s) { return false; }
             if self.cfg.dedupe && !seen.insert(normalize(&r.title)) { return false; }
             true
         }).cloned().collect();
 
         out.sort_by(|a, b| {
-            let c = match self.s_col {
+            let c = match self.search.s_col {
                 SortCol::Seeds => b.seeders.unwrap_or(0).cmp(&a.seeders.unwrap_or(0)),
                 SortCol::Leech => b.peers.unwrap_or(0).cmp(&a.peers.unwrap_or(0)),
                 SortCol::Ratio => {
@@ -399,7 +436,7 @@ impl App {
                 SortCol::Date => b.publish_date.as_deref().unwrap_or("")
                                      .cmp(a.publish_date.as_deref().unwrap_or("")),
             };
-            if self.s_dir == SortDir::Asc { c.reverse() } else { c }
+            if self.search.s_dir == SortDir::Asc { c.reverse() } else { c }
         });
         out
     }
@@ -410,7 +447,7 @@ impl App {
     }
     pub(crate) fn page_slice<'a>(&self, v: &'a [TorrentResult]) -> &'a [TorrentResult] {
         if self.cfg.page_size == 0 { return v; }
-        let s = self.page * self.cfg.page_size;
+        let s = self.search.page * self.cfg.page_size;
         if s >= v.len() { return &[]; }
         &v[s..(s + self.cfg.page_size).min(v.len())]
     }
@@ -433,7 +470,7 @@ impl App {
         let path = dirs_next::download_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join(format!("torrentx_{}.csv",
-                self.last_query.replace(' ', "_").replace('/', "-")));
+                self.search.last_query.replace(' ', "_").replace('/', "-")));
         let mut out = "Title,Tracker,Category,Size,Seeders,Leechers,Date\n".to_string();
         for r in rows {
             out.push_str(&format!(

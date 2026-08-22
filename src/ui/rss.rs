@@ -8,11 +8,11 @@ use crate::app::App;
 impl App {
 
     pub(crate) fn draw_rss_detail_panel(&mut self, ui: &mut egui::Ui) {
-        if self.tab != Tab::Rss { return; }
-        let Some(di) = self.rss_detail else { return };
+        if self.ui.tab != Tab::Rss { return; }
+        let Some(di) = self.rss.rss_detail else { return };
         // Items live in the active feed's state; rebuild the index the same
         // way draw_rss does so the panel and table agree.
-        let Some(feed) = self.rss_feeds.get(self.rss_selected) else { return };
+        let Some(feed) = self.rss.rss_feeds.get(self.rss.rss_selected) else { return };
         let items = feed.items.clone();
         if let Some(item) = items.get(di).cloned() {
             egui::Panel::right("rss_detail_pnl")
@@ -33,7 +33,7 @@ impl App {
         let pal = self.pal.clone();
         let fs = self.cfg.font_size;
 
-        if self.rss_feeds.is_empty() && !self.rss_add_mode {
+        if self.rss.rss_feeds.is_empty() && !self.rss.rss_add_mode {
             ui.add_space(60.0);
             ui.vertical_centered(|ui| {
                 ui.label(RichText::new("📡").size(42.0));
@@ -54,7 +54,7 @@ impl App {
                         lbl(ui, "You can search any indexer and get live results", pal.sub, fs - 1.0);
                         lbl(ui, "as an auto-refreshed feed — no browser needed.", pal.sub, fs - 1.0);
                         ui.add_space(12.0);
-                        if outline_btn(ui, "+ Add Feed", pal.accent) { self.rss_add_mode = true; }
+                        if outline_btn(ui, "+ Add Feed", pal.accent) { self.rss.rss_add_mode = true; }
                     });
             });
             return;
@@ -85,8 +85,8 @@ impl App {
             ui.add_space(6.0);
             ui.vertical(|ui| {
                 ui.set_width(ui.available_width());
-                if self.rss_add_mode { self.draw_rss_form(ui, None); }
-                else if let Some(idx) = self.rss_edit_idx { self.draw_rss_form(ui, Some(idx)); }
+                if self.rss.rss_add_mode { self.draw_rss_form(ui, None); }
+                else if let Some(idx) = self.rss.rss_edit_idx { self.draw_rss_form(ui, Some(idx)); }
                 else { self.draw_rss_items(ui); }
             });
         });
@@ -112,7 +112,7 @@ impl App {
                     });
                 });
                 ui.add_space(4.0);
-                ui.add(egui::TextEdit::singleline(&mut self.rss_filter)
+                ui.add(egui::TextEdit::singleline(&mut self.rss.rss_filter)
                     .desired_width(ui.available_width()).hint_text("Filter feeds…").font(FontId::proportional(fs)));
             });
 
@@ -120,21 +120,21 @@ impl App {
             .max_height(ui.available_height())
             .auto_shrink([false, true])
             .show(ui, |ui| {
-            let filter = self.rss_filter.to_lowercase();
-            let len = self.rss_feeds.len();
+            let filter = self.rss.rss_filter.to_lowercase();
+            let len = self.rss.rss_feeds.len();
             let mut sel: Option<usize> = None;
             let mut del: Option<usize> = None;
             let mut ed: Option<usize> = None;
             let mut refr: Option<usize> = None;
 
             for i in 0..len {
-                let name = self.rss_feeds[i].config.name.clone();
-                let n = self.rss_feeds[i].items.len();
-                let st = self.rss_feeds[i].status.clone();
-                let en = self.rss_feeds[i].config.enabled;
+                let name = self.rss.rss_feeds[i].config.name.clone();
+                let n = self.rss.rss_feeds[i].items.len();
+                let st = self.rss.rss_feeds[i].status.clone();
+                let en = self.rss.rss_feeds[i].config.enabled;
                 if !filter.is_empty() && !name.to_lowercase().contains(&filter) { continue; }
 
-                let is_sel = self.rss_selected == i && !self.rss_add_mode && self.rss_edit_idx.is_none();
+                let is_sel = self.rss.rss_selected == i && !self.rss.rss_add_mode && self.rss.rss_edit_idx.is_none();
                 let bg = if is_sel { tint(pal.accent, 22) } else { Color32::TRANSPARENT };
 
                 egui::Frame::NONE.fill(bg).corner_radius(6.0)
@@ -151,7 +151,7 @@ impl App {
                             if ui.add(egui::Label::new(RichText::new(&name).font(FontId::proportional(fs - 0.5)).color(nc))
                                 .truncate().sense(egui::Sense::click())).clicked() { sel = Some(i); }
                             // Auto-refresh marker
-                            if self.rss_feeds[i].config.auto_refresh {
+                            if self.rss.rss_feeds[i].config.auto_refresh {
                                 let ac = if en { pal.accent } else { pal.dim };
                                 ui.add(egui::Label::new(RichText::new("⟳").font(FontId::proportional(fs - 2.0)).color(ac))
                                     .sense(egui::Sense::hover()))
@@ -174,33 +174,33 @@ impl App {
                                 let ec = if en { pal.green } else { pal.dim };
                                 let el = if en { "On" } else { "Off" };
                                 if act_btn(ui, el, "Toggle enabled", ec) {
-                                    self.rss_feeds[i].config.enabled = !en; self.sync_rss_configs();
+                                    self.rss.rss_feeds[i].config.enabled = !en; self.sync_rss_configs();
                                 }
                             });
                         }
                     });
             }
-            if let Some(i) = sel  { self.rss_selected = i; self.rss_add_mode = false; self.rss_edit_idx = None; self.rss_detail = None; }
+            if let Some(i) = sel  { self.rss.rss_selected = i; self.rss.rss_add_mode = false; self.rss.rss_edit_idx = None; self.rss.rss_detail = None; }
             if let Some(i) = refr { self.refresh_feed(i); }
-            if let Some(i) = del  { self.rss_feeds.remove(i); if self.rss_selected >= self.rss_feeds.len() && !self.rss_feeds.is_empty() { self.rss_selected = self.rss_feeds.len() - 1; } self.sync_rss_configs(); }
-            if let Some(i) = ed   { self.rss_edit_idx = Some(i); self.rss_add_mode = false; }
+            if let Some(i) = del  { self.rss.rss_feeds.remove(i); if self.rss.rss_selected >= self.rss.rss_feeds.len() && !self.rss.rss_feeds.is_empty() { self.rss.rss_selected = self.rss.rss_feeds.len() - 1; } self.sync_rss_configs(); }
+            if let Some(i) = ed   { self.rss.rss_edit_idx = Some(i); self.rss.rss_add_mode = false; }
         });
 
         ui.add_space(8.0);
         egui::Frame::NONE.inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
-            if wide_btn(ui, "+ Add Feed", pal.accent) { self.rss_add_mode = true; self.rss_edit_idx = None; self.rss_new_cfg = RssFeedConfig::new_default(); }
+            if wide_btn(ui, "+ Add Feed", pal.accent) { self.rss.rss_add_mode = true; self.rss.rss_edit_idx = None; self.rss.rss_new_cfg = RssFeedConfig::new_default(); }
         });
     }
 
     pub(crate) fn draw_rss_items(&mut self, ui: &mut egui::Ui) {
         let pal = self.pal.clone(); let fs = self.cfg.font_size; let rh = self.cfg.row_height;
-        let sel = self.rss_selected;
-        if self.rss_feeds.is_empty() || sel >= self.rss_feeds.len() { return; }
+        let sel = self.rss.rss_selected;
+        if self.rss.rss_feeds.is_empty() || sel >= self.rss.rss_feeds.len() { return; }
 
-        let name = self.rss_feeds[sel].config.name.clone();
-        let status = self.rss_feeds[sel].status.clone();
-        let items = self.rss_feeds[sel].items.clone();
-        let err = self.rss_feeds[sel].error.clone();
+        let name = self.rss.rss_feeds[sel].config.name.clone();
+        let status = self.rss.rss_feeds[sel].status.clone();
+        let items = self.rss.rss_feeds[sel].items.clone();
+        let err = self.rss.rss_feeds[sel].error.clone();
 
         egui::Frame::NONE.fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border))
             .inner_margin(egui::Margin::symmetric(14, 8))
@@ -220,7 +220,7 @@ impl App {
                             outline_btn(ui, "Refresh", pal.accent)
                         }).inner { self.refresh_feed(sel); }
                         ui.add_space(6.0);
-                        if outline_btn(ui, "Edit Feed", pal.sub) { self.rss_edit_idx = Some(sel); }
+                        if outline_btn(ui, "Edit Feed", pal.sub) { self.rss.rss_edit_idx = Some(sel); }
                     });
                 });
                 if let Some(e) = &err { ui.add_space(4.0); lbl(ui, &format!("Error: {e}"), pal.red, fs - 1.0); }
@@ -235,7 +235,7 @@ impl App {
             return;
         }
 
-        if let Some(di) = self.rss_detail {
+        if let Some(di) = self.rss.rss_detail {
             if let Some(item) = items.get(di).cloned() {
                 // NOTE: rendering moved to draw_rss_detail_panel() (frame
                 // level, before CentralPanel) so it appears BESIDE the table.
@@ -262,7 +262,7 @@ impl App {
             })
             .body(|mut body| {
                 for (i, item) in items.iter().enumerate() {
-                    let is_sel = self.rss_detail == Some(i);
+                    let is_sel = self.rss.rss_detail == Some(i);
                     let bg = if is_sel { tint(pal.accent, 20) } else if i % 2 == 0 { pal.row_odd } else { pal.row_even };
                     body.row(rh, |mut row| {
                         row.col(|ui| {
@@ -324,7 +324,7 @@ impl App {
                                 let cell_id = egui::Id::new(("rsshov", i));
                                 let hover_resp = ui.interact(ui.max_rect(), cell_id, egui::Sense::hover());
                                 if hover_resp.hovered() {
-                                    self.hovered = Some(i);
+                                    self.ui.hovered = Some(i);
                                 }
                             });
                         });
@@ -335,7 +335,7 @@ impl App {
         for (i, action) in actions {
             if let Some(item) = items.get(i).cloned() {
                 match action {
-                    "detail" => { self.rss_detail = if self.rss_detail == Some(i) { None } else { Some(i) }; }
+                    "detail" => { self.rss.rss_detail = if self.rss.rss_detail == Some(i) { None } else { Some(i) }; }
                     "mag" => { if let Some(m) = &item.magnet { let _ = open::that(m); self.toast("Opening magnet…", pal.accent); } }
                     "copy" => { if let Some(m) = &item.magnet { ui.ctx().copy_text(m.clone()); self.toast("Magnet copied ✓", pal.green); } }
                     "dl" => { if let Some(l) = &item.link { let _ = open::that(l); } }
@@ -357,7 +357,7 @@ impl App {
                     if ui.add(egui::Button::new(svg_image(SvgIcon::Close, 14.0, pal.sub))
                         .fill(Color32::TRANSPARENT).corner_radius(4.0))
                         .on_hover_text("Close").clicked() {
-                        self.rss_detail = None;
+                        self.rss.rss_detail = None;
                     }
                 });
             });
@@ -389,9 +389,9 @@ impl App {
         let pal = self.pal.clone(); let fs = self.cfg.font_size;
         let is_edit = edit_idx.is_some();
 
-        if is_edit && self.rss_new_cfg.name.is_empty() {
+        if is_edit && self.rss.rss_new_cfg.name.is_empty() {
             if let Some(idx) = edit_idx {
-                if let Some(feed) = self.rss_feeds.get(idx) { self.rss_new_cfg = feed.config.clone(); }
+                if let Some(feed) = self.rss.rss_feeds.get(idx) { self.rss.rss_new_cfg = feed.config.clone(); }
             }
         }
 
@@ -403,37 +403,37 @@ impl App {
             lbl(ui, "Connects to a Jackett Torznab indexer endpoint", pal.dim, fs - 1.0);
             ui.add_space(20.0);
 
-            labeled_input(ui, "Name:", &mut self.rss_new_cfg.name, RSS_FORM_W, "My Feed", fs, pal.dim);
+            labeled_input(ui, "Name:", &mut self.rss.rss_new_cfg.name, RSS_FORM_W, "My Feed", fs, pal.dim);
             ui.add_space(6.0);
-            labeled_input(ui, "Indexer:", &mut self.rss_new_cfg.indexer, RSS_FORM_W, "all (Jackett slug)", fs, pal.dim);
+            labeled_input(ui, "Indexer:", &mut self.rss.rss_new_cfg.indexer, RSS_FORM_W, "all (Jackett slug)", fs, pal.dim);
             ui.add_space(6.0);
-            labeled_input(ui, "Query:", &mut self.rss_new_cfg.query, RSS_FORM_W, "empty = latest torrents", fs, pal.dim);
+            labeled_input(ui, "Query:", &mut self.rss.rss_new_cfg.query, RSS_FORM_W, "empty = latest torrents", fs, pal.dim);
             ui.add_space(6.0);
-            labeled_input(ui, "Category:", &mut self.rss_new_cfg.category, RSS_FORM_W, "Torznab cat numbers", fs, pal.dim);
+            labeled_input(ui, "Category:", &mut self.rss.rss_new_cfg.category, RSS_FORM_W, "Torznab cat numbers", fs, pal.dim);
             ui.add_space(10.0);
 
             ui.horizontal(|ui| {
-                ui.checkbox(&mut self.rss_new_cfg.enabled, "");
+                ui.checkbox(&mut self.rss.rss_new_cfg.enabled, "");
                 lbl(ui, "Enabled", pal.text, fs);
                 ui.add_space(20.0);
-                ui.checkbox(&mut self.rss_new_cfg.auto_refresh, "");
+                ui.checkbox(&mut self.rss.rss_new_cfg.auto_refresh, "");
                 lbl(ui, "Auto-refresh", pal.text, fs);
             });
             ui.add_space(16.0);
 
             ui.horizontal(|ui| {
-                if outline_btn(ui, "Cancel", pal.red) { self.rss_add_mode = false; self.rss_edit_idx = None; }
+                if outline_btn(ui, "Cancel", pal.red) { self.rss.rss_add_mode = false; self.rss.rss_edit_idx = None; }
                 ui.add_space(12.0);
                 if wide_btn(ui, "Save", pal.accent) {
                     if is_edit {
-                        if let Some(idx) = edit_idx { self.rss_feeds[idx].config = self.rss_new_cfg.clone(); }
+                        if let Some(idx) = edit_idx { self.rss.rss_feeds[idx].config = self.rss.rss_new_cfg.clone(); }
                     } else {
-                        self.rss_feeds.push(RssFeedState::new(self.rss_new_cfg.clone()));
-                        self.rss_selected = self.rss_feeds.len() - 1;
+                        self.rss.rss_feeds.push(RssFeedState::new(self.rss.rss_new_cfg.clone()));
+                        self.rss.rss_selected = self.rss.rss_feeds.len() - 1;
                     }
                     self.sync_rss_configs();
-                    self.rss_add_mode = false; self.rss_edit_idx = None;
-                    self.rss_new_cfg = RssFeedConfig::new_default();
+                    self.rss.rss_add_mode = false; self.rss.rss_edit_idx = None;
+                    self.rss.rss_new_cfg = RssFeedConfig::new_default();
                 }
             });
         });

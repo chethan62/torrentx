@@ -292,38 +292,38 @@ impl eframe::App for App {
         }
 
         // Fetch indexer list once (background, so UI never blocks)
-        if self.indexers.is_empty() && !self.indexers_loading && !self.cfg.api_key.is_empty() {
+        if self.net.indexers.is_empty() && !self.net.indexers_loading && !self.cfg.api_key.is_empty() {
             let url = self.cfg.jackett_url.clone();
             let key = self.cfg.api_key.clone();
-            let handle = self.indexers_handle.clone();
-            self.indexers_loading = true;
+            let handle = self.net.indexers_handle.clone();
+            self.net.indexers_loading = true;
             std::thread::spawn(move || {
                 let list = jackett::fetch_indexers(&url, &key);
                 let _ = handle.send(list);
             });
         }
         // Drain indexer fetch result
-        if self.indexers_loading {
-            if let Ok(list) = self.indexers_rx.try_recv() {
-                self.jackett_ok = Some(list.is_some()); // None = Jackett unreachable
+        if self.net.indexers_loading {
+            if let Ok(list) = self.net.indexers_rx.try_recv() {
+                self.net.jackett_ok = Some(list.is_some()); // None = Jackett unreachable
                 if let Some(l) = list {
-                    self.indexers = l;
+                    self.net.indexers = l;
                 }
-                self.indexers_loading = false;
+                self.net.indexers_loading = false;
             }
         }
 
         // Check for updates once at startup (background); show a toast when found
-        if !self.update_checked {
-            self.update_checked = true;
+        if !self.net.update_checked {
+            self.net.update_checked = true;
             let cur = env!("CARGO_PKG_VERSION").to_string();
-            let update_tx = self.update_tx.clone();
+            let update_tx = self.net.update_tx.clone();
             std::thread::spawn(move || {
                 let new = jackett::check_update(&cur);
                 let _ = update_tx.send(new);
             });
         }
-        if let Ok(Some(new)) = self.update_rx.try_recv() {
+        if let Ok(Some(new)) = self.net.update_rx.try_recv() {
             self.toast(&format!("Update available: {new}"), self.pal.accent);
         }
 
@@ -331,29 +331,29 @@ impl eframe::App for App {
         if state == SearchState::Searching {
             ctx.request_repaint_after(Duration::from_millis(80));
             let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.1);
-            self.spin_t += dt;
-            if self.spin_t > 0.1 { self.spin_t = 0.0; self.spin_i = (self.spin_i + 1) % SPIN.len(); }
+            self.ui.spin_t += dt;
+            if self.ui.spin_t > 0.1 { self.ui.spin_t = 0.0; self.ui.spin_i = (self.ui.spin_i + 1) % SPIN.len(); }
 
             // Watchdog: if the search thread never completes (dead thread,
             // hung connection), force Error so the spinner stops and the UI
             // recovers instead of spinning at 12fps forever.
-            if let Some(t) = self.t_start {
+            if let Some(t) = self.ui.t_start {
                 let budget = Duration::from_secs(self.cfg.timeout_secs.max(10) + 15);
                 if t.elapsed() > budget {
-                    jackett::set_err(&self.state,
+                    jackett::set_err(&self.search.state,
                         format!("Search timed out after {}s — check Jackett is running", budget.as_secs()));
-                    self.t_start = None;
+                    self.ui.t_start = None;
                     ctx.request_repaint();
                 }
             }
         }
         if matches!(state, SearchState::Done | SearchState::Error(_)) {
-            if let Some(t) = self.t_start.take() { self.t_done = Some(t.elapsed().as_secs_f64()); }
+            if let Some(t) = self.ui.t_start.take() { self.ui.t_done = Some(t.elapsed().as_secs_f64()); }
         }
 
         // Toast decay
         let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.1);
-        self.toasts.retain_mut(|t| { t.ttl -= dt; t.ttl > 0.0 });
+        self.ui.toasts.retain_mut(|t| { t.ttl -= dt; t.ttl > 0.0 });
 
         // Global shortcuts
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::F)) {
@@ -365,19 +365,19 @@ impl eframe::App for App {
             let raw = self.all_results();
             let sorted = self.filtered(&raw);
             if !sorted.is_empty() {
-                self.sel_mode = true;
+                self.ui.sel_mode = true;
                 let page_s = self.page_slice(&sorted);
-                let base = self.page * self.cfg.page_size;
-                self.sel_set = (0..page_s.len()).map(|i| base + i).collect();
+                let base = self.search.page * self.cfg.page_size;
+                self.ui.sel_set = (0..page_s.len()).map(|i| base + i).collect();
                 self.toast(&format!("Selected {} results", page_s.len()), self.pal.green);
             }
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            if self.detail_open { self.detail_open = false; } else { self.query.clear(); self.show_hist = false; }
+            if self.ui.detail_open { self.ui.detail_open = false; } else { self.search.query.clear(); self.ui.show_hist = false; }
         }
         // Copy magnet from detail panel with Ctrl+C
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C) && self.detail_open) {
-            if let Some(idx) = self.selected {
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C) && self.ui.detail_open) {
+            if let Some(idx) = self.ui.selected {
                 let raw = self.all_results();
                 let sorted = self.filtered(&raw);
                 let page_s = self.page_slice(&sorted);
@@ -403,16 +403,16 @@ impl eframe::App for App {
                             lbl(ui, "Ready — type a query and press Search", self.pal.dim, 12.0);
                         }
                         SearchState::Searching => {
-                            let sp = SPIN[self.spin_i];
-                            let el = self.t_start.as_ref()
+                            let sp = SPIN[self.ui.spin_i];
+                            let el = self.ui.t_start.as_ref()
                                 .map(|t| format!("  {:.1}s", t.elapsed().as_secs_f64()))
                                 .unwrap_or_default();
-                            lbl(ui, &format!("{sp} Searching \"{}\"{}", self.last_query, el), self.pal.accent, 12.0);
+                            lbl(ui, &format!("{sp} Searching \"{}\"{}", self.search.last_query, el), self.pal.accent, 12.0);
                         }
                         SearchState::Done => {
                             let n = self.total_count();
-                            let e = self.t_done.map(|e| format!("  ({:.1}s)", e)).unwrap_or_default();
-                            lbl(ui, &format!("✓ {n} results for \"{}\"{}", self.last_query, e), self.pal.green, 12.0);
+                            let e = self.ui.t_done.map(|e| format!("  ({:.1}s)", e)).unwrap_or_default();
+                            lbl(ui, &format!("✓ {n} results for \"{}\"{}", self.search.last_query, e), self.pal.green, 12.0);
                         }
                         SearchState::Error(e) => {
                             lbl(ui, &format!("✕ {}", e.lines().next().unwrap_or(e)), self.pal.red, 12.0);
@@ -433,7 +433,7 @@ impl eframe::App for App {
         self.auto_refresh_feeds();
 
         // ── Settings panel ───────────────────────────────────────────────
-        if self.show_settings {
+        if self.ui.show_settings {
             egui::Panel::top("settings")
                 .frame(egui::Frame::NONE
                     .fill(self.pal.hdr).stroke(Stroke::new(1.0_f32, self.pal.border))
@@ -454,7 +454,7 @@ impl eframe::App for App {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(self.pal.bg))
             .show(ui, |ui| {
-                match self.tab.clone() {
+                match self.ui.tab.clone() {
                     Tab::Search => self.draw_search(ui, &ctx, &state),
                     Tab::Favorites => self.draw_favorites(ui),
                     Tab::Rss => self.draw_rss(ui, &ctx),

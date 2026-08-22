@@ -35,11 +35,11 @@ impl App {
                         (SvgIcon::Rss, "RSS", "RSS feed reader", Tab::Rss),
                         (SvgIcon::Info, "About", "About TorrentX", Tab::About),
                     ] {
-                        let active = self.tab == tab;
+                        let active = self.ui.tab == tab;
                         let badge = if tab == Tab::Favorites && !self.cfg.favorites.is_empty() {
                             format!(" {}", self.cfg.favorites.len())
                         } else if tab == Tab::Search {
-                            let n = self.count.lock().map(|c| *c).unwrap_or(0);
+                            let n = self.search.count.lock().map(|c| *c).unwrap_or(0);
                             if n > 0 { format!(" {n}") } else { String::new() }
                         } else { String::new() };
                         let col = if active { self.pal.accent } else { self.pal.sub };
@@ -54,11 +54,11 @@ impl App {
                                 .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
                             ).on_hover_text(tip).clicked()
                         }).inner;
-                        if clicked && self.tab != tab {
-                            if tab != Tab::Favorites { self.fav_search.clear(); }
-                            self.tab = tab;
-                            self.detail_open = false;
-                            self.selected = None;
+                        if clicked && self.ui.tab != tab {
+                            if tab != Tab::Favorites { self.ui.fav_search.clear(); }
+                            self.ui.tab = tab;
+                            self.ui.detail_open = false;
+                            self.ui.selected = None;
                         }
                         ui.add_space(2.0);
                     }
@@ -68,7 +68,7 @@ impl App {
                         ui.add_space(12.0);
 
                         // Jackett connection status dot
-                        if let Some(ok) = self.jackett_ok {
+                        if let Some(ok) = self.net.jackett_ok {
                             let (col, txt, tip) = if ok {
                                 (self.pal.green, "●", "Jackett connected")
                             } else {
@@ -83,7 +83,7 @@ impl App {
                             ui.add_space(6.0);
                         }
 
-                        let sa = self.show_settings;
+                        let sa = self.ui.show_settings;
                         let set_col = if sa { self.pal.accent } else { self.pal.sub };
                         if ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 5.0;
@@ -93,7 +93,7 @@ impl App {
                                 .stroke(Stroke::new(1.0_f32, if sa { self.pal.accent } else { self.pal.border }))
                                 .corner_radius(6.0).min_size(Vec2::new(0.0, 30.0))
                             ).clicked()
-                        }).inner { self.show_settings = !self.show_settings; }
+                        }).inner { self.ui.show_settings = !self.ui.show_settings; }
                         ui.add_space(10.0);
 
                         // Theme picker
@@ -148,11 +148,11 @@ impl App {
                     ui.add_space(6.0);
                     lbl(ui, "API Key", self.pal.sub, 12.0);
                     ui.add(egui::TextEdit::singleline(&mut self.cfg.api_key)
-                        .desired_width(SETTINGS_KEY_W).password(!self.key_vis)
+                        .desired_width(SETTINGS_KEY_W).password(!self.ui.key_vis)
                         .hint_text("from Jackett dashboard (top-right)")
                         .font(FontId::monospace(12.0)));
-                    if ui.small_button(if self.key_vis { "hide" } else { "show" }).clicked() {
-                        self.key_vis = !self.key_vis;
+                    if ui.small_button(if self.ui.key_vis { "hide" } else { "show" }).clicked() {
+                        self.ui.key_vis = !self.ui.key_vis;
                     }
                     ui.add_space(6.0);
                     lbl(ui, "Timeout", self.pal.sub, 12.0);
@@ -203,7 +203,7 @@ impl App {
                         let on = self.cfg.page_size == ps;
                         if ui.add(egui::Button::selectable(on,
                             RichText::new(l).font(FontId::proportional(12.0))
-                        )).clicked() { self.cfg.page_size = ps; self.page = 0; save_cfg(&self.cfg); }
+                        )).clicked() { self.cfg.page_size = ps; self.search.page = 0; save_cfg(&self.cfg); }
                     }
                     ui.add_space(8.0);
                     if ui.add(egui::Button::selectable(self.cfg.dedupe,
@@ -228,7 +228,7 @@ impl App {
                         .min_size(egui::vec2(18.0, 18.0))
                         .stroke(Stroke::new(1.0_f32, self.pal.border))
                     ).on_hover_text("Custom accent color (overrides theme)").clicked() {
-                        self.show_color_picker = !self.show_color_picker;
+                        self.ui.show_color_picker = !self.ui.show_color_picker;
                     }
                     if self.cfg.accent.is_some() {
                         ui.add_space(4.0);
@@ -242,7 +242,7 @@ impl App {
                         }
                     }
                     // Color picker popup
-                    if self.show_color_picker {
+                    if self.ui.show_color_picker {
                         let mut col: [f32; 3] = self.cfg.accent
                             .map(|[r, g, b]| [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0])
                             .unwrap_or([self.pal.accent.r() as f32 / 255.0, self.pal.accent.g() as f32 / 255.0, self.pal.accent.b() as f32 / 255.0]);
@@ -263,7 +263,7 @@ impl App {
                                 ui.add_space(6.0);
                                 if ui.button("Done").clicked() { close = true; }
                             });
-                        if close { self.show_color_picker = false; save_cfg(&self.cfg); }
+                        if close { self.ui.show_color_picker = false; save_cfg(&self.cfg); }
                     }
                 });
                 ui.add_space(5.0);

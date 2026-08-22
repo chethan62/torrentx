@@ -125,10 +125,10 @@ impl App {
     // ─── Toast notifications ───────────────────────────────────────────────
 
     pub(crate) fn draw_toasts(&self, ctx: &egui::Context) {
-        if self.toasts.is_empty() { return; }
+        if self.ui.toasts.is_empty() { return; }
         let scr = ctx.input(|i| i.viewport_rect());
         let mut y = scr.max.y - 54.0;
-        for toast in self.toasts.iter().rev() {
+        for toast in self.ui.toasts.iter().rev() {
             let a = ((toast.ttl.min(0.4) / 0.4) * 230.0) as u8;
             egui::Area::new(egui::Id::new(format!("toast_{}", toast.msg)))
                 .fixed_pos([scr.max.x - 310.0, y])
