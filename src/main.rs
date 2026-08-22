@@ -84,6 +84,7 @@ pub(crate) fn svg_btn(
 pub(crate) enum SvgIcon {
     Magnet, Copy, Download, Star, Info, Web,
     Search, Rss, Settings, Close, Refresh, Bookmark,
+    ArrowUp, ArrowDown, Circle, CircleDot,
 }
 
 impl SvgIcon {
@@ -101,6 +102,10 @@ impl SvgIcon {
             SvgIcon::Close => "bytes://tx/x.svg",
             SvgIcon::Refresh => "bytes://tx/refresh-cw.svg",
             SvgIcon::Bookmark => "bytes://tx/bookmark.svg",
+            SvgIcon::ArrowUp => "bytes://tx/arrow-up.svg",
+            SvgIcon::ArrowDown => "bytes://tx/arrow-down.svg",
+            SvgIcon::Circle => "bytes://tx/circle.svg",
+            SvgIcon::CircleDot => "bytes://tx/circle-dot.svg",
         }
     }
     fn svg(&self) -> &'static str {
@@ -117,6 +122,10 @@ impl SvgIcon {
             SvgIcon::Close => include_str!("../assets/icons/x.svg"),
             SvgIcon::Refresh => include_str!("../assets/icons/refresh-cw.svg"),
             SvgIcon::Bookmark => include_str!("../assets/icons/bookmark.svg"),
+            SvgIcon::ArrowUp => include_str!("../assets/icons/arrow-up.svg"),
+            SvgIcon::ArrowDown => include_str!("../assets/icons/arrow-down.svg"),
+            SvgIcon::Circle => include_str!("../assets/icons/circle.svg"),
+            SvgIcon::CircleDot => include_str!("../assets/icons/circle-dot.svg"),
         }
     }
 }

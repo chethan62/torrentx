@@ -147,11 +147,13 @@ impl App {
                         if row_resp.hovered() { ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand); }
                         if row_resp.clicked() { sel = Some(i); }
                         ui.horizontal(|ui| {
-                            let (dc, dot) = match st {
-                                FeedStatus::Ok => (pal.green, "●"), FeedStatus::Loading => (pal.accent, "⟳"),
-                                FeedStatus::Error => (pal.red, "✕"), FeedStatus::Idle => (pal.dim, "○"),
+                            let (dc, icon) = match st {
+                                FeedStatus::Ok => (pal.green, SvgIcon::Circle),
+                                FeedStatus::Loading => (pal.accent, SvgIcon::Refresh),
+                                FeedStatus::Error => (pal.red, SvgIcon::Close),
+                                FeedStatus::Idle => (pal.dim, SvgIcon::CircleDot),
                             };
-                            lbl(ui, dot, dc, fs - 2.0);
+                            svg_icon(ui, icon, 10.0, dc);
                             ui.add_space(4.0);
                             let nc = if en { pal.text } else { pal.dim };
                             ui.add(egui::Label::new(RichText::new(&name).font(FontId::proportional(fs - 0.5)).color(nc))

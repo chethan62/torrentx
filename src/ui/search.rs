@@ -512,13 +512,19 @@ impl App {
                         ui.add_space(2.0);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let d_lbl = if self.search.s_dir == SortDir::Desc { "▼ DESC" } else { "▲ ASC" };
-                        if ui.add(egui::Button::new(
-                            RichText::new(d_lbl).font(FontId::proportional(fs - 1.0)).color(self.pal.accent))
-                            .fill(tint(self.pal.accent, 18))
-                            .stroke(Stroke::new(1.0_f32, tint(self.pal.accent, 60))).corner_radius(4.0)
-                        ).on_hover_text("Toggle sort direction").clicked() {
-                            self.search.s_dir = if self.search.s_dir == SortDir::Desc { SortDir::Asc } else { SortDir::Desc };
+                        let desc = self.search.s_dir == SortDir::Desc;
+                        let d_lbl = if desc { "DESC" } else { "ASC" };
+                        let arrow = if desc { SvgIcon::ArrowDown } else { SvgIcon::ArrowUp };
+                        let clicked = ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 3.0;
+                            svg_icon(ui, arrow, 10.0, self.pal.accent);
+                            ui.add(egui::Button::new(
+                                RichText::new(d_lbl).font(FontId::proportional(fs - 1.0)).color(self.pal.accent))
+                                .fill(Color32::TRANSPARENT).frame(false)
+                            ).clicked()
+                        }).inner;
+                        if clicked {
+                            self.search.s_dir = if desc { SortDir::Asc } else { SortDir::Desc };
                             self.search.page = 0;
                         }
                         ui.add_space(6.0);
@@ -529,13 +535,19 @@ impl App {
                                          ("Ratio", SortCol::Ratio), ("Tracker", SortCol::Tracker),
                                          ("Name", SortCol::Name)] {
                             let on = self.search.s_col == col;
-                            let txt = if on {
-                                if self.search.s_dir == SortDir::Desc { format!("{l}▼") } else { format!("{l}▲") }
-                            } else { l.to_string() };
-                            if ui.add(egui::Button::selectable(on,
-                                RichText::new(&txt).font(FontId::proportional(fs - 1.0))
-                                    .color(if on { self.pal.accent } else { self.pal.sub })
-                            )).clicked() {
+                            let col_c = if on { self.pal.accent } else { self.pal.sub };
+                            let clicked = ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 3.0;
+                                let hit = ui.add(egui::Button::selectable(on,
+                                    RichText::new(l).font(FontId::proportional(fs - 1.0)).color(col_c)
+                                )).clicked();
+                                if on {
+                                    let arrow = if self.search.s_dir == SortDir::Desc { SvgIcon::ArrowDown } else { SvgIcon::ArrowUp };
+                                    svg_icon(ui, arrow, 9.0, self.pal.accent);
+                                }
+                                hit
+                            }).inner;
+                            if clicked {
                                 if self.search.s_col == col {
                                     self.search.s_dir = if self.search.s_dir == SortDir::Desc { SortDir::Asc } else { SortDir::Desc };
                                 } else { self.search.s_col = col; self.search.s_dir = SortDir::Desc; }

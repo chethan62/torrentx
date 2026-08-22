@@ -20,12 +20,16 @@ impl App {
 
         let mut new_sort: Option<(SortCol, bool)> = None;
 
-        // Table header helper
-        let hdr = |l: &str, col: &SortCol| {
+        // Table header helper — label + SVG sort arrow (no glyphs).
+        let hdr = |ui: &mut egui::Ui, l: &str, col: &SortCol| {
             let on = &s_col == col;
-            let arr = if on { if s_dir == SortDir::Desc { "▼" } else { "▲" } } else { "" };
-            RichText::new(format!("{l}{arr}")).font(FontId::proportional(fsz))
-                .color(if on { pal.accent } else { pal.sub }).strong()
+            let col_c = if on { pal.accent } else { pal.sub };
+            ui.label(RichText::new(l).font(FontId::proportional(fsz))
+                .color(col_c).strong());
+            if on {
+                let icon = if s_dir == SortDir::Desc { SvgIcon::ArrowDown } else { SvgIcon::ArrowUp };
+                svg_icon(ui, icon, 10.0, pal.accent);
+            }
         };
 
         // Visible columns in user-configured order
@@ -77,7 +81,7 @@ impl App {
                             ui.label(RichText::new("Health").font(FontId::proportional(fsz)).color(pal.sub).strong());
                         } else {
                             let hresp = ui.interact(ui.max_rect(), egui::Id::new(("sort_hdr", c.label())), egui::Sense::click());
-                            ui.label(hdr(c.label(), &sortcol));
+                            hdr(ui, c.label(), &sortcol);
                             if hresp.hovered() { ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand); }
                             if hresp.clicked() { new_sort = Some((sortcol.clone(), s_col == sortcol)); }
                         }

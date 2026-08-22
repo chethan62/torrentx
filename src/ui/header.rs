@@ -69,16 +69,16 @@ impl App {
 
                         // Jackett connection status dot
                         if let Some(ok) = self.net.jackett_ok {
-                            let (col, txt, tip) = if ok {
-                                (self.pal.green, "●", "Jackett connected")
+                            let (col, tip) = if ok {
+                                (self.pal.green, "Jackett connected")
                             } else {
-                                (self.pal.red, "●", "Jackett unreachable — check Settings")
+                                (self.pal.red, "Jackett unreachable — check Settings")
                             };
-                            ui.add(egui::Label::new(RichText::new(txt).color(col).size(13.0)))
+                            ui.add(svg_image(SvgIcon::Circle, 12.0, col))
                                 .on_hover_text(tip);
                             ui.add_space(6.0);
                         } else {
-                            ui.add(egui::Label::new(RichText::new("◌").color(self.pal.dim).size(13.0)))
+                            ui.add(svg_image(SvgIcon::CircleDot, 12.0, self.pal.dim))
                                 .on_hover_text("Checking Jackett…");
                             ui.add_space(6.0);
                         }

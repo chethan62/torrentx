@@ -51,9 +51,13 @@ pub(crate) fn draw_cell_content(
             }
         }
         TableCol::Health => {
-            let dot = if seed > 10 { "●" } else { "○" };
-            ui.label(RichText::new(format!("{dot} {}", hlth_lbl(seed)))
-                .font(FontId::proportional(fsz - 1.0)).strong().color(seed_col(seed)));
+            let dot = if seed > 10 { SvgIcon::CircleDot } else { SvgIcon::Circle };
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 3.0;
+                svg_icon(ui, dot, 8.0, seed_col(seed));
+                ui.label(RichText::new(hlth_lbl(seed))
+                    .font(FontId::proportional(fsz - 1.0)).strong().color(seed_col(seed)));
+            });
         }
         TableCol::Date => {
             let d = r.publish_date.as_deref()
