@@ -66,6 +66,22 @@ impl App {
                 { continue; }
                 row_i += 1;
                 let bg = if row_i.is_multiple_of(2) { self.pal.row_odd } else { self.pal.row_even };
+                // Full-row click layer FIRST (covers the whole row rect, text
+                // included). Drawn before content so text stays clickable.
+                let row_rect = ui.max_rect();
+                let row_resp = ui.interact(
+                    row_rect,
+                    egui::Id::new(("favrow", i)),
+                    egui::Sense::click(),
+                );
+                if row_resp.clicked() {
+                    if let Some(m) = &fav.magnet {
+                        if is_magnet(m) { open_mag = Some(m.clone()); }
+                    }
+                }
+                if row_resp.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
                 egui::Frame::NONE
                     .fill(bg).inner_margin(egui::Margin::symmetric(16, 10))
                     .show(ui, |ui| {

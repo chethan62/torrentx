@@ -75,8 +75,11 @@ impl App {
                     header.col(|ui| {
                         if *c == TableCol::Health {
                             ui.label(RichText::new("Health").font(FontId::proportional(fsz)).color(pal.sub).strong());
-                        } else if ui.add(egui::Label::new(hdr(c.label(), &sortcol.clone())).sense(egui::Sense::click())).clicked() {
-                            new_sort = Some((sortcol.clone(), s_col == sortcol));
+                        } else {
+                            let hresp = ui.interact(ui.max_rect(), egui::Id::new(("sort_hdr", c.label())), egui::Sense::click());
+                            ui.label(hdr(c.label(), &sortcol));
+                            if hresp.hovered() { ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand); }
+                            if hresp.clicked() { new_sort = Some((sortcol.clone(), s_col == sortcol)); }
                         }
                     });
                 }
@@ -154,9 +157,10 @@ impl App {
                                     TableCol::Tracker | TableCol::Size | TableCol::Seeds
                                     | TableCol::Leech | TableCol::Ratio | TableCol::Health
                                     | TableCol::Date => {
-                                        draw_cell_content(ui, c, r, seed, leech, fsz, &pal);
-                                        // Click anywhere in these cells selects the row
-                                        // (the Name cell handles its own label clicks).
+                                        // Full-cell click layer FIRST (covers the whole
+                                        // cell rect), THEN draw the label as non-interactive
+                                        // content. If drawn first, the label shrinks
+                                        // ui.max_rect() and clicks on the text miss.
                                         let cell_id = egui::Id::new(("rowcell", gi, c.label()));
                                         let cell_resp = ui.interact(ui.max_rect(), cell_id, egui::Sense::click());
                                         if cell_resp.clicked() && !self.ui.sel_mode {
@@ -166,6 +170,7 @@ impl App {
                                             self.ui.hovered = Some(i);
                                             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                                         }
+                                        draw_cell_content(ui, c, r, seed, leech, fsz, &pal);
                                     }
                                 }
                             });
@@ -405,10 +410,13 @@ impl App {
                     } else {
                         mag.clone()
                     };
-                    let resp = ui.add(egui::Label::new(
+                    // Full-width clickable copy target (button, not a text label).
+                    if ui.add(egui::Button::new(
                         RichText::new(truncated).font(FontId::monospace(fs-2.0)).color(self.pal.sub))
-                        .sense(egui::Sense::click()));
-                    if resp.on_hover_text("Click to copy full magnet").clicked() {
+                        .fill(tint(self.pal.sub, 10))
+                        .stroke(Stroke::new(1.0_f32, self.pal.border))
+                        .corner_radius(4.0)
+                    ).on_hover_text("Click to copy full magnet").clicked() {
                         ui.ctx().copy_text(mag.clone());
                         self.toast("Magnet copied ✓", self.pal.green);
                     }

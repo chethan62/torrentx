@@ -186,11 +186,14 @@ impl App {
                                         tint(*col, if sel { 200 } else { 80 })))
                                     .inner_margin(egui::Margin::symmetric(7, 2))
                                     .show(ui, |ui| {
-                                        if ui.add(egui::Label::new(
+                                        // Whole-chip click (not just the text).
+                                        let chip_resp = ui.interact(ui.max_rect(), egui::Id::new(("chip", cat)), egui::Sense::click());
+                                        ui.label(
                                             RichText::new(format!("{cat}  {count}"))
                                                 .font(FontId::proportional(11.0)).color(*col)
-                                        ).sense(egui::Sense::click()))
-                                            .on_hover_text("Click to filter by category").clicked() {
+                                        );
+                                        if chip_resp.hovered() { ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand); }
+                                        if chip_resp.clicked() {
                                             if self.search.f_text == *cat { self.search.f_text.clear(); }
                                             else { self.search.f_text = cat.clone(); }
                                             // Category filter changed the result set: drop batch selections.

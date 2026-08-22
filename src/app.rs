@@ -510,5 +510,11 @@ impl App {
         vis.widgets.hovered.corner_radius = rn;
         vis.widgets.active.corner_radius = rn;
         ctx.set_visuals(vis);
+        // Labels must NOT be text-selectable: with the egui default
+        // `selectable_labels = true`, every Label silently senses click+drag
+        // over its text galley, which sits ON TOP of our row `ui.interact`
+        // click layers and swallows clicks on text. Disable it so row clicks
+        // land everywhere (we never need in-table text selection).
+        ctx.all_styles_mut(|s| s.interaction.selectable_labels = false);
     }
 }

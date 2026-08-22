@@ -140,6 +140,12 @@ impl App {
                 egui::Frame::NONE.fill(bg).corner_radius(6.0)
                     .inner_margin(egui::Margin::symmetric(10, 7))
                     .show(ui, |ui| {
+                        // Full-row click layer — clicking anywhere in the feed
+                        // row (name, count badge, empty space) selects it, not
+                        // just the name text.
+                        let row_resp = ui.interact(ui.max_rect(), egui::Id::new(("feedrow", i)), egui::Sense::click());
+                        if row_resp.hovered() { ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand); }
+                        if row_resp.clicked() { sel = Some(i); }
                         ui.horizontal(|ui| {
                             let (dc, dot) = match st {
                                 FeedStatus::Ok => (pal.green, "●"), FeedStatus::Loading => (pal.accent, "⟳"),
@@ -148,8 +154,8 @@ impl App {
                             lbl(ui, dot, dc, fs - 2.0);
                             ui.add_space(4.0);
                             let nc = if en { pal.text } else { pal.dim };
-                            if ui.add(egui::Label::new(RichText::new(&name).font(FontId::proportional(fs - 0.5)).color(nc))
-                                .truncate().sense(egui::Sense::click())).clicked() { sel = Some(i); }
+                            ui.add(egui::Label::new(RichText::new(&name).font(FontId::proportional(fs - 0.5)).color(nc))
+                                .truncate());
                             // Auto-refresh marker
                             if self.rss.rss_feeds[i].config.auto_refresh {
                                 let ac = if en { pal.accent } else { pal.dim };
