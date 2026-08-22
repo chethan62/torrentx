@@ -257,7 +257,7 @@ impl App {
         ui.add_space(50.0);
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("TorrentX")
-                .font(FontId::proportional(40.0)).strong().color(tint(self.pal.accent, 90)));
+                .font(FontId::proportional(40.0)).strong().color(tint(self.pal.accent, 230)));
             ui.add_space(6.0);
             lbl(ui, "Search all your Jackett indexers in one shot", self.pal.sub, fs + 1.0);
             ui.add_space(3.0);

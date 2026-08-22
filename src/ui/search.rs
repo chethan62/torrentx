@@ -60,7 +60,7 @@ impl App {
                 egui::Button::new(
                     RichText::new(if busy { "  Scanning…  " } else { "    Search    " })
                         .font(FontId::proportional(fs)).strong().color(Color32::WHITE))
-                    .fill(if busy { rgb(6,100,130) } else { self.pal.accent })
+                    .fill(if busy { tint(self.pal.accent, 190) } else { self.pal.accent })
                     .corner_radius(6.0).min_size(Vec2::new(0.0, 36.0))
             ).clicked() { self.do_search(); }
 

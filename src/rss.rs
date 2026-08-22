@@ -292,5 +292,19 @@ mod tests {
         assert!(url.contains("/indexers/all/results/torznab/api"));
         assert!(!url.contains("&cat="));
     }
+
+    #[test]
+    fn html_named_entities_in_title_are_decoded() {
+        // Torznab titles carry HTML entities (&ldquo; &rdquo; &amp; &nbsp;).
+        // quick-xml's plain unescape() only decodes the 5 XML entities; the
+        // escape-html feature (Cargo.toml) adds full HTML5 named-entity
+        // decoding. Regression: literal "&ldquo;Sylvia&rdquo;" was rendered.
+        let xml = r#"<rss><channel><item>
+            <title>Linux Mint 18.3 &ldquo;Sylvia&rdquo; KDE (64-bit) &amp; More</title>
+        </item></channel></rss>"#;
+        let items = parse_torznab_xml(xml).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Linux Mint 18.3 \u{201C}Sylvia\u{201D} KDE (64-bit) & More");
+    }
 }
 
