@@ -413,8 +413,11 @@ impl eframe::App for App {
             ctx.memory_mut(|m| m.request_focus(egui::Id::new("q")));
         }
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::R)) { self.do_search(); }
-        // Ctrl+A — select all visible results (batch mode auto-enables)
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::A)) {
+        // Ctrl+A — select all visible results (batch mode auto-enables).
+        // Skipped while a TextEdit owns the keyboard, so select-all still
+        // works inside the query/filters/settings inputs.
+        let editing = ctx.memory(|m| m.focused().is_some());
+        if !editing && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::A)) {
             let raw = self.all_results();
             let sorted = self.filtered(&raw);
             if !sorted.is_empty() {
@@ -428,8 +431,10 @@ impl eframe::App for App {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             if self.ui.detail_open { self.ui.detail_open = false; } else { self.search.query.clear(); self.ui.show_hist = false; }
         }
-        // Copy magnet from detail panel with Ctrl+C
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C) && self.ui.detail_open) {
+        // Copy magnet from detail panel with Ctrl+C — only when no TextEdit
+        // is focused (don't clobber the clipboard while copying typed text).
+        if self.ui.detail_open && !editing
+            && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C)) {
             if let Some(idx) = self.ui.selected {
                 let raw = self.all_results();
                 let sorted = self.filtered(&raw);

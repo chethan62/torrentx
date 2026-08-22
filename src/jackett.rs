@@ -3,6 +3,7 @@ use crate::themes::rgb;
 use eframe::egui::Color32;
 use reqwest::blocking::Client;
 use serde::Deserialize;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -347,8 +348,13 @@ pub(crate) fn start_search(
     results: Arc<Mutex<Vec<TorrentResult>>>,
     state: Arc<Mutex<SearchState>>,
     count: Arc<Mutex<usize>>,
+    epoch: Arc<AtomicU64>, gen: u64,
 ) {
     thread::spawn(move || {
+        // Epoch guard: a newer search invalidates this one — never touch state,
+        // so a slow old response can't overwrite fresh results (search race).
+        if epoch.load(Ordering::Relaxed) != gen { return; }
+        let live = || epoch.load(Ordering::Relaxed) == gen;
         if let Ok(mut s) = state.lock() { *s = SearchState::Searching; }
         let idx = if indexer.is_empty() || indexer == "All" { "all" } else { indexer.as_str() };
         let mut ep = format!(
@@ -367,14 +373,15 @@ pub(crate) fn start_search(
                 if st.is_success() {
                     match resp.json::<JackettResponse>() {
                         Ok(data) => {
+                            if !live() { return; }
                             let n = data.results.len();
                             if let Ok(mut r) = results.lock() { *r = data.results; }
                             if let Ok(mut c) = count.lock() { *c = n; }
                             if let Ok(mut s) = state.lock() { *s = SearchState::Done; }
                         }
-                        Err(e) => set_err(&state, format!("Parse error: {e}")),
+                        Err(e) => if live() { set_err(&state, format!("Parse error: {e}")) },
                     }
-                } else {
+                } else if live() {
                     set_err(&state, match st.as_u16() {
                         401 => "Invalid API key — open Settings to update it.".into(),
                         403 => "Forbidden — check Jackett permissions.".into(),
@@ -384,13 +391,13 @@ pub(crate) fn start_search(
                     });
                 }
             }
-            Err(e) => set_err(&state, if e.is_connect() {
+            Err(e) => if live() { set_err(&state, if e.is_connect() {
                 format!("Cannot reach Jackett at {url}\nRun: sudo systemctl start jackett")
             } else if e.is_timeout() {
                 format!("Timed out after {timeout}s — increase timeout in Settings")
             } else {
                 format!("Network error: {e}")
-            }),
+            }) },
         };
     });
 }

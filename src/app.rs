@@ -12,6 +12,7 @@ use crate::themes::{tint, Pal, Theme};
 
 use eframe::egui::{self, Color32, Stroke, Visuals};
 use std::fs;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -85,6 +86,9 @@ pub(crate) struct SearchUi {
     pub(crate) results: Arc<Mutex<Vec<TorrentResult>>>,
     pub(crate) state: Arc<Mutex<SearchState>>,
     pub(crate) count: Arc<Mutex<usize>>,
+    /// Monotonic search counter; bumped per search so stale threads can
+    /// detect they were superseded and discard their response.
+    pub(crate) epoch: Arc<AtomicU64>,
     pub(crate) last_query: String,
     pub(crate) page: usize,
 }
@@ -100,6 +104,7 @@ impl Default for SearchUi {
             results: Arc::new(Mutex::new(vec![])),
             state: Arc::new(Mutex::new(SearchState::Idle)),
             count: Arc::new(Mutex::new(0)),
+            epoch: Arc::new(AtomicU64::new(0)),
             last_query: String::new(), page: 0,
         }
     }
@@ -229,10 +234,12 @@ impl App {
         self.ui.notified = false;
         if let Ok(mut r) = self.search.results.lock() { r.clear(); }
         if let Ok(mut c) = self.search.count.lock() { *c = 0; }
+        let gen = self.search.epoch.fetch_add(1, Ordering::Relaxed) + 1;
         start_search(
             self.cfg.jackett_url.clone(), self.cfg.api_key.clone(),
             q, self.search.cat.clone(), self.net.indexer.clone(), self.cfg.timeout_secs,
             Arc::clone(&self.search.results), Arc::clone(&self.search.state), Arc::clone(&self.search.count),
+            Arc::clone(&self.search.epoch), gen,
         );
     }
 
