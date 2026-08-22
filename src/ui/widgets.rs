@@ -21,15 +21,15 @@ pub(crate) fn draw_cell_content(
         }
         TableCol::Size => {
             ui.label(RichText::new(r.size.map(fmt_size).unwrap_or_else(||"—".into()))
-                .font(FontId::proportional(fsz)).color(pal.sub));
+                .font(FontId::monospace(fsz - 0.5)).color(pal.sub));
         }
         TableCol::Seeds => {
             ui.label(RichText::new(seed.to_string())
-                .font(FontId::proportional(fsz)).color(seed_col(seed)).strong());
+                .font(FontId::monospace(fsz - 0.5)).color(seed_col(seed)).strong());
         }
         TableCol::Leech => {
             ui.label(RichText::new(leech.to_string())
-                .font(FontId::proportional(fsz)).color(pal.red));
+                .font(FontId::monospace(fsz - 0.5)).color(pal.red));
         }
         TableCol::Ratio => {
             let tot = (seed + leech) as f32;
@@ -63,7 +63,7 @@ pub(crate) fn draw_cell_content(
             let d = r.publish_date.as_deref()
                 .map(time_ago).unwrap_or_else(||"—".into());
             ui.label(RichText::new(d)
-                .font(FontId::proportional(fsz)).color(pal.dim));
+                .font(FontId::monospace(fsz - 0.5)).color(pal.dim));
         }
         TableCol::Name => {} // handled inline (interaction)
     }

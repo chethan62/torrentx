@@ -12,7 +12,7 @@ mod search;
 mod widgets;
 
 
-pub(crate) use crate::{act_btn, grid_row, labeled_input, lbl, outline_btn, outline_icon_btn, status_pill, svg_btn, svg_icon, svg_image, v_checkbox, wide_btn, wide_icon_btn, SvgIcon, CATS, MARGIN_DEFAULT};
+pub(crate) use crate::{act_btn, grid_row, icon_text_btn, labeled_input, lbl, outline_btn, outline_icon_btn, status_icon_pill, svg_btn, svg_icon, svg_image, v_checkbox, wide_btn, wide_icon_btn, SvgIcon, CATS, MARGIN_DEFAULT};
 pub(crate) use crate::config::{save_cfg, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_ROOMY};
 pub(crate) use crate::jackett::{cat_col, fmt_size, hlth_lbl, is_magnet, seed_col, time_ago, Hlth, SearchState, SortCol, SortDir, Tab, TableCol, TorrentResult};
 pub(crate) use crate::rss::{FeedStatus, RssFeedConfig, RssFeedState, RssItem};

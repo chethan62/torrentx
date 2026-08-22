@@ -172,8 +172,7 @@ impl App {
                     }
                     lbl(ui, "s", self.pal.dim, 11.0);
                     ui.add_space(2.0);
-                    ui.add(egui::Label::new(RichText::new("ⓘ").font(FontId::proportional(12.0)).color(self.pal.dim))
-                        .sense(egui::Sense::hover()))
+                    ui.add(svg_image(SvgIcon::Info, 12.0, self.pal.dim))
                         .on_hover_text("RSS auto-refresh interval (seconds). 0 disables auto-refresh.");
                 });
                 ui.add_space(5.0);

@@ -275,12 +275,10 @@ impl App {
                 .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 5)))
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if ui.add_enabled(pg > 0,
-                        egui::Button::new(RichText::new("← Prev")
-                            .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
-                        .fill(Color32::TRANSPARENT)
-                        .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0)
-                    ).clicked() { self.search.page -= 1; self.ui.selected = None; }
+                    if icon_text_btn(ui, SvgIcon::ChevronLeft, "Prev", self.pal.sub, pg > 0) {
+                        self.search.page -= 1;
+                        self.ui.selected = None;
+                    }
                     ui.add_space(6.0);
                     for p in 0..max_p {
                         let near = p == 0 || p == max_p - 1 || p.abs_diff(pg) <= 2;
@@ -298,12 +296,10 @@ impl App {
                         )).clicked() { self.search.page = p; self.ui.selected = None; }
                     }
                     ui.add_space(6.0);
-                    if ui.add_enabled(pg + 1 < max_p,
-                        egui::Button::new(RichText::new("Next →")
-                            .font(FontId::proportional(fs - 1.0)).color(self.pal.sub))
-                        .fill(Color32::TRANSPARENT)
-                        .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0)
-                    ).clicked() { self.search.page += 1; self.ui.selected = None; }
+                    if icon_text_btn(ui, SvgIcon::ChevronRight, "Next", self.pal.sub, pg + 1 < max_p) {
+                        self.search.page += 1;
+                        self.ui.selected = None;
+                    }
                     lbl(ui, &format!("  Page {} of {max_p}", pg + 1), self.pal.dim, fs - 1.0);
                 });
             });
@@ -462,13 +458,8 @@ impl App {
                     }
                     if self.ui.sel_mode {
                         let n = self.ui.sel_set.len();
-                        if n > 0 && ui.add(egui::Button::new(
-                            RichText::new(format!("⧉ Copy {n} magnet{}", if n == 1 { "" } else { "s" }))
-                                .font(FontId::proportional(fs - 1.0)).color(self.pal.green))
-                            .fill(tint(self.pal.green, 14))
-                            .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 60)))
-                            .corner_radius(4.0)
-                        ).clicked() {
+                        let copy_label = format!("Copy {n} magnet{}", if n == 1 { "" } else { "s" });
+                        if n > 0 && icon_text_btn(ui, SvgIcon::Copy, &copy_label, self.pal.green, true) {
                             self.copy_selected_magnets(ui);
                         }
                         ui.add_space(4.0);

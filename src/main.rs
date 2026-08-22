@@ -85,6 +85,7 @@ pub(crate) enum SvgIcon {
     Magnet, Copy, Download, Star, Info, Web,
     Search, Rss, Settings, Close, Refresh, Bookmark,
     ArrowUp, ArrowDown, Circle, CircleDot,
+    ChevronLeft, ChevronRight, Check,
 }
 
 impl SvgIcon {
@@ -106,6 +107,9 @@ impl SvgIcon {
             SvgIcon::ArrowDown => "bytes://tx/arrow-down.svg",
             SvgIcon::Circle => "bytes://tx/circle.svg",
             SvgIcon::CircleDot => "bytes://tx/circle-dot.svg",
+            SvgIcon::ChevronLeft => "bytes://tx/chevron-left.svg",
+            SvgIcon::ChevronRight => "bytes://tx/chevron-right.svg",
+            SvgIcon::Check => "bytes://tx/check.svg",
         }
     }
     fn svg(&self) -> &'static str {
@@ -126,6 +130,9 @@ impl SvgIcon {
             SvgIcon::ArrowDown => include_str!("../assets/icons/arrow-down.svg"),
             SvgIcon::Circle => include_str!("../assets/icons/circle.svg"),
             SvgIcon::CircleDot => include_str!("../assets/icons/circle-dot.svg"),
+            SvgIcon::ChevronLeft => include_str!("../assets/icons/chevron-left.svg"),
+            SvgIcon::ChevronRight => include_str!("../assets/icons/chevron-right.svg"),
+            SvgIcon::Check => include_str!("../assets/icons/check.svg"),
         }
     }
 }
@@ -191,10 +198,47 @@ pub(crate) fn v_checkbox(ui: &mut egui::Ui, checked: bool, label: &str, accent: 
     response
 }
 
-pub(crate) fn status_pill(ui: &mut egui::Ui, label: &str, col: Color32) {
-    egui::Frame::NONE.fill(tint(col, 20)).corner_radius(6.0)
+/// Compact icon + text pill. The complete surface is one native button,
+/// so icon and label share the same hover/focus/click target.
+pub(crate) fn icon_text_btn(
+    ui: &mut egui::Ui,
+    icon: SvgIcon,
+    label: &str,
+    color: Color32,
+    enabled: bool,
+) -> bool {
+    ui.add_enabled(
+        enabled,
+        egui::Button::image_and_text(
+            svg_image(icon, 12.0, color),
+            RichText::new(label).font(FontId::proportional(12.0)).color(color),
+        )
+        .fill(tint(color, 14))
+        .stroke(Stroke::new(1.0, tint(color, 70)))
+        .corner_radius(5.0)
+        .min_size(Vec2::new(0.0, 28.0)),
+    )
+    .clicked()
+}
+
+/// Non-interactive status pill with a tofu-proof SVG icon.
+pub(crate) fn status_icon_pill(
+    ui: &mut egui::Ui,
+    icon: SvgIcon,
+    label: &str,
+    col: Color32,
+) {
+    egui::Frame::NONE
+        .fill(tint(col, 20))
+        .corner_radius(6.0)
         .inner_margin(egui::Margin::symmetric(6, 2))
-        .show(ui, |ui| { ui.label(RichText::new(label).font(FontId::proportional(10.5)).color(col)); });
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                svg_icon(ui, icon, 9.0, col);
+                ui.label(RichText::new(label).font(FontId::proportional(10.5)).color(col));
+            });
+        });
 }
 
 pub(crate) fn wide_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> bool {
@@ -421,10 +465,12 @@ impl eframe::App for App {
                         SearchState::Done => {
                             let n = self.total_count();
                             let e = self.ui.t_done.map(|e| format!("  ({:.1}s)", e)).unwrap_or_default();
-                            lbl(ui, &format!("✓ {n} results for \"{}\"{}", self.search.last_query, e), self.pal.green, 12.0);
+                            svg_icon(ui, SvgIcon::Check, 12.0, self.pal.green);
+                            lbl(ui, &format!("{n} results for \"{}\"{}", self.search.last_query, e), self.pal.green, 12.0);
                         }
                         SearchState::Error(e) => {
-                            lbl(ui, &format!("✕ {}", e.lines().next().unwrap_or(e)), self.pal.red, 12.0);
+                            svg_icon(ui, SvgIcon::Close, 12.0, self.pal.red);
+                            lbl(ui, e.lines().next().unwrap_or(e), self.pal.red, 12.0);
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

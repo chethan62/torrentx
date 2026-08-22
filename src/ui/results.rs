@@ -315,7 +315,11 @@ impl App {
                             .font(FontId::proportional(fs + 1.0)).color(self.pal.accent).strong());
                         ui.add_space(6.0);
                         lbl(ui, "1. Make sure Jackett is running  (localhost:9117)", self.pal.sub, fs - 1.0);
-                        lbl(ui, "2. Click ⚙ Settings and paste your API key", self.pal.sub, fs - 1.0);
+                        ui.horizontal(|ui| {
+                            lbl(ui, "2. Click", self.pal.sub, fs - 1.0);
+                            svg_icon(ui, SvgIcon::Settings, 12.0, self.pal.sub);
+                            lbl(ui, "Settings and paste your API key", self.pal.sub, fs - 1.0);
+                        });
                         lbl(ui, "3. Search for anything!", self.pal.sub, fs - 1.0);
                         ui.add_space(10.0);
                         if outline_btn(ui, "Open Settings", self.pal.accent) {

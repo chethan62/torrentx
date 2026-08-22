@@ -39,6 +39,8 @@ PANEL_RADIUS = 8.0. Small controls 4–6, buttons 5, panels 8. No large-radius d
 
 ### Icons
 **Lucide SVG only** (MIT, embedded via `bytes://` image loader + `egui::Image::from_bytes(...).tint(color)`). NEVER font glyphs (emoji, ✕, ⟳, ▶ — they tofu). Pre-tint: `svg.replace("currentColor", "#fff")` so resvg black doesn't defeat the tint. Sizes: 16px in buttons, 12–15 for inline.
+- Registered inline set includes ArrowUp/Down, ChevronLeft/Right, Circle/CircleDot, Check, Info, Settings, Refresh, Close, Copy, plus row-action icons.
+- Icon+text controls use a **single native button surface** (`Button::image_and_text` / `icon_text_btn`) so the icon and label are one hover/focus/click target — never an adjacent decorative icon plus text-only button.
 
 ## Patterns
 
@@ -65,8 +67,8 @@ PANEL_RADIUS = 8.0. Small controls 4–6, buttons 5, panels 8. No large-radius d
 - Numbers tabular; seed count colored via `seed_col()`; size via `fmt_size()`.
 
 ### Status dots (RSS feeds / Jackett)
-- ● green=Ok · ⟳ replaced by Refresh SVG accent=Loading · ✕ replaced by Close SVG red=Error · ○ dim=Idle
-- (glyph dots in the dot-column are fine — tiny single-char, but prefer tinted SVG where practical)
+- Circle SVG green=Ok · Refresh SVG accent=Loading · Close SVG red=Error · CircleDot SVG dim=Idle.
+- Status pills use `status_icon_pill`: SVG + label on one tinted surface. No glyph exceptions.
 
 ### Toasts
 - `self.toast(msg, color)` — bottom transient, 2.5s. Success green, info accent.

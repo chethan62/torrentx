@@ -161,15 +161,14 @@ impl App {
                             // Auto-refresh marker
                             if self.rss.rss_feeds[i].config.auto_refresh {
                                 let ac = if en { pal.accent } else { pal.dim };
-                                ui.add(egui::Label::new(RichText::new("⟳").font(FontId::proportional(fs - 2.0)).color(ac))
-                                    .sense(egui::Sense::hover()))
+                                ui.add(svg_image(SvgIcon::Refresh, 10.0, ac))
                                     .on_hover_text(format!("Auto-refreshes every {} min", self.cfg.rss_refresh_secs / 60));
                             }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if n > 0 {
                                     egui::Frame::NONE.fill(tint(pal.accent, 25)).corner_radius(PANEL_RADIUS)
                                         .inner_margin(egui::Margin::symmetric(5, 1))
-                                        .show(ui, |ui| { ui.label(RichText::new(n.to_string()).font(FontId::proportional(fs - 3.0)).color(pal.accent)); });
+                                        .show(ui, |ui| { ui.label(RichText::new(n.to_string()).font(FontId::monospace(fs - 3.0)).color(pal.accent)); });
                                 }
                             });
                         });
@@ -215,11 +214,13 @@ impl App {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     lbl(ui, &name, pal.accent, fs + 1.0); ui.add_space(8.0);
-                    let (dc, dl) = match status {
-                        FeedStatus::Ok => (pal.green, "● OK"), FeedStatus::Loading => (pal.accent, "⟳ Loading"),
-                        FeedStatus::Error => (pal.red, "✕ Error"), FeedStatus::Idle => (pal.dim, "○ Idle"),
+                    let (dc, icon, label) = match status {
+                        FeedStatus::Ok => (pal.green, SvgIcon::Circle, "OK"),
+                        FeedStatus::Loading => (pal.accent, SvgIcon::Refresh, "Loading"),
+                        FeedStatus::Error => (pal.red, SvgIcon::Close, "Error"),
+                        FeedStatus::Idle => (pal.dim, SvgIcon::CircleDot, "Idle"),
                     };
-                    status_pill(ui, dl, dc);
+                    status_icon_pill(ui, icon, label, dc);
                     lbl(ui, &format!("  {} items", items.len()), pal.dim, fs - 1.0);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.horizontal(|ui| {
@@ -298,7 +299,7 @@ impl App {
                             let cell_resp = ui.interact(ui.max_rect(), egui::Id::new(("rsssize", i)), egui::Sense::click());
                             if cell_resp.clicked() { actions.push((i, "detail")); }
                             ui.add_space(4.0);
-                            ui.label(RichText::new(item.size.map(fmt_size).unwrap_or_else(|| "—".into())).font(FontId::proportional(fs)).color(pal.sub));
+                            ui.label(RichText::new(item.size.map(fmt_size).unwrap_or_else(|| "—".into())).font(FontId::monospace(fs - 0.5)).color(pal.sub));
                         });
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
@@ -306,7 +307,7 @@ impl App {
                             if cell_resp.clicked() { actions.push((i, "detail")); }
                             ui.add_space(4.0);
                             let s = item.seeders.unwrap_or(0);
-                            ui.label(RichText::new(s.to_string()).font(FontId::proportional(fs)).color(seed_col(s)).strong());
+                            ui.label(RichText::new(s.to_string()).font(FontId::monospace(fs - 0.5)).color(seed_col(s)).strong());
                         });
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
@@ -314,7 +315,7 @@ impl App {
                             if cell_resp.clicked() { actions.push((i, "detail")); }
                             ui.add_space(4.0);
                             let d = item.pub_date.as_deref().map(time_ago).unwrap_or_else(|| "—".into());
-                            ui.label(RichText::new(d).font(FontId::proportional(fs)).color(pal.dim));
+                            ui.label(RichText::new(d).font(FontId::monospace(fs - 0.5)).color(pal.dim));
                         });
                         row.col(|ui| {
                             ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
