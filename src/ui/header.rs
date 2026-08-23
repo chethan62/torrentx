@@ -498,42 +498,51 @@ impl App {
                     ui.add_space(6.0);
                     let mut moved: Option<(usize, isize)> = None;
                     for (idx, name) in self.cfg.col_order.clone().iter().enumerate() {
-                        // Chip for the column name (first = accent = fixed).
-                        let lbl_txt = RichText::new(name.as_str())
-                            .font(FontId::proportional(11.5))
-                            .color(if idx == 0 {
-                                self.pal.accent
-                            } else {
-                                self.pal.sub
-                            });
-                        egui::Frame::NONE
-                            .fill(if idx == 0 {
-                                tint(self.pal.accent, 14)
-                            } else {
-                                self.pal.surface
-                            })
-                            .stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .corner_radius(4.0)
-                            .inner_margin(egui::Margin::symmetric(7, 2))
-                            .show(ui, |ui| {
-                                ui.label(lbl_txt);
-                            });
-                        ui.add_space(2.0);
-                        // Compact vertical ↑/↓ reorder control (no font glyphs;
-                        // ~14px wide so all 7 columns fit one line).
+                        // Each column is ONE atomic horizontal unit (chip + gap
+                        // + vertical arrows) so horizontal_wrapped never splits
+                        // it and every unit shares the same row height — this is
+                        // what keeps the whole ORDER row on a straight line.
                         let can_up = idx > 0;
                         let can_down = idx + 1 < self.cfg.col_order.len();
-                        if let Some(d) = reorder_control(
-                            ui,
-                            self.pal.sub,
-                            can_up,
-                            can_down,
-                            "Move left",
-                            "Move right",
-                        ) {
-                            moved = Some((idx, d));
-                        }
-                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing = egui::vec2(2.0, 0.0);
+                            let lbl_txt = RichText::new(name.as_str())
+                                .font(FontId::proportional(11.5))
+                                .color(if idx == 0 {
+                                    self.pal.accent
+                                } else {
+                                    self.pal.sub
+                                });
+                            egui::Frame::NONE
+                                .fill(if idx == 0 {
+                                    tint(self.pal.accent, 14)
+                                } else {
+                                    self.pal.surface
+                                })
+                                .stroke(Stroke::new(1.0_f32, self.pal.border))
+                                .corner_radius(4.0)
+                                .inner_margin(egui::Margin::symmetric(7, 3))
+                                .show(ui, |ui| {
+                                    // Vertically center the label against the
+                                    // 18px arrow stack so every unit aligns.
+                                    ui.vertical_centered(|ui| {
+                                        ui.add_space(2.0);
+                                        ui.label(lbl_txt);
+                                        ui.add_space(2.0);
+                                    });
+                                });
+                            if let Some(d) = reorder_control(
+                                ui,
+                                self.pal.sub,
+                                can_up,
+                                can_down,
+                                "Move left",
+                                "Move right",
+                            ) {
+                                moved = Some((idx, d));
+                            }
+                        });
+                        ui.add_space(2.0);
                     }
                     if let Some((idx, d)) = moved {
                         let j = (idx as isize + d) as usize;
