@@ -151,13 +151,23 @@ impl App {
                 } else {
                     pal.row_even
                 };
-                // Lerp between base_bg and hover color (symmetric ease for enter+exit)
+                // Lerp between base_bg and hover color (symmetric ease for enter+exit).
+                // Blend in STRAIGHT (non-premultiplied) alpha: the hover color is a
+                // low-alpha accent tint, so we composite it over the base row color
+                // rather than lerping raw RGB (which produced a dark muddy highlight
+                // on light themes).
                 let bg = if hover_t > 0.0 {
                     let t = (tokens.easing_hover)(hover_t);
-                    Color32::from_rgba_premultiplied(
-                        (base_bg.r() as f32 * (1.0 - t) + pal.row_hov.r() as f32 * t) as u8,
-                        (base_bg.g() as f32 * (1.0 - t) + pal.row_hov.g() as f32 * t) as u8,
-                        (base_bg.b() as f32 * (1.0 - t) + pal.row_hov.b() as f32 * t) as u8,
+                    // Effective alpha of the hover tint at this point in the fade.
+                    let hov_a = pal.row_hov.a() as f32 * t;
+                    let hov_r = pal.row_hov.r() as f32;
+                    let hov_g = pal.row_hov.g() as f32;
+                    let hov_b = pal.row_hov.b() as f32;
+                    // Straight-alpha "over" composite: dst = src*a + base*(1-a)
+                    Color32::from_rgba_unmultiplied(
+                        (hov_r * hov_a / 255.0 + base_bg.r() as f32 * (1.0 - hov_a / 255.0)) as u8,
+                        (hov_g * hov_a / 255.0 + base_bg.g() as f32 * (1.0 - hov_a / 255.0)) as u8,
+                        (hov_b * hov_a / 255.0 + base_bg.b() as f32 * (1.0 - hov_a / 255.0)) as u8,
                         255,
                     )
                 } else {

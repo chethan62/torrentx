@@ -550,31 +550,33 @@ impl App {
                         self.cfg.col_order.insert(j, name);
                         save_cfg(&self.cfg);
                     }
-                    ui.add_space(8.0);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new("Save")
-                                        .font(FontId::proportional(12.0))
-                                        .color(self.pal.green),
-                                )
-                                .fill(tint(self.pal.green, 18))
-                                .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 80)))
-                                .corner_radius(4.0),
+                    // Save sits inline right after the Order chips — NOT
+                    // right-aligned to the full panel width, which left a huge
+                    // empty void between the chips and the orphaned button on
+                    // wide monitors.
+                    ui.add_space(10.0);
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new("Save")
+                                    .font(FontId::proportional(12.0))
+                                    .color(self.pal.green),
                             )
-                            .clicked()
+                            .fill(tint(self.pal.green, 18))
+                            .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 80)))
+                            .corner_radius(4.0),
+                        )
+                        .clicked()
+                    {
+                        if let Some(err) =
+                            crate::jackett::validate_jackett_url(&self.cfg.jackett_url)
                         {
-                            if let Some(err) =
-                                crate::jackett::validate_jackett_url(&self.cfg.jackett_url)
-                            {
-                                self.toast(&format!("Jackett URL invalid: {err}"), self.pal.red);
-                            } else {
-                                save_cfg(&self.cfg);
-                                self.toast("Settings saved", self.pal.green);
-                            }
+                            self.toast(&format!("Jackett URL invalid: {err}"), self.pal.red);
+                        } else {
+                            save_cfg(&self.cfg);
+                            self.toast("Settings saved", self.pal.green);
                         }
-                    });
+                    }
                 });
             });
         });
