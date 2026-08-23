@@ -684,11 +684,10 @@ impl App {
                                 .font(FontId::proportional(fs - 1.5))
                                 .color(self.pal.dim),
                         );
-                        let truncated = if mag.len() > 60 {
-                            format!("{}…", &mag[..57])
-                        } else {
-                            mag.clone()
-                        };
+                        // Truncate on a UTF-8 char boundary (magnets can carry
+                        // non-ASCII in the dn= display name; byte-slicing [..57]
+                        // panics on a mid-char cut). Uses the tested helper.
+                        let truncated = crate::jackett::truncate_magnet(mag, 57);
                         // Full-width clickable copy target (button, not a text label).
                         if ui
                             .add(

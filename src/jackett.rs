@@ -190,6 +190,24 @@ pub(crate) fn pub_year(s: &str) -> u32 {
         .unwrap_or(0)
 }
 
+/// Truncate a magnet link for display, cutting on a UTF-8 char boundary.
+/// Magnets can carry non-ASCII in the `dn=` display name; byte-slicing
+/// `&s[..57]` panics on a mid-char cut. Returns the string un-changed when
+/// it's short enough. Pure + testable.
+pub(crate) fn truncate_magnet(mag: &str, max_bytes: usize) -> String {
+    if mag.len() <= max_bytes {
+        return mag.to_string();
+    }
+    // Find the last char boundary at or before max_bytes.
+    let cut = mag
+        .char_indices()
+        .map(|(i, _)| i)
+        .take_while(|&i| i <= max_bytes)
+        .last()
+        .unwrap_or(0);
+    format!("{}…", &mag[..cut])
+}
+
 pub(crate) fn seed_col(s: u32) -> Color32 {
     if s > 500 {
         rgb(34, 197, 94)
@@ -561,7 +579,7 @@ pub(crate) fn start_search(
 mod tests {
     use super::{
         category_id, fmt_size, is_magnet, normalize, parse_indexers_xml, parse_latest_tag,
-        pub_year, urlenc, validate_jackett_url,
+        pub_year, truncate_magnet, urlenc, validate_jackett_url,
     };
 
     #[test]
@@ -672,5 +690,39 @@ mod tests {
         assert_eq!(ids, vec!["rarbg", "yts"]);
         // Forgiving parser: malformed XML yields empty list, not an error.
         assert!(parse_indexers_xml("<broken>").unwrap().is_empty());
+    }
+
+    #[test]
+    fn truncate_magnet_cuts_on_char_boundary() {
+        // Short → unchanged (no ellipsis).
+        assert_eq!(
+            truncate_magnet("magnet:?xt=urn:btih:abcd", 100),
+            "magnet:?xt=urn:btih:abcd"
+        );
+        // ASCII: cuts at byte 57, then appends the 3-byte ellipsis.
+        let long = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=abcdefghijklmnopqrstuvwxyz";
+        let t = truncate_magnet(long, 57);
+        assert!(t.ends_with('…'));
+        // The kept body is the 0..57 prefix (57 bytes), plus ellipsis (3).
+        assert_eq!(t.len(), 60);
+        let body = t.trim_end_matches('…');
+        assert!(long.starts_with(body));
+        assert!(body.is_char_boundary(body.len()));
+    }
+
+    #[test]
+    fn truncate_magnet_handles_multibyte_without_panic() {
+        // dn= with multibyte UTF-8 (Japanese). Byte-slicing [..57] would panic
+        // on a mid-char boundary; char_indices must not.
+        let s =
+            "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=日本語タイトルテスト";
+        let t = truncate_magnet(s, 57);
+        // Result must be valid UTF-8 (didn't panic) and end with the ellipsis.
+        assert!(t.ends_with('…'));
+        // The body (before ellipsis) must cut on a char boundary.
+        let body = t.trim_end_matches('…');
+        assert!(body.is_char_boundary(body.len()));
+        // Re-slice the body must not panic.
+        let _ = &body[..body.len()];
     }
 }
