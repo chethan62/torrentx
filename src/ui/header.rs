@@ -111,6 +111,11 @@ impl App {
                                 self.ui.tab = tab;
                                 self.ui.detail_open = false;
                                 self.ui.selected = None;
+                                // Clear cross-tab hover/selection state so a
+                                // stale row highlight never bleeds into the
+                                // newly shown tab's table.
+                                self.ui.hovered = None;
+                                self.rss.rss_detail = None;
                             }
                             ui.add_space(2.0);
                         }

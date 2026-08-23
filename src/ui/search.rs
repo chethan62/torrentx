@@ -380,6 +380,8 @@ impl App {
                     if icon_text_btn(ui, SvgIcon::ChevronLeft, "Prev", self.pal.sub, pg > 0) {
                         self.search.page -= 1;
                         self.ui.selected = None;
+                        self.ui.detail_open = false; // page content changed; drop stale detail
+                        self.ui.detail_row = None;
                     }
                     ui.add_space(6.0);
                     for p in 0..max_p {
@@ -402,6 +404,8 @@ impl App {
                         {
                             self.search.page = p;
                             self.ui.selected = None;
+                            self.ui.detail_open = false;
+                            self.ui.detail_row = None;
                         }
                     }
                     ui.add_space(6.0);
@@ -414,6 +418,8 @@ impl App {
                     ) {
                         self.search.page += 1;
                         self.ui.selected = None;
+                        self.ui.detail_open = false;
+                        self.ui.detail_row = None;
                     }
                     lbl(
                         ui,

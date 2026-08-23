@@ -293,6 +293,7 @@ impl App {
         save_cfg(&self.cfg);
         self.ui.selected = None;
         self.ui.detail_open = false;
+        self.ui.detail_row = None; // drop cached detail from previous search
         self.ui.show_hist = false;
         self.search.page = 0;
         self.ui.sel_set.clear();
