@@ -698,7 +698,7 @@ impl eframe::App for App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         lbl(
                             ui,
-                            "Arrow keys: up/down navigate · Enter open · D detail · F favorite · M magnet · Esc · Ctrl+F · Ctrl+R",
+                            "Keys: Arrows · Enter · D · F · M · Esc · Ctrl+F · Ctrl+R",
                             self.pal.dim,
                             10.5,
                         );
