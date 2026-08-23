@@ -634,7 +634,7 @@ impl eframe::App for App {
                 if let Some(r) = page_s.get(idx) {
                     if let Some(m) = &r.magnet_uri {
                         ui.ctx().copy_text(m.clone());
-                        self.toast("Magnet copied ✓", self.pal.green);
+                        self.toast("Magnet copied", self.pal.green);
                     }
                 }
             }
@@ -698,7 +698,7 @@ impl eframe::App for App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         lbl(
                             ui,
-                            "↑↓ Enter  D  F  M  Esc  Ctrl+F  Ctrl+R",
+                            "Arrow keys: up/down navigate · Enter open · D detail · F favorite · M magnet · Esc · Ctrl+F · Ctrl+R",
                             self.pal.dim,
                             10.5,
                         );

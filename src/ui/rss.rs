@@ -89,7 +89,9 @@ impl App {
         if self.rss.rss_feeds.is_empty() && !self.rss.rss_add_mode {
             ui.add_space(60.0);
             ui.vertical_centered(|ui| {
-                ui.label(RichText::new("📡").size(42.0));
+                // SVG icon (no font glyph) — the 📡 emoji tofus; Rss icon is
+                // the Lucide vector, tinted to the accent, large for the hero.
+                ui.add(svg_image(SvgIcon::Rss, 42.0, pal.accent));
                 ui.add_space(12.0);
                 lbl(ui, "No RSS Feeds yet", pal.sub, 18.0);
                 ui.add_space(6.0);
@@ -683,7 +685,7 @@ impl App {
                             "copy" => {
                                 if let Some(m) = &item.magnet {
                                     ui.ctx().copy_text(m.clone());
-                                    self.toast("Magnet copied ✓", pal.green);
+                                    self.toast("Magnet copied", pal.green);
                                 }
                             }
                             "dl" => {
@@ -770,7 +772,7 @@ impl App {
                     if wide_icon_btn(ui, SvgIcon::Copy, "Copy Magnet", pal.sub) {
                         if let Some(m) = &item.magnet {
                             ui.ctx().copy_text(m.clone());
-                            self.toast("Copied ✓", pal.green);
+                            self.toast("Copied", pal.green);
                         }
                     }
                     ui.add_space(4.0);

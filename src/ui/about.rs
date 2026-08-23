@@ -102,7 +102,7 @@ impl App {
                     "Automatic update check on startup",
                     "Export filtered results to CSV",
                     "Pagination: 25 / 50 / 100 / All per page",
-                    "Keyboard nav: ↑↓ Enter D F M Ctrl+F Ctrl+R Esc",
+                    "Keyboard nav: Arrow keys, Enter, D, F, M, Ctrl+F, Ctrl+R, Esc",
                 ] {
                     lbl(ui, &format!("  ·  {f}"), self.pal.sub, fs - 1.0);
                     ui.add_space(1.0);
@@ -113,7 +113,7 @@ impl App {
                 lbl(ui, "Keyboard Shortcuts", self.pal.accent, fs + 1.0);
                 ui.add_space(10.0);
                 for (k, v) in [
-                    ("↑ / ↓", "Navigate result rows"),
+                    ("Up / Down", "Navigate result rows"),
                     ("Enter", "Open magnet for selected row"),
                     ("D", "Toggle detail panel"),
                     ("F", "Add selected to Favorites"),

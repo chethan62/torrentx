@@ -364,7 +364,7 @@ impl App {
                     "copy" => {
                         if let Some(m) = &r.magnet_uri {
                             ui.ctx().copy_text(m.clone());
-                            self.toast("Magnet copied ✓", self.pal.green);
+                            self.toast("Magnet copied", self.pal.green);
                         }
                     }
                     "dl" => {
@@ -705,7 +705,7 @@ impl App {
                             .clicked()
                         {
                             ui.ctx().copy_text(mag.clone());
-                            self.toast("Magnet copied ✓", self.pal.green);
+                            self.toast("Magnet copied", self.pal.green);
                         }
                     });
                 }
@@ -723,7 +723,7 @@ impl App {
                     ui.add_space(4.0);
                     if wide_icon_btn(ui, SvgIcon::Copy, "Copy Magnet Link", self.pal.sub) {
                         ui.ctx().copy_text(mc);
-                        self.toast("Copied ✓", self.pal.green);
+                        self.toast("Copied", self.pal.green);
                     }
                     ui.add_space(4.0);
                 }

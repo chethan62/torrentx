@@ -234,7 +234,7 @@ impl App {
                         let sc = sorted.clone();
                         if outline_btn(ui, "Export CSV", self.pal.sub) {
                             self.export_csv(&sc);
-                            self.toast("Exported to Downloads ✓", self.pal.green);
+                            self.toast("Exported to Downloads", self.pal.green);
                         }
                     });
                 });

@@ -31,23 +31,15 @@ pub(crate) fn load_cjk_fonts(ctx: &egui::Context) {
         return;
     }
     let data: &'static [u8] = include_bytes!("../assets/NotoSansCJKjp-subset.otf");
-    let phosphor: &'static [u8] = include_bytes!("../assets/Phosphor.ttf");
     let mut fonts = egui::FontDefinitions::default();
     fonts
         .font_data
         .insert("cjk".to_owned(), egui::FontData::from_static(data).into());
-    // Phosphor icon font for the row action buttons (square icon buttons).
-    fonts.font_data.insert(
-        "phosphor".to_owned(),
-        egui::FontData::from_static(phosphor).into(),
-    );
+    // NOTE: Phosphor.ttf removed — all icons are Lucide SVG (no font glyphs).
     for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
         if let Some(list) = fonts.families.get_mut(&family) {
             if !list.contains(&"cjk".to_owned()) {
                 list.push("cjk".to_owned());
-            }
-            if !list.contains(&"phosphor".to_owned()) {
-                list.push("phosphor".to_owned());
             }
         }
     }
@@ -378,7 +370,7 @@ impl App {
             saved_at: now_str(),
         });
         save_cfg(&self.cfg);
-        self.toast("Saved to Favorites ★", self.pal.yellow);
+        self.toast("Saved to Favorites", self.pal.yellow);
     }
 
     pub(crate) fn toast(&mut self, msg: &str, col: Color32) {
@@ -521,7 +513,7 @@ impl App {
             saved_at: now_str(),
         });
         save_cfg(&self.cfg);
-        self.toast("Saved to Favorites ★", self.pal.yellow);
+        self.toast("Saved to Favorites", self.pal.yellow);
     }
 
     pub(crate) fn cur_state(&self) -> SearchState {

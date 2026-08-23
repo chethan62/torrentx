@@ -496,12 +496,13 @@ impl App {
                             }
                             ui.label(lbl_txt);
                             ui.add_space(2.0);
-                            if idx > 0 && ui.small_button("↑").on_hover_text("Move left").clicked()
-                            {
+                            // SVG arrows (no font glyphs — ↑/↓ tofu when the
+                            // font stack breaks). Tinted to the accent.
+                            if idx > 0 && svg_btn(ui, SvgIcon::ArrowUp, "Move left", self.pal.sub) {
                                 moved = Some((idx, -1));
                             }
                             if idx + 1 < self.cfg.col_order.len()
-                                && ui.small_button("↓").on_hover_text("Move right").clicked()
+                                && svg_btn(ui, SvgIcon::ArrowDown, "Move right", self.pal.sub)
                             {
                                 moved = Some((idx, 1));
                             }
@@ -534,7 +535,7 @@ impl App {
                                 self.toast(&format!("Jackett URL invalid: {err}"), self.pal.red);
                             } else {
                                 save_cfg(&self.cfg);
-                                self.toast("Settings saved ✓", self.pal.green);
+                                self.toast("Settings saved", self.pal.green);
                             }
                         }
                     });
