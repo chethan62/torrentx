@@ -4,21 +4,30 @@ use super::*;
 
 use crate::app::App;
 
-
 impl App {
-
     pub(crate) fn draw_about(&self, ui: &mut egui::Ui) {
         let fs = self.cfg.font_size;
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.add_space(30.0);
             ui.vertical_centered(|ui| {
-                ui.label(RichText::new("TorrentX")
-                    .font(FontId::proportional(30.0)).color(self.pal.text).strong());
-                ui.label(RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
-                    .font(FontId::proportional(fs)).color(self.pal.accent));
+                ui.label(
+                    RichText::new("TorrentX")
+                        .font(FontId::proportional(30.0))
+                        .color(self.pal.text)
+                        .strong(),
+                );
+                ui.label(
+                    RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
+                        .font(FontId::proportional(fs))
+                        .color(self.pal.accent),
+                );
                 ui.add_space(4.0);
-                lbl(ui, "Native Rust + egui torrent search GUI powered by Jackett",
-                    self.pal.sub, fs + 1.0);
+                lbl(
+                    ui,
+                    "Native Rust + egui torrent search GUI powered by Jackett",
+                    self.pal.sub,
+                    fs + 1.0,
+                );
 
                 ui.add_space(24.0);
                 for (k, v) in [
@@ -38,7 +47,12 @@ impl App {
 
                 // Theme swatches
                 ui.add_space(24.0);
-                lbl(ui, &format!("{} Themes", Theme::all().len()), self.pal.accent, fs + 1.0);
+                lbl(
+                    ui,
+                    &format!("{} Themes", Theme::all().len()),
+                    self.pal.accent,
+                    fs + 1.0,
+                );
                 ui.add_space(10.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
@@ -47,14 +61,19 @@ impl App {
                         let col = t.accent_color();
                         let active = &self.cfg.theme == t;
                         egui::Frame::NONE
-                            .fill(tint(col, if active { 45 } else { 20 })).corner_radius(6.0)
+                            .fill(tint(col, if active { 45 } else { 20 }))
+                            .corner_radius(6.0)
                             .stroke(Stroke::new(
                                 if active { 2.0_f32 } else { 1.0_f32 },
-                                tint(col, if active { 220 } else { 90 })))
+                                tint(col, if active { 220 } else { 90 }),
+                            ))
                             .inner_margin(egui::Margin::symmetric(9, 4))
                             .show(ui, |ui| {
-                                ui.label(RichText::new(t.name())
-                                    .font(FontId::proportional(fs - 1.5)).color(col));
+                                ui.label(
+                                    RichText::new(t.name())
+                                        .font(FontId::proportional(fs - 1.5))
+                                        .color(col),
+                                );
                             });
                     }
                 });
@@ -106,10 +125,16 @@ impl App {
                 ] {
                     ui.horizontal(|ui| {
                         ui.add_space(ui.available_width() * 0.12);
-                        ui.add(egui::Button::new(
-                            RichText::new(k).font(FontId::proportional(fs)).color(self.pal.accent))
+                        ui.add(
+                            egui::Button::new(
+                                RichText::new(k)
+                                    .font(FontId::proportional(fs))
+                                    .color(self.pal.accent),
+                            )
                             .fill(self.pal.surface)
-                            .stroke(Stroke::new(1.0_f32, self.pal.border)).corner_radius(4.0));
+                            .stroke(Stroke::new(1.0_f32, self.pal.border))
+                            .corner_radius(4.0),
+                        );
                         ui.add_space(8.0);
                         lbl(ui, v, self.pal.sub, fs);
                     });
@@ -125,18 +150,25 @@ impl App {
     // ─── Toast notifications ───────────────────────────────────────────────
 
     pub(crate) fn draw_toasts(&self, ctx: &egui::Context) {
-        if self.ui.toasts.is_empty() { return; }
+        if self.ui.toasts.is_empty() {
+            return;
+        }
         let scr = ctx.input(|i| i.viewport_rect());
         let mut y = scr.max.y - 54.0;
         for toast in self.ui.toasts.iter().rev() {
-            let a = ((toast.ttl.min(0.4) / 0.4) * 230.0) as u8;
+            // Fade out during last 0.4s, slide in during first 0.15s
+            let fade_a = ((toast.ttl.min(0.4) / 0.4) * 230.0) as u8;
+            let slide_progress = (1.0 - toast.anim_progress.min(1.0)) * 30.0; // slide from right
+                                                                              // Clamp to viewport so toasts never go off-screen at narrow widths
+            let x_pos = (scr.max.x - 310.0 + slide_progress).max(8.0);
+
             egui::Area::new(egui::Id::new(format!("toast_{}", toast.msg)))
-                .fixed_pos([scr.max.x - 310.0, y])
+                .fixed_pos([x_pos, y])
                 .order(egui::Order::Foreground)
                 .show(ctx, |ui| {
                     egui::Frame::NONE
-                        .fill(tint(self.pal.surface, a))
-                        .stroke(Stroke::new(1.5_f32, tint(toast.col, a)))
+                        .fill(tint(self.pal.surface, fade_a))
+                        .stroke(Stroke::new(1.5_f32, tint(toast.col, fade_a)))
                         .corner_radius(PANEL_RADIUS)
                         .inner_margin(egui::Margin::symmetric(14, 9))
                         .shadow(egui::epaint::Shadow {
@@ -146,12 +178,14 @@ impl App {
                             color: rgba(0, 0, 0, 80),
                         })
                         .show(ui, |ui| {
-                            ui.label(RichText::new(&toast.msg)
-                                .font(FontId::proportional(13.5)).color(tint(toast.col, a)));
+                            ui.label(
+                                RichText::new(&toast.msg)
+                                    .font(FontId::proportional(13.5))
+                                    .color(tint(toast.col, fade_a)),
+                            );
                         });
                 });
             y -= 46.0;
         }
     }
 }
-

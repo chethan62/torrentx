@@ -72,6 +72,14 @@ PANEL_RADIUS = 8.0. Small controls 4–6, buttons 5, panels 8. No large-radius d
 
 ### Toasts
 - `self.toast(msg, color)` — bottom transient, 2.5s. Success green, info accent.
+- Slide in from right (30px, ~150ms ease-out cubic), fade out last 0.4s. TTL 2.5s.
+
+### Motion (animation system, added 2026-08)
+- All easing centralized in `VisualTokens` (themes.rs): `easing` = ease-out cubic for entrances (`1-(1-t)³`), `easing_hover` = smoothstep for bidirectional hover.
+- Animated surfaces: search state transitions (fade, 200ms), table content on page/filter/sort change (overlay dissolve, 250ms), detail panel open/close (fade + downward settle 8px, 200ms open / 150ms close, cached `detail_row` so close animates), toasts (slide+fade).
+- Row hover: eased color lerp between base row and `row_hov` (100ms, smoothstep).
+- Press feedback: `svg_btn` shrinks to 94% while pointer-down (tactile confirmation).
+- Rule: entrances NEVER ease-in; hover/exit use symmetric ease; <300ms for everything.
 
 ## Decisions
 
@@ -83,3 +91,5 @@ PANEL_RADIUS = 8.0. Small controls 4–6, buttons 5, panels 8. No large-radius d
 | Full-row/cell click layers | User: "text not clickable" — every cell must register | 2026-08-22 |
 | Leading cell padding (6/4) | User: "dont align text to full left edge" | 2026-08 |
 | Interact-first, headless-verified | egui 0.36 hit-test proof in tests/click_repro.rs | 2026-08-22 |
+| Ease-out entrances, <300ms | Interface-design motion rules; fast start never feels slow | 2026-08-23 |
+| Press feedback on icon buttons | Tactile confirmation (scale 0.94 while held) | 2026-08-23 |

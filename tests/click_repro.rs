@@ -24,13 +24,17 @@ fn run_frame(ctx: &egui::Context, pos: Pos2, press: bool, release: bool) -> bool
     }
     let full_output = ctx.run_ui(
         RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(400.0, 300.0))),
+            screen_rect: Some(egui::Rect::from_min_size(
+                Pos2::ZERO,
+                egui::vec2(400.0, 300.0),
+            )),
             events,
             ..Default::default()
         },
         |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                let cell = egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(200.0, 30.0));
+                let cell =
+                    egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(200.0, 30.0));
                 let _ = ui.allocate_rect(cell, egui::Sense::hover());
                 // REPRO STACK:
                 let cell_resp = ui.interact(cell, egui::Id::new("cell"), egui::Sense::click());
@@ -56,7 +60,10 @@ fn click_on_text_registers() {
     run_frame(&ctx, text_pos, false, false); // hover
     run_frame(&ctx, text_pos, true, false); // press
     let clicked = run_frame(&ctx, text_pos, false, true); // release
-    assert!(clicked, "click on text should register on the interact layer");
+    assert!(
+        clicked,
+        "click on text should register on the interact layer"
+    );
 }
 
 #[test]

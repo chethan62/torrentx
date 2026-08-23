@@ -33,53 +33,99 @@ pub(crate) struct TorrentResult {
 // ─── App state types ───────────────────────────────────────────────────────
 
 #[derive(Clone, PartialEq)]
-pub(crate) enum SortCol { Name, Tracker, Size, Seeds, Leech, Ratio, Date }
+pub(crate) enum SortCol {
+    Name,
+    Tracker,
+    Size,
+    Seeds,
+    Leech,
+    Ratio,
+    Date,
+}
 
 #[derive(Clone, PartialEq)]
-pub(crate) enum SortDir { Asc, Desc }
+pub(crate) enum SortDir {
+    Asc,
+    Desc,
+}
 
 #[derive(Clone, PartialEq)]
-pub(crate) enum Tab { Search, Favorites, Rss, About }
+pub(crate) enum Tab {
+    Search,
+    Favorites,
+    Rss,
+    About,
+}
 
 /// Results-table columns (order is user-configurable via `Config::col_order`).
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum TableCol {
-    Name, Tracker, Size, Seeds, Leech, Ratio, Health, Date,
+    Name,
+    Tracker,
+    Size,
+    Seeds,
+    Leech,
+    Ratio,
+    Health,
+    Date,
 }
 
 impl TableCol {
     pub(crate) fn label(&self) -> &'static str {
         match self {
-            TableCol::Name => "Name", TableCol::Tracker => "Tracker",
-            TableCol::Size => "Size", TableCol::Seeds => "Seeds",
-            TableCol::Leech => "Leech", TableCol::Ratio => "Ratio",
-            TableCol::Health => "Health", TableCol::Date => "Date",
+            TableCol::Name => "Name",
+            TableCol::Tracker => "Tracker",
+            TableCol::Size => "Size",
+            TableCol::Seeds => "Seeds",
+            TableCol::Leech => "Leech",
+            TableCol::Ratio => "Ratio",
+            TableCol::Health => "Health",
+            TableCol::Date => "Date",
         }
     }
     pub(crate) fn from_name(s: &str) -> Option<Self> {
         Some(match s {
-            "Name" => TableCol::Name, "Tracker" => TableCol::Tracker,
-            "Size" => TableCol::Size, "Seeds" => TableCol::Seeds,
-            "Leech" => TableCol::Leech, "Ratio" => TableCol::Ratio,
-            "Health" => TableCol::Health, "Date" => TableCol::Date,
+            "Name" => TableCol::Name,
+            "Tracker" => TableCol::Tracker,
+            "Size" => TableCol::Size,
+            "Seeds" => TableCol::Seeds,
+            "Leech" => TableCol::Leech,
+            "Ratio" => TableCol::Ratio,
+            "Health" => TableCol::Health,
+            "Date" => TableCol::Date,
             _ => return None,
         })
     }
     pub(crate) fn width(&self) -> f32 {
         match self {
-            TableCol::Name => 295.0, TableCol::Tracker => 88.0,
-            TableCol::Size => 76.0, TableCol::Seeds => 66.0,
-            TableCol::Leech => 66.0, TableCol::Ratio => 58.0,
-            TableCol::Health => 78.0, TableCol::Date => 88.0,
+            TableCol::Name => 295.0,
+            TableCol::Tracker => 84.0,
+            TableCol::Size => 72.0,
+            TableCol::Seeds => 62.0,
+            TableCol::Leech => 62.0,
+            TableCol::Ratio => 56.0,
+            TableCol::Health => 72.0,
+            TableCol::Date => 84.0,
         }
     }
 }
 
 #[derive(Clone, PartialEq)]
-pub(crate) enum SearchState { Idle, Searching, Done, Error(String) }
+pub(crate) enum SearchState {
+    Idle,
+    Searching,
+    Done,
+    Error(String),
+}
 
 #[derive(Clone, PartialEq)]
-pub(crate) enum Hlth { All, Hot, Good, Slow, Dead }
+pub(crate) enum Hlth {
+    All,
+    Hot,
+    Good,
+    Slow,
+    Dead,
+}
 
 impl Hlth {
     pub(crate) fn label(&self) -> &'static str {
@@ -104,10 +150,15 @@ impl Hlth {
 // ─── Pure helpers ──────────────────────────────────────────────────────────
 
 pub(crate) fn fmt_size(b: u64) -> String {
-    if b >= 1_073_741_824 { format!("{:.2} GB", b as f64 / 1_073_741_824.0) }
-    else if b >= 1_048_576 { format!("{:.0} MB", b as f64 / 1_048_576.0) }
-    else if b >= 1_024 { format!("{:.0} KB", b as f64 / 1_024.0) }
-    else { format!("{b} B") }
+    if b >= 1_073_741_824 {
+        format!("{:.2} GB", b as f64 / 1_073_741_824.0)
+    } else if b >= 1_048_576 {
+        format!("{:.0} MB", b as f64 / 1_048_576.0)
+    } else if b >= 1_024 {
+        format!("{:.0} KB", b as f64 / 1_024.0)
+    } else {
+        format!("{b} B")
+    }
 }
 
 pub(crate) fn time_ago(s: &str) -> String {
@@ -116,11 +167,17 @@ pub(crate) fn time_ago(s: &str) -> String {
     {
         let secs = chrono::Utc::now()
             .signed_duration_since(dt.with_timezone(&chrono::Utc))
-            .num_seconds().max(0);
-        return if secs < 3600 { format!("{}m ago", secs / 60) }
-               else if secs < 86400 { format!("{}h ago", secs / 3600) }
-               else if secs < 604800 { format!("{}d ago", secs / 86400) }
-               else { dt.format("%Y-%m-%d").to_string() };
+            .num_seconds()
+            .max(0);
+        return if secs < 3600 {
+            format!("{}m ago", secs / 60)
+        } else if secs < 86400 {
+            format!("{}h ago", secs / 3600)
+        } else if secs < 604800 {
+            format!("{}d ago", secs / 86400)
+        } else {
+            dt.format("%Y-%m-%d").to_string()
+        };
     }
     s.get(..10).unwrap_or("?").to_string()
 }
@@ -134,22 +191,43 @@ pub(crate) fn pub_year(s: &str) -> u32 {
 }
 
 pub(crate) fn seed_col(s: u32) -> Color32 {
-    if s > 500 { rgb(34,197,94) } else if s > 100 { rgb(74,222,128) }
-    else if s > 10 { rgb(245,158,11) } else if s > 0 { rgb(249,115,22) }
-    else { rgb(239,68,68) }
+    if s > 500 {
+        rgb(34, 197, 94)
+    } else if s > 100 {
+        rgb(74, 222, 128)
+    } else if s > 10 {
+        rgb(245, 158, 11)
+    } else if s > 0 {
+        rgb(249, 115, 22)
+    } else {
+        rgb(239, 68, 68)
+    }
 }
 
 pub(crate) fn hlth_lbl(s: u32) -> &'static str {
-    if s > 500 {"HOT"} else if s > 100 {"GOOD"}
-    else if s > 10 {"SLOW"} else if s > 0 {"DYING"} else {"DEAD"}
+    if s > 500 {
+        "HOT"
+    } else if s > 100 {
+        "GOOD"
+    } else if s > 10 {
+        "SLOW"
+    } else if s > 0 {
+        "DYING"
+    } else {
+        "DEAD"
+    }
 }
 
 pub(crate) fn cat_col(cat: &str) -> Color32 {
     match cat.split('/').next().unwrap_or("").trim() {
-        "Movies" => rgb(245,158,11), "TV" => rgb(59,130,246),
-        "Music" => rgb(16,185,129), "Games" => rgb(139,92,246),
-        "Software" => rgb(6,182,212), "Anime" => rgb(236,72,153),
-        "Books" => rgb(249,115,22), _ => rgb(100,116,139),
+        "Movies" => rgb(245, 158, 11),
+        "TV" => rgb(59, 130, 246),
+        "Music" => rgb(16, 185, 129),
+        "Games" => rgb(139, 92, 246),
+        "Software" => rgb(6, 182, 212),
+        "Anime" => rgb(236, 72, 153),
+        "Books" => rgb(249, 115, 22),
+        _ => rgb(100, 116, 139),
     }
 }
 
@@ -159,7 +237,9 @@ pub(crate) fn urlenc(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
             b' ' => out.push('+'),
             _ => out.push_str(&format!("%{b:02X}")),
         }
@@ -168,18 +248,26 @@ pub(crate) fn urlenc(s: &str) -> String {
 }
 
 pub(crate) fn normalize(t: &str) -> String {
-    let stop = ["2160p","1080p","720p","480p","4k","uhd","bluray","bdrip","webrip",
-                "webdl","x264","x265","hevc","10bit","hdr","dolby","yify","yts","rarbg",
-                "mkv","mp4","avi","remux"];
+    let stop = [
+        "2160p", "1080p", "720p", "480p", "4k", "uhd", "bluray", "bdrip", "webrip", "webdl",
+        "x264", "x265", "hevc", "10bit", "hdr", "dolby", "yify", "yts", "rarbg", "mkv", "mp4",
+        "avi", "remux",
+    ];
     let mut s = t.to_lowercase();
-    for w in &stop { s = s.replace(w, " "); }
+    for w in &stop {
+        s = s.replace(w, " ");
+    }
     s.split_whitespace().take(4).collect::<Vec<_>>().join(" ")
 }
 
-pub(crate) fn now_str() -> String { chrono::Utc::now().format("%Y-%m-%d %H:%M").to_string() }
+pub(crate) fn now_str() -> String {
+    chrono::Utc::now().format("%Y-%m-%d %H:%M").to_string()
+}
 
 pub(crate) fn set_err(st: &Arc<Mutex<SearchState>>, msg: String) {
-    if let Ok(mut s) = st.lock() { *s = SearchState::Error(msg); }
+    if let Ok(mut s) = st.lock() {
+        *s = SearchState::Error(msg);
+    }
 }
 
 // ─── Search thread ─────────────────────────────────────────────────────────
@@ -203,8 +291,7 @@ const UPDATE_REPO: &str = "chethan62/torrentx";
 /// Check GitHub releases for a newer version. Returns the latest release tag
 /// (e.g. "v17.0.0") or None on failure / no newer version.
 pub(crate) fn check_update(current: &str) -> Option<String> {
-    let repo = std::env::var("TORRENTX_UPDATE_REPO")
-        .unwrap_or_else(|_| UPDATE_REPO.to_string());
+    let repo = std::env::var("TORRENTX_UPDATE_REPO").unwrap_or_else(|_| UPDATE_REPO.to_string());
     let ep = format!("https://api.github.com/repos/{repo}/releases/latest");
     let resp = shared_client()
         .get(ep)
@@ -220,14 +307,20 @@ pub(crate) fn check_update(current: &str) -> Option<String> {
     let latest_trim = latest.trim_start_matches('v');
     let cur_trim = current.trim_start_matches('v');
     // Compare dotted versions
-    let parse = |s: &str| -> Vec<u64> {
-        s.split('.').filter_map(|p| p.parse::<u64>().ok()).collect()
-    };
+    let parse =
+        |s: &str| -> Vec<u64> { s.split('.').filter_map(|p| p.parse::<u64>().ok()).collect() };
     let (l, c) = (parse(latest_trim), parse(cur_trim));
-    let newer = l.iter().zip(c.iter()).find(|(a, b)| a != b)
+    let newer = l
+        .iter()
+        .zip(c.iter())
+        .find(|(a, b)| a != b)
         .map(|(a, b)| a > b)
         .unwrap_or(l.len() > c.len());
-    if newer { Some(latest.to_string()) } else { None }
+    if newer {
+        Some(latest.to_string())
+    } else {
+        None
+    }
 }
 
 /// Pull `tag_name` out of a GitHub "latest release" JSON body via serde_json.
@@ -235,7 +328,9 @@ pub(crate) fn check_update(current: &str) -> Option<String> {
 /// and unit-testable without a live server.
 fn parse_latest_tag(body: &str) -> Option<String> {
     #[derive(serde::Deserialize)]
-    struct Latest { tag_name: String }
+    struct Latest {
+        tag_name: String,
+    }
     let l: Latest = serde_json::from_str(body).ok()?;
     Some(l.tag_name)
 }
@@ -244,7 +339,9 @@ fn parse_latest_tag(body: &str) -> Option<String> {
 /// Returns an error message, or None if the URL is acceptable.
 pub(crate) fn validate_jackett_url(s: &str) -> Option<&'static str> {
     let t = s.trim();
-    if t.is_empty() { return Some("URL is empty"); }
+    if t.is_empty() {
+        return Some("URL is empty");
+    }
     let lower = t.to_lowercase();
     if lower.starts_with("http://") {
         // Allowed (Jackett commonly runs on plain http locally), but warn.
@@ -260,7 +357,9 @@ pub(crate) fn validate_jackett_url(s: &str) -> Option<&'static str> {
 /// a 32- or 40-char hex/base32 info-hash. Rejects empty / malformed strings.
 pub(crate) fn is_magnet(s: &str) -> bool {
     let s = s.trim();
-    if !s.starts_with("magnet:?xt=urn:btih:") { return false; }
+    if !s.starts_with("magnet:?xt=urn:btih:") {
+        return false;
+    }
     // Grab the xt=urn:btih:<hash> value (may be followed by &dn=... etc.)
     let rest = &s["magnet:?xt=urn:btih:".len()..];
     let hash = rest.split('&').next().unwrap_or("");
@@ -294,9 +393,14 @@ pub(crate) fn category_id(label: &str) -> Option<&'static str> {
 pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<Vec<String>> {
     let ep = format!(
         "{}/api/v2.0/indexers/all/results/torznab/api?apikey={}&t=indexers",
-        url.trim_end_matches('/'), key
+        url.trim_end_matches('/'),
+        key
     );
-    let resp = shared_client().get(&ep).timeout(Duration::from_secs(15)).send().ok()?;
+    let resp = shared_client()
+        .get(&ep)
+        .timeout(Duration::from_secs(15))
+        .send()
+        .ok()?;
     let body = resp.text().ok()?;
     parse_indexers_xml(&body)
 }
@@ -314,7 +418,9 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_lowercase();
-                if tag != "indexer" { continue; }
+                if tag != "indexer" {
+                    continue;
+                }
                 let mut id = None;
                 let mut configured = false;
                 for attr in e.attributes().flatten() {
@@ -328,7 +434,11 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
                     }
                 }
                 if configured {
-                    if let Some(id) = id { if !id.is_empty() { out.push(id); } }
+                    if let Some(id) = id {
+                        if !id.is_empty() {
+                            out.push(id);
+                        }
+                    }
                 }
             }
             Ok(Event::Eof) => break,
@@ -344,22 +454,39 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_search(
-    url: String, key: String, query: String, cat: String, indexer: String, timeout: u64,
+    url: String,
+    key: String,
+    query: String,
+    cat: String,
+    indexer: String,
+    timeout: u64,
     results: Arc<Mutex<Vec<TorrentResult>>>,
     state: Arc<Mutex<SearchState>>,
     count: Arc<Mutex<usize>>,
-    epoch: Arc<AtomicU64>, gen: u64,
+    epoch: Arc<AtomicU64>,
+    gen: u64,
 ) {
     thread::spawn(move || {
         // Epoch guard: a newer search invalidates this one — never touch state,
         // so a slow old response can't overwrite fresh results (search race).
-        if epoch.load(Ordering::Relaxed) != gen { return; }
+        if epoch.load(Ordering::Relaxed) != gen {
+            return;
+        }
         let live = || epoch.load(Ordering::Relaxed) == gen;
-        if let Ok(mut s) = state.lock() { *s = SearchState::Searching; }
-        let idx = if indexer.is_empty() || indexer == "All" { "all" } else { indexer.as_str() };
+        if let Ok(mut s) = state.lock() {
+            *s = SearchState::Searching;
+        }
+        let idx = if indexer.is_empty() || indexer == "All" {
+            "all"
+        } else {
+            indexer.as_str()
+        };
         let mut ep = format!(
             "{}/api/v2.0/indexers/{}/results?apikey={}&Query={}",
-            url.trim_end_matches('/'), urlenc(idx), urlenc(&key), urlenc(&query)
+            url.trim_end_matches('/'),
+            urlenc(idx),
+            urlenc(&key),
+            urlenc(&query)
         );
         if cat != "All" {
             if let Some(id) = category_id(&cat) {
@@ -367,45 +494,75 @@ pub(crate) fn start_search(
             }
         }
 
-        match shared_client().get(&ep).timeout(Duration::from_secs(timeout)).send() {
+        match shared_client()
+            .get(&ep)
+            .timeout(Duration::from_secs(timeout))
+            .send()
+        {
             Ok(resp) => {
                 let st = resp.status();
                 if st.is_success() {
                     match resp.json::<JackettResponse>() {
                         Ok(data) => {
-                            if !live() { return; }
+                            if !live() {
+                                return;
+                            }
                             let n = data.results.len();
-                            if let Ok(mut r) = results.lock() { *r = data.results; }
-                            if let Ok(mut c) = count.lock() { *c = n; }
-                            if let Ok(mut s) = state.lock() { *s = SearchState::Done; }
+                            if let Ok(mut r) = results.lock() {
+                                *r = data.results;
+                            }
+                            if let Ok(mut c) = count.lock() {
+                                *c = n;
+                            }
+                            if let Ok(mut s) = state.lock() {
+                                *s = SearchState::Done;
+                            }
                         }
-                        Err(e) => if live() { set_err(&state, format!("Parse error: {e}")) },
+                        Err(e) => {
+                            if live() {
+                                set_err(&state, format!("Parse error: {e}"))
+                            }
+                        }
                     }
                 } else if live() {
-                    set_err(&state, match st.as_u16() {
-                        401 => "Invalid API key — open Settings to update it.".into(),
-                        403 => "Forbidden — check Jackett permissions.".into(),
-                        404 => "Jackett endpoint not found — verify URL in Settings.".into(),
-                        500 => "Jackett internal error — check Jackett logs.".into(),
-                        n => format!("HTTP {n} from Jackett"),
-                    });
+                    set_err(
+                        &state,
+                        match st.as_u16() {
+                            401 => "Invalid API key — open Settings to update it.".into(),
+                            403 => "Forbidden — check Jackett permissions.".into(),
+                            404 => "Jackett endpoint not found — verify URL in Settings.".into(),
+                            500 => "Jackett internal error — check Jackett logs.".into(),
+                            n => format!("HTTP {n} from Jackett"),
+                        },
+                    );
                 }
             }
-            Err(e) => if live() { set_err(&state, if e.is_connect() {
-                format!("Cannot reach Jackett at {url}\nRun: sudo systemctl start jackett")
-            } else if e.is_timeout() {
-                format!("Timed out after {timeout}s — increase timeout in Settings")
-            } else {
-                format!("Network error: {e}")
-            }) },
+            Err(e) => {
+                if live() {
+                    set_err(
+                        &state,
+                        if e.is_connect() {
+                            format!(
+                                "Cannot reach Jackett at {url}\nRun: sudo systemctl start jackett"
+                            )
+                        } else if e.is_timeout() {
+                            format!("Timed out after {timeout}s — increase timeout in Settings")
+                        } else {
+                            format!("Network error: {e}")
+                        },
+                    )
+                }
+            }
         };
     });
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::{category_id, fmt_size, is_magnet, normalize, parse_indexers_xml, parse_latest_tag, pub_year, urlenc, validate_jackett_url};
+    use super::{
+        category_id, fmt_size, is_magnet, normalize, parse_indexers_xml, parse_latest_tag,
+        pub_year, urlenc, validate_jackett_url,
+    };
 
     #[test]
     fn category_mapping() {
@@ -452,7 +609,10 @@ mod tests {
         // 2160p / UHD 4K releases dedupe with their 1080p counterparts.
         assert_eq!(normalize("Dune 2024 2160p UHD WEBRip"), "dune 2024");
         // Stops after 4 words.
-        assert_eq!(normalize("one two three four five six"), "one two three four");
+        assert_eq!(
+            normalize("one two three four five six"),
+            "one two three four"
+        );
         assert_eq!(normalize(""), "");
     }
 
@@ -486,8 +646,14 @@ mod tests {
     fn validates_jackett_url_scheme() {
         assert_eq!(validate_jackett_url("http://localhost:9117"), None);
         assert_eq!(validate_jackett_url("https://jackett.example.com"), None);
-        assert_eq!(validate_jackett_url("localhost:9117"), Some("URL must start with http:// or https://"));
-        assert_eq!(validate_jackett_url("ftp://host"), Some("URL must start with http:// or https://"));
+        assert_eq!(
+            validate_jackett_url("localhost:9117"),
+            Some("URL must start with http:// or https://")
+        );
+        assert_eq!(
+            validate_jackett_url("ftp://host"),
+            Some("URL must start with http:// or https://")
+        );
         assert_eq!(validate_jackett_url(""), Some("URL is empty"));
         assert_eq!(validate_jackett_url("   "), Some("URL is empty"));
     }

@@ -53,8 +53,12 @@ impl Default for Config {
             row_height: ROW_HEIGHT_NORMAL,
             font_size: 14.0,
             show_cat_bar: true,
-            col_tracker: true, col_size: true, col_leech: true,
-            col_ratio: true, col_health: true, col_date: true,
+            col_tracker: true,
+            col_size: true,
+            col_leech: true,
+            col_ratio: true,
+            col_health: true,
+            col_date: true,
             rss_feeds: vec![],
             rss_refresh_secs: default_rss_refresh(),
             accent: None,
@@ -100,7 +104,10 @@ pub(crate) fn load_cfg() -> Config {
         Some(s) => match serde_json::from_str(s) {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("torrentx: failed to parse {} ({e}); using defaults", path.display());
+                eprintln!(
+                    "torrentx: failed to parse {} ({e}); using defaults",
+                    path.display()
+                );
                 Config::default()
             }
         },
@@ -108,7 +115,10 @@ pub(crate) fn load_cfg() -> Config {
             // Warn only for an explicit --config that's missing/unreadable, not
             // the normal first-run (no config yet) case.
             if CONFIG_OVERRIDE.get().is_some() {
-                eprintln!("torrentx: config file {} not found; using defaults", path.display());
+                eprintln!(
+                    "torrentx: config file {} not found; using defaults",
+                    path.display()
+                );
             }
             Config::default()
         }
@@ -130,8 +140,14 @@ pub(crate) fn heal_col_order(mut c: Config) -> Config {
 /// The canonical column order, used as the default and to heal old configs.
 pub(crate) fn default_col_order() -> Vec<String> {
     vec![
-        "Name".into(), "Tracker".into(), "Size".into(), "Seeds".into(),
-        "Leech".into(), "Ratio".into(), "Health".into(), "Date".into(),
+        "Name".into(),
+        "Tracker".into(),
+        "Size".into(),
+        "Seeds".into(),
+        "Leech".into(),
+        "Ratio".into(),
+        "Health".into(),
+        "Date".into(),
     ]
 }
 
@@ -181,4 +197,3 @@ mod tests {
         assert_eq!(Config::default().col_order, default_col_order());
     }
 }
-

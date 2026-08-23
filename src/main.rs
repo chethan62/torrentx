@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-
 // ─── Modules ────────────────────────────────────────────────────────
 mod app;
 mod config;
@@ -21,15 +20,15 @@ use std::time::Duration;
 
 pub(crate) const MARGIN_DEFAULT: f32 = 12.0;
 
-
-pub(crate) const CATS: &[&str] = &["All", "Movies", "TV", "Music", "PC Games", "Software", "Anime", "Books", "XXX"];
+pub(crate) const CATS: &[&str] = &[
+    "All", "Movies", "TV", "Music", "PC Games", "Software", "Anime", "Books", "XXX",
+];
 pub(crate) const SPIN: &[&str] = &["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
 
 /// CSV field escaping: wrap in quotes, double any embedded quotes.
 pub(crate) fn csv_esc(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
-
 
 // ─── Small UI buttons ──────────────────────────────────────────────────────
 
@@ -39,31 +38,46 @@ pub(crate) fn act_btn(ui: &mut egui::Ui, label: &str, tip: &str, color: Color32)
             .fill(tint(color, 18))
             .stroke(Stroke::new(1.0_f32, tint(color, 70)))
             .corner_radius(5.0)
-            .min_size(Vec2::new(0.0, 25.0))
-    ).on_hover_text(tip).clicked()
+            .min_size(Vec2::new(0.0, 25.0)),
+    )
+    .on_hover_text(tip)
+    .clicked()
 }
 
 /// A high-quality SVG icon button — renders an embedded Lucide SVG via
 /// egui's image loader (resvg), tinted to the theme color. Professional
 /// icon design, vector-crisp, no glyphs, no tofu. egui caches the
 /// rasterized image by URI. Returns true when clicked.
-pub(crate) fn svg_btn(
-    ui: &mut egui::Ui,
-    icon: SvgIcon,
-    tip: &str,
-    color: Color32,
-) -> bool {
+pub(crate) fn svg_btn(ui: &mut egui::Ui, icon: SvgIcon, tip: &str, color: Color32) -> bool {
     let size = egui::vec2(32.0, 28.0);
     let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
     let rounding = egui::CornerRadius::same(5);
     let painter = ui.painter_at(rect);
+
+    // Press feedback: shrink the hit surface slightly while held (tactile
+    // confirmation the click registered — interface-design motion rule).
+    let press_scale = if resp.is_pointer_button_down_on() {
+        0.94
+    } else {
+        1.0
+    };
+    let rect = if press_scale < 1.0 {
+        egui::Rect::from_center_size(rect.center(), rect.size() * press_scale)
+    } else {
+        rect
+    };
 
     if resp.hovered() || resp.clicked() {
         painter.rect_filled(rect, rounding, tint(color, 26));
     } else {
         painter.rect_filled(rect, rounding, tint(color, 14));
     }
-    painter.rect_stroke(rect.shrink(0.5), rounding, Stroke::new(1.0, tint(color, 70)), egui::StrokeKind::Outside);
+    painter.rect_stroke(
+        rect.shrink(0.5),
+        rounding,
+        Stroke::new(1.0, tint(color, 70)),
+        egui::StrokeKind::Outside,
+    );
 
     // Draw the SVG tinted to the theme color (icon area centered in button).
     // Lucide uses stroke="currentColor"; resvg renders that black, and egui's
@@ -82,10 +96,25 @@ pub(crate) fn svg_btn(
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum SvgIcon {
-    Magnet, Copy, Download, Star, Info, Web,
-    Search, Rss, Settings, Close, Refresh, Bookmark,
-    ArrowUp, ArrowDown, Circle, CircleDot,
-    ChevronLeft, ChevronRight, Check,
+    Magnet,
+    Copy,
+    Download,
+    Star,
+    Info,
+    Web,
+    Search,
+    Rss,
+    Settings,
+    Close,
+    Refresh,
+    Bookmark,
+    ArrowUp,
+    ArrowDown,
+    Circle,
+    CircleDot,
+    ChevronLeft,
+    ChevronRight,
+    Check,
 }
 
 impl SvgIcon {
@@ -155,16 +184,26 @@ pub(crate) fn svg_image(icon: SvgIcon, size: f32, color: Color32) -> egui::Image
 /// A high-quality vector checkbox — drawn with the Painter (rounded rect +
 /// check mark), NO font glyphs. Single allocation, whole-rect clickable.
 /// Uses the accent color when checked. Returns the Response.
-pub(crate) fn v_checkbox(ui: &mut egui::Ui, checked: bool, label: &str, accent: Color32) -> egui::Response {
+pub(crate) fn v_checkbox(
+    ui: &mut egui::Ui,
+    checked: bool,
+    label: &str,
+    accent: Color32,
+) -> egui::Response {
     let icon_size = 15.0;
     let spacing = ui.spacing().item_spacing.x;
 
     // Measure label
     let font_id = egui::TextStyle::Body.resolve(ui.style());
-    let galley = ui.painter().layout_no_wrap(label.to_owned(), font_id, ui.visuals().text_color());
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font_id, ui.visuals().text_color());
 
     // Single allocation for the whole row (icon + spacing + text)
-    let desired = egui::vec2(icon_size + spacing + galley.size().x, icon_size.max(galley.size().y) + 2.0);
+    let desired = egui::vec2(
+        icon_size + spacing + galley.size().x,
+        icon_size.max(galley.size().y) + 2.0,
+    );
     let (rect, response) = ui.allocate_exact_size(desired, egui::Sense::click());
 
     if response.hovered() {
@@ -182,17 +221,41 @@ pub(crate) fn v_checkbox(ui: &mut egui::Ui, checked: bool, label: &str, accent: 
         if checked {
             p.rect_filled(box_rect, rounding, accent);
             // Check mark (two lines); contrast against the accent fill
-            let check_col = if ui.visuals().dark_mode { Color32::from_rgb(12, 12, 16) } else { Color32::WHITE };
+            let check_col = if ui.visuals().dark_mode {
+                Color32::from_rgb(12, 12, 16)
+            } else {
+                Color32::WHITE
+            };
             let ck = egui::Stroke::new(2.2, check_col);
             let cc = box_rect.center();
-            p.line_segment([egui::pos2(cc.x - 3.5, cc.y), egui::pos2(cc.x - 0.8, cc.y + 3.0)], ck);
-            p.line_segment([egui::pos2(cc.x - 0.8, cc.y + 3.0), egui::pos2(cc.x + 4.0, cc.y - 3.5)], ck);
+            p.line_segment(
+                [
+                    egui::pos2(cc.x - 3.5, cc.y),
+                    egui::pos2(cc.x - 0.8, cc.y + 3.0),
+                ],
+                ck,
+            );
+            p.line_segment(
+                [
+                    egui::pos2(cc.x - 0.8, cc.y + 3.0),
+                    egui::pos2(cc.x + 4.0, cc.y - 3.5),
+                ],
+                ck,
+            );
         } else {
             p.rect_filled(box_rect, rounding, Color32::TRANSPARENT);
-            p.rect_stroke(box_rect, rounding, egui::Stroke::new(1.3, ui.visuals().text_color().gamma_multiply(0.6)), egui::StrokeKind::Inside);
+            p.rect_stroke(
+                box_rect,
+                rounding,
+                egui::Stroke::new(1.3, ui.visuals().text_color().gamma_multiply(0.6)),
+                egui::StrokeKind::Inside,
+            );
         }
         // Label
-        let text_pos = egui::pos2(rect.left() + icon_size + spacing, rect.center().y - galley.size().y / 2.0);
+        let text_pos = egui::pos2(
+            rect.left() + icon_size + spacing,
+            rect.center().y - galley.size().y / 2.0,
+        );
         p.galley(text_pos, galley, ui.visuals().text_color());
     }
     response
@@ -211,7 +274,9 @@ pub(crate) fn icon_text_btn(
         enabled,
         egui::Button::image_and_text(
             svg_image(icon, 12.0, color),
-            RichText::new(label).font(FontId::proportional(12.0)).color(color),
+            RichText::new(label)
+                .font(FontId::proportional(12.0))
+                .color(color),
         )
         .fill(tint(color, 14))
         .stroke(Stroke::new(1.0, tint(color, 70)))
@@ -222,12 +287,7 @@ pub(crate) fn icon_text_btn(
 }
 
 /// Non-interactive status pill with a tofu-proof SVG icon.
-pub(crate) fn status_icon_pill(
-    ui: &mut egui::Ui,
-    icon: SvgIcon,
-    label: &str,
-    col: Color32,
-) {
+pub(crate) fn status_icon_pill(ui: &mut egui::Ui, icon: SvgIcon, label: &str, col: Color32) {
     egui::Frame::NONE
         .fill(tint(col, 20))
         .corner_radius(6.0)
@@ -236,7 +296,11 @@ pub(crate) fn status_icon_pill(
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 svg_icon(ui, icon, 9.0, col);
-                ui.label(RichText::new(label).font(FontId::proportional(10.5)).color(col));
+                ui.label(
+                    RichText::new(label)
+                        .font(FontId::proportional(10.5))
+                        .color(col),
+                );
             });
         });
 }
@@ -244,21 +308,31 @@ pub(crate) fn status_icon_pill(
 pub(crate) fn wide_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> bool {
     let w = ui.available_width().max(200.0);
     ui.add(
-        egui::Button::new(RichText::new(label).font(FontId::proportional(13.0)).color(color))
-            .fill(tint(color, 18))
-            .stroke(Stroke::new(1.0_f32, tint(color, 80)))
-            .corner_radius(6.0)
-            .min_size(Vec2::new(w, 34.0))
-    ).clicked()
+        egui::Button::new(
+            RichText::new(label)
+                .font(FontId::proportional(13.0))
+                .color(color),
+        )
+        .fill(tint(color, 18))
+        .stroke(Stroke::new(1.0_f32, tint(color, 80)))
+        .corner_radius(6.0)
+        .min_size(Vec2::new(w, 34.0)),
+    )
+    .clicked()
 }
 
 pub(crate) fn outline_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> bool {
     ui.add(
-        egui::Button::new(RichText::new(label).font(FontId::proportional(12.0)).color(color))
-            .fill(Color32::TRANSPARENT)
-            .stroke(Stroke::new(1.0_f32, tint(color, 80)))
-            .corner_radius(4.0)
-    ).clicked()
+        egui::Button::new(
+            RichText::new(label)
+                .font(FontId::proportional(12.0))
+                .color(color),
+        )
+        .fill(Color32::TRANSPARENT)
+        .stroke(Stroke::new(1.0_f32, tint(color, 80)))
+        .corner_radius(4.0),
+    )
+    .clicked()
 }
 
 /// Wide button with an SVG icon + text label (professional look, no glyphs).
@@ -269,37 +343,71 @@ pub(crate) fn wide_icon_btn(ui: &mut egui::Ui, icon: SvgIcon, label: &str, color
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 34.0), egui::Sense::click());
     if ui.is_rect_visible(rect) {
         let painter = ui.painter_at(rect);
-        let fill = if resp.hovered() { tint(color, 26) } else { tint(color, 18) };
+        let fill = if resp.hovered() {
+            tint(color, 26)
+        } else {
+            tint(color, 18)
+        };
         painter.rect_filled(rect, egui::CornerRadius::same(6), fill);
-        painter.rect_stroke(rect.shrink(0.5), egui::CornerRadius::same(6), Stroke::new(1.0, tint(color, 80)), egui::StrokeKind::Outside);
+        painter.rect_stroke(
+            rect.shrink(0.5),
+            egui::CornerRadius::same(6),
+            Stroke::new(1.0, tint(color, 80)),
+            egui::StrokeKind::Outside,
+        );
     }
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     child.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
         svg_icon(ui, icon, 15.0, color);
-        ui.label(RichText::new(label).font(FontId::proportional(13.0)).color(color));
+        ui.label(
+            RichText::new(label)
+                .font(FontId::proportional(13.0))
+                .color(color),
+        );
     });
     resp.clicked()
 }
 
 /// Outline button with an SVG icon + text label (professional, no glyphs).
-pub(crate) fn outline_icon_btn(ui: &mut egui::Ui, icon: SvgIcon, label: &str, color: Color32) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width().min(160.0), 26.0), egui::Sense::click());
+pub(crate) fn outline_icon_btn(
+    ui: &mut egui::Ui,
+    icon: SvgIcon,
+    label: &str,
+    color: Color32,
+) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width().min(160.0), 26.0),
+        egui::Sense::click(),
+    );
     if ui.is_rect_visible(rect) {
         let painter = ui.painter_at(rect);
-        painter.rect_stroke(rect.shrink(0.5), egui::CornerRadius::same(4), Stroke::new(1.0, tint(color, 80)), egui::StrokeKind::Outside);
+        painter.rect_stroke(
+            rect.shrink(0.5),
+            egui::CornerRadius::same(4),
+            Stroke::new(1.0, tint(color, 80)),
+            egui::StrokeKind::Outside,
+        );
     }
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     child.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
         svg_icon(ui, icon, 13.0, color);
-        ui.label(RichText::new(label).font(FontId::proportional(12.0)).color(color));
+        ui.label(
+            RichText::new(label)
+                .font(FontId::proportional(12.0))
+                .color(color),
+        );
     });
     resp.clicked()
 }
 
 pub(crate) fn lbl(ui: &mut egui::Ui, text: &str, color: Color32, fs: f32) {
-    ui.label(RichText::new(text).font(FontId::proportional(fs)).color(color));
+    ui.label(
+        RichText::new(text)
+            .font(FontId::proportional(fs))
+            .color(color),
+    );
 }
 
 /// A labeled single-line input: `Label: [input]` on one row.
@@ -316,8 +424,12 @@ pub(crate) fn labeled_input(
         ui.add_space(4.0);
         lbl(ui, label, dim, fs);
         ui.add_space(4.0);
-        ui.add(egui::TextEdit::singleline(value)
-            .desired_width(width).hint_text(hint).font(FontId::proportional(fs)));
+        ui.add(
+            egui::TextEdit::singleline(value)
+                .desired_width(width)
+                .hint_text(hint)
+                .font(FontId::proportional(fs)),
+        );
     });
 }
 
@@ -341,11 +453,16 @@ impl eframe::App for App {
         if TOGGLE_VIS.swap(false, std::sync::atomic::Ordering::SeqCst) {
             let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(!focused));
-            if focused { ctx.request_repaint(); }
+            if focused {
+                ctx.request_repaint();
+            }
         }
 
         // Fetch indexer list once (background, so UI never blocks)
-        if self.net.indexers.is_empty() && !self.net.indexers_loading && !self.cfg.api_key.is_empty() {
+        if self.net.indexers.is_empty()
+            && !self.net.indexers_loading
+            && !self.cfg.api_key.is_empty()
+        {
             let url = self.cfg.jackett_url.clone();
             let key = self.cfg.api_key.clone();
             let handle = self.net.indexers_handle.clone();
@@ -385,7 +502,10 @@ impl eframe::App for App {
             ctx.request_repaint_after(Duration::from_millis(80));
             let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.1);
             self.ui.spin_t += dt;
-            if self.ui.spin_t > 0.1 { self.ui.spin_t = 0.0; self.ui.spin_i = (self.ui.spin_i + 1) % SPIN.len(); }
+            if self.ui.spin_t > 0.1 {
+                self.ui.spin_t = 0.0;
+                self.ui.spin_i = (self.ui.spin_i + 1) % SPIN.len();
+            }
 
             // Watchdog: if the search thread never completes (dead thread,
             // hung connection), force Error so the spinner stops and the UI
@@ -393,26 +513,88 @@ impl eframe::App for App {
             if let Some(t) = self.ui.t_start {
                 let budget = Duration::from_secs(self.cfg.timeout_secs.max(10) + 15);
                 if t.elapsed() > budget {
-                    jackett::set_err(&self.search.state,
-                        format!("Search timed out after {}s — check Jackett is running", budget.as_secs()));
+                    jackett::set_err(
+                        &self.search.state,
+                        format!(
+                            "Search timed out after {}s — check Jackett is running",
+                            budget.as_secs()
+                        ),
+                    );
                     self.ui.t_start = None;
                     ctx.request_repaint();
                 }
             }
         }
         if matches!(state, SearchState::Done | SearchState::Error(_)) {
-            if let Some(t) = self.ui.t_start.take() { self.ui.t_done = Some(t.elapsed().as_secs_f64()); }
+            if let Some(t) = self.ui.t_start.take() {
+                self.ui.t_done = Some(t.elapsed().as_secs_f64());
+            }
         }
 
-        // Toast decay
+        // Toast decay + animation progress
         let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.1);
-        self.ui.toasts.retain_mut(|t| { t.ttl -= dt; t.ttl > 0.0 });
+        self.ui.toasts.retain_mut(|t| {
+            t.ttl -= dt;
+            // Animate in (0.15s) and out (handled by fade in draw_toasts)
+            t.anim_progress = (t.anim_progress + dt / 0.15).min(1.0);
+            t.ttl > 0.0
+        });
+
+        // Row hover animation (smooth transition between rows)
+        if self.ui.hovered != self.ui.prev_hovered {
+            self.ui.prev_hovered = self.ui.hovered;
+            self.ui.row_hover_anim = 0.0;
+        } else if self.ui.hovered.is_some() {
+            self.ui.row_hover_anim = (self.ui.row_hover_anim + dt / 0.1).min(1.0);
+        } else {
+            self.ui.row_hover_anim = (self.ui.row_hover_anim - dt / 0.1).max(0.0);
+        }
+
+        // Search state transition animation
+        if self.ui.prev_search_state != state {
+            self.ui.prev_search_state = state.clone();
+            self.ui.search_state_anim = 0.0;
+        } else {
+            self.ui.search_state_anim = (self.ui.search_state_anim + dt / 0.2).min(1.0);
+        }
+
+        // Table content animation — reset when the page changes (page turns,
+        // filters/sort changed → page was reset to 0 by the caller)
+        if self.ui.last_table_page != self.search.page {
+            self.ui.last_table_page = self.search.page;
+            self.ui.table_anim = 0.0;
+        } else {
+            self.ui.table_anim = (self.ui.table_anim + dt / 0.25).min(1.0);
+        }
+
+        // Detail panel open/close animation — drive toward the target state.
+        // Both the search detail panel (detail_open) and the RSS item panel
+        // (rss_detail) share this one clock; whichever is open drives it.
+        let target = if self.ui.detail_open || self.rss.rss_detail.is_some() {
+            1.0
+        } else {
+            0.0
+        };
+        let speed = if self.ui.detail_open {
+            1.0 / 0.2
+        } else {
+            1.0 / 0.15
+        };
+        let delta = speed * dt;
+        self.ui.detail_anim = if self.ui.detail_anim < target {
+            (self.ui.detail_anim + delta).min(target)
+        } else {
+            (self.ui.detail_anim - delta).max(target)
+        };
+        self.ui.prev_detail_open = self.ui.detail_open;
 
         // Global shortcuts
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::F)) {
             ctx.memory_mut(|m| m.request_focus(egui::Id::new("q")));
         }
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::R)) { self.do_search(); }
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::R)) {
+            self.do_search();
+        }
         // Ctrl+A — select all visible results (batch mode auto-enables).
         // Skipped while a TextEdit owns the keyboard, so select-all still
         // works inside the query/filters/settings inputs.
@@ -425,16 +607,26 @@ impl eframe::App for App {
                 let page_s = self.page_slice(&sorted);
                 let base = self.search.page * self.cfg.page_size;
                 self.ui.sel_set = (0..page_s.len()).map(|i| base + i).collect();
-                self.toast(&format!("Selected {} results", page_s.len()), self.pal.green);
+                self.toast(
+                    &format!("Selected {} results", page_s.len()),
+                    self.pal.green,
+                );
             }
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            if self.ui.detail_open { self.ui.detail_open = false; } else { self.search.query.clear(); self.ui.show_hist = false; }
+            if self.ui.detail_open {
+                self.ui.detail_open = false;
+            } else {
+                self.search.query.clear();
+                self.ui.show_hist = false;
+            }
         }
         // Copy magnet from detail panel with Ctrl+C — only when no TextEdit
         // is focused (don't clobber the clipboard while copying typed text).
-        if self.ui.detail_open && !editing
-            && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C)) {
+        if self.ui.detail_open
+            && !editing
+            && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C))
+        {
             if let Some(idx) = self.ui.selected {
                 let raw = self.all_results();
                 let sorted = self.filtered(&raw);
@@ -451,27 +643,52 @@ impl eframe::App for App {
         // ── Status bar ───────────────────────────────────────────────────
         egui::Panel::bottom("sb")
             .default_size(26.0)
-            .frame(egui::Frame::NONE
-                .fill(self.pal.hdr).stroke(Stroke::new(1.0_f32, self.pal.border))
-                .inner_margin(egui::Margin::symmetric(12, 4)))
+            .frame(
+                egui::Frame::NONE
+                    .fill(self.pal.hdr)
+                    .stroke(Stroke::new(1.0_f32, self.pal.border))
+                    .inner_margin(egui::Margin::symmetric(12, 4)),
+            )
             .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
                     match &state {
                         SearchState::Idle => {
-                            lbl(ui, "Ready — type a query and press Search", self.pal.dim, 12.0);
+                            lbl(
+                                ui,
+                                "Ready — type a query and press Search",
+                                self.pal.dim,
+                                12.0,
+                            );
                         }
                         SearchState::Searching => {
                             let sp = SPIN[self.ui.spin_i];
-                            let el = self.ui.t_start.as_ref()
+                            let el = self
+                                .ui
+                                .t_start
+                                .as_ref()
                                 .map(|t| format!("  {:.1}s", t.elapsed().as_secs_f64()))
                                 .unwrap_or_default();
-                            lbl(ui, &format!("{sp} Searching \"{}\"{}", self.search.last_query, el), self.pal.accent, 12.0);
+                            lbl(
+                                ui,
+                                &format!("{sp} Searching \"{}\"{}", self.search.last_query, el),
+                                self.pal.accent,
+                                12.0,
+                            );
                         }
                         SearchState::Done => {
                             let n = self.total_count();
-                            let e = self.ui.t_done.map(|e| format!("  ({:.1}s)", e)).unwrap_or_default();
+                            let e = self
+                                .ui
+                                .t_done
+                                .map(|e| format!("  ({:.1}s)", e))
+                                .unwrap_or_default();
                             svg_icon(ui, SvgIcon::Check, 12.0, self.pal.green);
-                            lbl(ui, &format!("{n} results for \"{}\"{}", self.search.last_query, e), self.pal.green, 12.0);
+                            lbl(
+                                ui,
+                                &format!("{n} results for \"{}\"{}", self.search.last_query, e),
+                                self.pal.green,
+                                12.0,
+                            );
                         }
                         SearchState::Error(e) => {
                             svg_icon(ui, SvgIcon::Close, 12.0, self.pal.red);
@@ -479,8 +696,12 @@ impl eframe::App for App {
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        lbl(ui, "↑↓ Enter  D  F  M  Esc  Ctrl+F  Ctrl+R",
-                            self.pal.dim, 10.5);
+                        lbl(
+                            ui,
+                            "↑↓ Enter  D  F  M  Esc  Ctrl+F  Ctrl+R",
+                            self.pal.dim,
+                            10.5,
+                        );
                     });
                 });
             });
@@ -495,9 +716,12 @@ impl eframe::App for App {
         // ── Settings panel ───────────────────────────────────────────────
         if self.ui.show_settings {
             egui::Panel::top("settings")
-                .frame(egui::Frame::NONE
-                    .fill(self.pal.hdr).stroke(Stroke::new(1.0_f32, self.pal.border))
-                    .inner_margin(egui::Margin::symmetric(14, 8)))
+                .frame(
+                    egui::Frame::NONE
+                        .fill(self.pal.hdr)
+                        .stroke(Stroke::new(1.0_f32, self.pal.border))
+                        .inner_margin(egui::Margin::symmetric(14, 8)),
+                )
                 .show(ui, |ui| {
                     self.draw_settings_panel(ui);
                 });
@@ -513,13 +737,11 @@ impl eframe::App for App {
         // ── Central panel ────────────────────────────────────────────────
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(self.pal.bg))
-            .show(ui, |ui| {
-                match self.ui.tab.clone() {
-                    Tab::Search => self.draw_search(ui, &ctx, &state),
-                    Tab::Favorites => self.draw_favorites(ui),
-                    Tab::Rss => self.draw_rss(ui, &ctx),
-                    Tab::About => self.draw_about(ui),
-                }
+            .show(ui, |ui| match self.ui.tab.clone() {
+                Tab::Search => self.draw_search(ui, &ctx, &state),
+                Tab::Favorites => self.draw_favorites(ui),
+                Tab::Rss => self.draw_rss(ui, &ctx),
+                Tab::About => self.draw_about(ui),
             });
 
         self.draw_toasts(&ctx);
@@ -529,9 +751,24 @@ impl eframe::App for App {
 // ─── (UI draw methods moved to ui.rs) ──────────────────────────────
 // ─── Helper for detail grid ─────────────────────────────────────────────────
 
-pub(crate) fn grid_row(ui: &mut egui::Ui, label: &str, value: &str, color: Color32, p: &Pal, fs: f32) {
-    ui.label(RichText::new(format!("{label}:")).font(FontId::proportional(fs - 1.5)).color(p.dim));
-    ui.label(RichText::new(value).font(FontId::proportional(fs - 1.0)).color(color));
+pub(crate) fn grid_row(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &str,
+    color: Color32,
+    p: &Pal,
+    fs: f32,
+) {
+    ui.label(
+        RichText::new(format!("{label}:"))
+            .font(FontId::proportional(fs - 1.5))
+            .color(p.dim),
+    );
+    ui.label(
+        RichText::new(value)
+            .font(FontId::proportional(fs - 1.0))
+            .color(color),
+    );
     ui.end_row();
 }
 
@@ -542,12 +779,18 @@ fn native_options() -> eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("TorrentX")
             .with_inner_size([1300.0, 800.0])
-            .with_min_inner_size([900.0, 560.0]),
+            // Min width tuned so the header right-side controls + search bar
+            // still fit without clipping on small screens (1280x720 laptops).
+            .with_min_inner_size([820.0, 560.0]),
         ..Default::default()
     }
 }
 
-type AppCreator = Box<dyn FnOnce(&eframe::CreationContext) -> Result<Box<dyn eframe::App>, Box<dyn std::error::Error + Send + Sync>>>;
+type AppCreator = Box<
+    dyn FnOnce(
+        &eframe::CreationContext,
+    ) -> Result<Box<dyn eframe::App>, Box<dyn std::error::Error + Send + Sync>>,
+>;
 
 fn app_creator() -> AppCreator {
     Box::new(|cc| {
@@ -571,30 +814,48 @@ fn setup_tray() {
     #[cfg(target_os = "linux")]
     {
         std::thread::spawn(|| {
-            use tray_icon::{menu::{Menu, MenuItem, MenuEvent}, Icon, TrayIconBuilder};
-            if gtk::init().is_err() { return; }
+            use tray_icon::{
+                menu::{Menu, MenuEvent, MenuItem},
+                Icon, TrayIconBuilder,
+            };
+            if gtk::init().is_err() {
+                return;
+            }
 
             // A tiny 16x16 TorrentX-ish icon (blue "T" on dark).
             let mut rgba = Vec::with_capacity(16 * 16 * 4);
             for y in 0..16 {
                 for x in 0..16 {
-                    let in_t = (4..=11).contains(&x) && (3..=12).contains(&y) && !((6..=9).contains(&x) && (6..=9).contains(&y));
-                    if in_t { rgba.extend_from_slice(&[122, 162, 247, 255]); }
-                    else { rgba.extend_from_slice(&[26, 27, 38, 255]); }
+                    let in_t = (4..=11).contains(&x)
+                        && (3..=12).contains(&y)
+                        && !((6..=9).contains(&x) && (6..=9).contains(&y));
+                    if in_t {
+                        rgba.extend_from_slice(&[122, 162, 247, 255]);
+                    } else {
+                        rgba.extend_from_slice(&[26, 27, 38, 255]);
+                    }
                 }
             }
-            let Ok(icon) = Icon::from_rgba(rgba, 16, 16) else { return };
+            let Ok(icon) = Icon::from_rgba(rgba, 16, 16) else {
+                return;
+            };
 
             let show = MenuItem::new("Show / Hide", true, None);
             let quit = MenuItem::new("Quit", true, None);
             let menu = Menu::new();
-            if menu.append_items(&[&show, &quit]).is_err() { return; }
+            if menu.append_items(&[&show, &quit]).is_err() {
+                return;
+            }
 
             if TrayIconBuilder::new()
                 .with_menu(Box::new(menu))
                 .with_tooltip("TorrentX")
                 .with_icon(icon)
-                .build().is_err() { return; }
+                .build()
+                .is_err()
+            {
+                return;
+            }
 
             // Menu events arrive on this thread's channel; signal the app.
             let show_id = show.id().clone();
