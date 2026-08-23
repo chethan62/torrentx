@@ -519,15 +519,19 @@ impl App {
                                 ui.label(lbl_txt);
                             });
                         ui.add_space(2.0);
-                        // SVG arrows (no font glyphs — ↑/↓ tofu when the font
-                        // stack breaks). Tinted to the accent.
-                        if idx > 0 && svg_btn(ui, SvgIcon::ArrowUp, "Move left", self.pal.sub) {
-                            moved = Some((idx, -1));
-                        }
-                        if idx + 1 < self.cfg.col_order.len()
-                            && svg_btn(ui, SvgIcon::ArrowDown, "Move right", self.pal.sub)
-                        {
-                            moved = Some((idx, 1));
+                        // Compact vertical ↑/↓ reorder control (no font glyphs;
+                        // ~14px wide so all 7 columns fit one line).
+                        let can_up = idx > 0;
+                        let can_down = idx + 1 < self.cfg.col_order.len();
+                        if let Some(d) = reorder_control(
+                            ui,
+                            self.pal.sub,
+                            can_up,
+                            can_down,
+                            "Move left",
+                            "Move right",
+                        ) {
+                            moved = Some((idx, d));
                         }
                         ui.add_space(4.0);
                     }

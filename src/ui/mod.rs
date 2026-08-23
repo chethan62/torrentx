@@ -19,8 +19,8 @@ pub(crate) use crate::rss::{FeedStatus, RssFeedConfig, RssFeedState, RssItem};
 pub(crate) use crate::themes::{rgb, rgba, tint, Pal, Theme};
 pub(crate) use crate::{
     act_btn, grid_row, icon_text_btn, labeled_input, lbl, outline_btn, outline_icon_btn,
-    status_icon_pill, svg_btn, svg_icon, svg_image, v_checkbox, wide_btn, wide_icon_btn, SvgIcon,
-    CATS, MARGIN_DEFAULT,
+    reorder_control, status_icon_pill, svg_btn, svg_icon, svg_image, v_checkbox, wide_btn,
+    wide_icon_btn, SvgIcon, CATS, MARGIN_DEFAULT,
 };
 pub(crate) use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 pub(crate) use egui_extras::{Column, TableBuilder};

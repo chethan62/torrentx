@@ -93,7 +93,7 @@ pub(crate) fn svg_btn(ui: &mut egui::Ui, icon: SvgIcon, tip: &str, color: Color3
     resp.on_hover_text(tip).clicked()
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub(crate) enum SvgIcon {
     Magnet,
     Copy,
@@ -178,6 +178,62 @@ pub(crate) fn svg_image(icon: SvgIcon, size: f32, color: Color32) -> egui::Image
     egui::Image::from_bytes(icon.uri(), svg_white.into_bytes())
         .tint(color)
         .fit_to_exact_size(egui::vec2(size, size))
+}
+
+/// Compact vertical reorder control — a tight ↑/↓ pair (one SVG button above
+/// the other, no font glyphs) for the settings column-order row. Each half is
+/// a click target with press feedback, but the pair is ~14px wide instead of
+/// two 32px buttons side-by-side, so a full 7-column order row fits on one
+/// line. Returns:
+///   None            — no click
+///   Some(-1)        — "up" clicked (move left)
+///   Some(1)         — "down" clicked (move right)
+pub(crate) fn reorder_control(
+    ui: &mut egui::Ui,
+    color: Color32,
+    can_up: bool,
+    can_down: bool,
+    tip_up: &str,
+    tip_down: &str,
+) -> Option<isize> {
+    let w = 14.0;
+    let h = 22.0;
+    let (rect, _resp) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::click());
+    let half = rect.height() / 2.0;
+    let up = egui::Rect::from_min_max(rect.min, egui::pos2(rect.max.x, rect.min.y + half));
+    let down = egui::Rect::from_min_max(egui::pos2(rect.min.x, rect.min.y + half), rect.max);
+    let rounding = egui::CornerRadius::same(3);
+    let mut clicked: Option<isize> = None;
+
+    let mut draw_half =
+        |ui: &mut egui::Ui, r: egui::Rect, icon: SvgIcon, enabled: bool, tip: &str| {
+            let resp = ui.interact(r, ui.id().with((icon, tip)), egui::Sense::click());
+            let painter = ui.painter_at(r);
+            let col = if enabled { color } else { tint(color, 60) };
+            let bg = if resp.is_pointer_button_down_on() {
+                tint(col, 30)
+            } else if resp.hovered() && enabled {
+                tint(col, 22)
+            } else {
+                Color32::TRANSPARENT
+            };
+            painter.rect_filled(r, rounding, bg);
+            // Draw the SVG icon centered in the half (same tint-to-white trick as
+            // svg_btn: resvg renders currentColor black; tint() then yields color).
+            let icon_rect = egui::Rect::from_center_size(r.center(), egui::vec2(10.0, 10.0));
+            let img = svg_image(icon, 10.0, col);
+            ui.put(icon_rect, img);
+            if enabled {
+                resp.clone().on_hover_text(tip);
+                if resp.clicked() {
+                    clicked = Some(if icon == SvgIcon::ArrowUp { -1 } else { 1 });
+                }
+            }
+        };
+
+    draw_half(ui, up, SvgIcon::ArrowUp, can_up, tip_up);
+    draw_half(ui, down, SvgIcon::ArrowDown, can_down, tip_down);
+    clicked
 }
 
 /// A high-quality vector checkbox — drawn with the Painter (rounded rect +
