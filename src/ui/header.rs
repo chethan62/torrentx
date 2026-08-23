@@ -456,7 +456,7 @@ impl App {
                 });
                 ui.add_space(5.0);
 
-                // Row 3 — Columns
+                // Row 3 — Columns (toggle which columns are shown)
                 ui.horizontal_wrapped(|ui| {
                     lbl(ui, "COLUMNS", self.pal.dim, 10.0);
                     ui.add_space(6.0);
@@ -487,39 +487,57 @@ impl App {
                     if col_changed {
                         save_cfg(&self.cfg);
                     }
-                    ui.add_space(10.0);
-                    // Column order (reorder via ↑/↓)
-                    ui.horizontal_wrapped(|ui| {
-                        lbl(ui, "Order", self.pal.dim, 10.0);
+                });
+                ui.add_space(5.0);
+
+                // Row 4 — Column order (dedicated row: each column chip + SVG
+                // up/down arrows; no longer nested inside the COLUMNS toggles,
+                // which made the chips and arrows wrap together and scramble).
+                ui.horizontal_wrapped(|ui| {
+                    lbl(ui, "ORDER", self.pal.dim, 10.0);
+                    ui.add_space(6.0);
+                    let mut moved: Option<(usize, isize)> = None;
+                    for (idx, name) in self.cfg.col_order.clone().iter().enumerate() {
+                        // Chip for the column name (first = accent = fixed).
+                        let lbl_txt = RichText::new(name.as_str())
+                            .font(FontId::proportional(11.5))
+                            .color(if idx == 0 {
+                                self.pal.accent
+                            } else {
+                                self.pal.sub
+                            });
+                        egui::Frame::NONE
+                            .fill(if idx == 0 {
+                                tint(self.pal.accent, 14)
+                            } else {
+                                self.pal.surface
+                            })
+                            .stroke(Stroke::new(1.0_f32, self.pal.border))
+                            .corner_radius(4.0)
+                            .inner_margin(egui::Margin::symmetric(7, 2))
+                            .show(ui, |ui| {
+                                ui.label(lbl_txt);
+                            });
+                        ui.add_space(2.0);
+                        // SVG arrows (no font glyphs — ↑/↓ tofu when the font
+                        // stack breaks). Tinted to the accent.
+                        if idx > 0 && svg_btn(ui, SvgIcon::ArrowUp, "Move left", self.pal.sub) {
+                            moved = Some((idx, -1));
+                        }
+                        if idx + 1 < self.cfg.col_order.len()
+                            && svg_btn(ui, SvgIcon::ArrowDown, "Move right", self.pal.sub)
+                        {
+                            moved = Some((idx, 1));
+                        }
                         ui.add_space(4.0);
-                        let mut moved: Option<(usize, isize)> = None;
-                        for (idx, name) in self.cfg.col_order.clone().iter().enumerate() {
-                            let mut lbl_txt =
-                                RichText::new(name.as_str()).font(FontId::proportional(11.5));
-                            if idx == 0 {
-                                lbl_txt = lbl_txt.color(self.pal.accent);
-                            }
-                            ui.label(lbl_txt);
-                            ui.add_space(2.0);
-                            // SVG arrows (no font glyphs — ↑/↓ tofu when the
-                            // font stack breaks). Tinted to the accent.
-                            if idx > 0 && svg_btn(ui, SvgIcon::ArrowUp, "Move left", self.pal.sub) {
-                                moved = Some((idx, -1));
-                            }
-                            if idx + 1 < self.cfg.col_order.len()
-                                && svg_btn(ui, SvgIcon::ArrowDown, "Move right", self.pal.sub)
-                            {
-                                moved = Some((idx, 1));
-                            }
-                            ui.add_space(4.0);
-                        }
-                        if let Some((idx, d)) = moved {
-                            let j = (idx as isize + d) as usize;
-                            let name = self.cfg.col_order.remove(idx);
-                            self.cfg.col_order.insert(j, name);
-                            save_cfg(&self.cfg);
-                        }
-                    });
+                    }
+                    if let Some((idx, d)) = moved {
+                        let j = (idx as isize + d) as usize;
+                        let name = self.cfg.col_order.remove(idx);
+                        self.cfg.col_order.insert(j, name);
+                        save_cfg(&self.cfg);
+                    }
+                    ui.add_space(8.0);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui
                             .add(
