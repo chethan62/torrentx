@@ -163,8 +163,6 @@ pub(crate) struct UiState {
     pub(crate) t_start: Option<Instant>,
     pub(crate) t_done: Option<f64>,
     pub(crate) notified: bool,
-    pub(crate) spin_i: usize,
-    pub(crate) spin_t: f32,
     /// Animation progress for row hover (0.0 = not hovering, 1.0 = fully hovered)
     pub(crate) row_hover_anim: f32,
     /// Previously hovered row index for animation
@@ -205,8 +203,6 @@ impl Default for UiState {
             t_start: None,
             t_done: None,
             notified: false,
-            spin_i: 0,
-            spin_t: 0.0,
             row_hover_anim: 0.0,
             prev_hovered: None,
             search_state_anim: 1.0, // Start fully visible

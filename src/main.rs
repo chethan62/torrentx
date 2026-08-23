@@ -23,7 +23,6 @@ pub(crate) const MARGIN_DEFAULT: f32 = 12.0;
 pub(crate) const CATS: &[&str] = &[
     "All", "Movies", "TV", "Music", "PC Games", "Software", "Anime", "Books", "XXX",
 ];
-pub(crate) const SPIN: &[&str] = &["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
 
 /// CSV field escaping: wrap in quotes, double any embedded quotes.
 pub(crate) fn csv_esc(s: &str) -> String {
@@ -497,15 +496,11 @@ impl eframe::App for App {
             self.toast(&format!("Update available: {new}"), self.pal.accent);
         }
 
-        // Spinner tick
+        // Spinner tick — keeps the Searching state repainting so the elapsed
+        // timer updates live. (The Braille spinner was replaced by an SVG
+        // Refresh icon; spin_i/t removed.)
         if state == SearchState::Searching {
             ctx.request_repaint_after(Duration::from_millis(80));
-            let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.1);
-            self.ui.spin_t += dt;
-            if self.ui.spin_t > 0.1 {
-                self.ui.spin_t = 0.0;
-                self.ui.spin_i = (self.ui.spin_i + 1) % SPIN.len();
-            }
 
             // Watchdog: if the search thread never completes (dead thread,
             // hung connection), force Error so the spinner stops and the UI
@@ -661,16 +656,19 @@ impl eframe::App for App {
                             );
                         }
                         SearchState::Searching => {
-                            let sp = SPIN[self.ui.spin_i];
                             let el = self
                                 .ui
                                 .t_start
                                 .as_ref()
                                 .map(|t| format!("  {:.1}s", t.elapsed().as_secs_f64()))
                                 .unwrap_or_default();
+                            // SVG Refresh icon — the Braille-dot spinner (⣾…)
+                            // tofus on fonts without Braille; vector icon is
+                            // consistent with the Check/Close status icons.
+                            svg_icon(ui, SvgIcon::Refresh, 12.0, self.pal.accent);
                             lbl(
                                 ui,
-                                &format!("{sp} Searching \"{}\"{}", self.search.last_query, el),
+                                &format!("Searching \"{}\"{}", self.search.last_query, el),
                                 self.pal.accent,
                                 12.0,
                             );
