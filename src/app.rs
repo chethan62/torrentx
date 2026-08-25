@@ -494,7 +494,9 @@ impl App {
                     let mut items = items;
                     items.sort_by_key(|a| std::cmp::Reverse(a.seeders.unwrap_or(0)));
                     let mut seen = std::collections::HashSet::new();
-                    items.retain(|it| seen.insert(normalize(&it.title)));
+                    items.retain(|it| {
+                        seen.insert(it.guid.clone().unwrap_or_else(|| normalize(&it.title)))
+                    });
                     self.rss.rss_feeds[idx].items = items;
                     self.rss.rss_feeds[idx].status = FeedStatus::Ok;
                     self.rss.rss_feeds[idx].error = None;

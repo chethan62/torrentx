@@ -46,6 +46,10 @@ pub(crate) struct Config {
     /// Last window size [w, h], restored at startup.
     #[serde(default)]
     pub(crate) win_size: Option<[f32; 2]>,
+    /// Anonymous per-install identifier (UUID v4), generated on first run.
+    /// Handy when triaging bug reports; never sent anywhere by the app.
+    #[serde(default)]
+    pub(crate) install_id: String,
 }
 
 impl Default for Config {
@@ -75,6 +79,7 @@ impl Default for Config {
             check_updates: true,
             last_tab: None,
             win_size: None,
+            install_id: String::new(),
         }
     }
 }
@@ -137,6 +142,11 @@ pub(crate) fn load_cfg() -> Config {
     };
     // Heal old configs: empty col_order (pre-column-reorder) → default order.
     c = heal_col_order(c);
+    // First run: mint the anonymous per-install GUID and persist it.
+    if c.install_id.is_empty() {
+        c.install_id = uuid::Uuid::new_v4().to_string();
+        save_cfg(&c);
+    }
     c
 }
 

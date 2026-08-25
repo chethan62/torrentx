@@ -19,6 +19,7 @@ open = "5.1"
 dirs-next = "2.0"
 url = "2.5"
 quick-xml = { version = "0.31", features = ["escape-html"] }
+uuid = { version = "1", features = ["v4"] }
 tray-icon = "0.19"
 notify-rust = "4.11"
 

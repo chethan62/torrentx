@@ -60,6 +60,7 @@ impl App {
                     leechers: r.peers,
                     category: r.category_desc.clone(),
                     pub_date: r.publish_date.clone(),
+                    guid: None,
                 },
                 None => return,
             },

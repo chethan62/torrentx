@@ -38,6 +38,9 @@ pub(crate) struct RssItem {
     pub(crate) leechers: Option<u32>,
     pub(crate) tracker: Option<String>,
     pub(crate) category: Option<String>,
+    /// Feed-level `<guid>` — the stable identity Torznab intends for dedupe
+    /// (falls back to normalized title when absent).
+    pub(crate) guid: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -192,6 +195,7 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                                     item.size = t.parse().ok();
                                 }
                                 "jackettindexer" => item.tracker = Some(t),
+                                "guid" if item.guid.is_none() => item.guid = Some(t),
                                 "category" => item.category = Some(t),
                                 _ => {}
                             }
@@ -286,6 +290,7 @@ mod tests {
       <torznab:attr name="size" value="7340032"/>
       <pubDate>Wed, 21 Aug 2024 10:00:00 +0000</pubDate>
       <jackettindexer>mytracker</jackettindexer>
+      <guid isPermaLink="false">urn:btih:abc123</guid>
     </item>
   </channel>
 </rss>"#;
@@ -307,6 +312,7 @@ mod tests {
         assert_eq!(it.category.as_deref(), Some("PC"));
         assert_eq!(it.tracker.as_deref(), Some("mytracker"));
         assert!(it.pub_date.is_some());
+        assert_eq!(it.guid.as_deref(), Some("urn:btih:abc123"));
     }
 
     #[test]

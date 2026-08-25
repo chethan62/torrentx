@@ -5,7 +5,7 @@ use super::*;
 use crate::app::App;
 
 impl App {
-    pub(crate) fn draw_about(&self, ui: &mut egui::Ui) {
+    pub(crate) fn draw_about(&mut self, ui: &mut egui::Ui) {
         let fs = self.cfg.font_size;
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.add_space(30.0);
@@ -30,20 +30,55 @@ impl App {
                 );
 
                 ui.add_space(24.0);
+                let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
                 for (k, v) in [
-                    ("Language", "Rust 2021 edition"),
-                    ("GUI", "egui 0.36 + egui_extras"),
-                    ("Rendering", "GPU via wgpu / OpenGL (eframe)"),
-                    ("HTTP", "reqwest (blocking)"),
-                    ("Config", "~/.config/torrentx/config.json"),
+                    ("Language", "Rust 2021 edition".to_string()),
+                    ("GUI", "egui 0.36 + egui_extras".to_string()),
+                    ("Rendering", "GPU via wgpu / OpenGL (eframe)".to_string()),
+                    ("HTTP", "reqwest 0.12 (blocking)".to_string()),
+                    ("Platform", platform),
+                    (
+                        "Build",
+                        if cfg!(debug_assertions) {
+                            "debug".to_string()
+                        } else {
+                            "release".to_string()
+                        },
+                    ),
+                    ("Config", "~/.config/torrentx/config.json".to_string()),
                 ] {
                     ui.horizontal(|ui| {
                         ui.add_space(ui.available_width() * 0.15);
                         lbl(ui, &format!("{k:<18}"), self.pal.dim, fs);
-                        lbl(ui, v, self.pal.sub, fs);
+                        lbl(ui, &v, self.pal.sub, fs);
                     });
                     ui.add_space(2.0);
                 }
+
+                // Install GUID — click to copy (for bug reports)
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(ui.available_width() * 0.15);
+                    lbl(ui, &format!("{:<18}", "Install ID"), self.pal.dim, fs);
+                    let gid = self.cfg.install_id.clone();
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(if gid.is_empty() { "(unassigned)" } else { &gid })
+                                    .font(FontId::monospace(fs - 1.0))
+                                    .color(self.pal.accent),
+                            )
+                            .fill(Color32::TRANSPARENT)
+                            .frame(false),
+                        )
+                        .on_hover_text("Click to copy this install's anonymous ID")
+                        .clicked()
+                        && !gid.is_empty()
+                    {
+                        ui.ctx().copy_text(gid.clone());
+                        self.toast("Install ID copied", self.pal.green);
+                    }
+                });
 
                 // Theme swatches
                 ui.add_space(24.0);
@@ -140,6 +175,57 @@ impl App {
                     });
                     ui.add_space(4.0);
                 }
+
+                // Credits
+                ui.add_space(24.0);
+                lbl(ui, "Credits", self.pal.accent, fs + 1.0);
+                ui.add_space(8.0);
+                for line in [
+                    "Created by chethan62",
+                    "Powered by Jackett — the open-source indexer proxy",
+                    "Built with egui/eframe, reqwest, quick-xml, tray-icon, notify-rust",
+                    "CJK font: Noto Sans CJK · Icons: Lucide + Phosphor",
+                    "License: MIT — free to use, modify, and share",
+                ] {
+                    lbl(ui, &format!("  ·  {line}"), self.pal.sub, fs - 1.0);
+                    ui.add_space(1.0);
+                }
+
+                // Links
+                ui.add_space(10.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+                    ui.add_space(40.0);
+                    for (label, url) in [
+                        ("GitHub", "https://github.com/chethan62/torrentx"),
+                        (
+                            "Releases",
+                            "https://github.com/chethan62/torrentx/releases/latest",
+                        ),
+                        (
+                            "Report an Issue",
+                            "https://github.com/chethan62/torrentx/issues/new",
+                        ),
+                        ("Jackett", "https://github.com/Jackett/Jackett"),
+                    ] {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(label)
+                                        .font(FontId::proportional(12.0))
+                                        .color(self.pal.sub),
+                                )
+                                .fill(Color32::TRANSPARENT)
+                                .stroke(Stroke::new(1.0_f32, tint(self.pal.sub, 80)))
+                                .corner_radius(4.0),
+                            )
+                            .on_hover_text(url)
+                            .clicked()
+                        {
+                            let _ = crate::safe_open(url);
+                        }
+                    }
+                });
 
                 ui.add_space(20.0);
                 lbl(ui, "github.com/chethan62/torrentx", self.pal.dim, fs - 1.0);
