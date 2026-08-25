@@ -8,9 +8,11 @@
 
 ## Screenshots
 
-| Dark | Light |
-|------|-------|
-| *Tokyo Night, Cyberpunk, Midnight, One Dark, Dracula, Rose Pine, Monokai, Kanagawa, Everforest, Material Ocean, Oxocarbon, Ayu, Nord, Gruvbox, Solarized Dark* | *Light, Gruvbox Light, Catppuccin Latte* |
+| Dark (Tokyo Night) | Light (Catppuccin Latte) |
+|--------------------|--------------------------|
+| ![Dark theme — Tokyo Night](docs/screenshots/dark.png) | ![Light theme — Catppuccin Latte](docs/screenshots/light.png) |
+
+*19 themes total — 16 dark + 3 light, instant switching.*
 
 ## Features
 
