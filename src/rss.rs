@@ -95,12 +95,18 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
     use quick_xml::Reader;
 
     let mut reader = Reader::from_str(xml);
-    reader.trim_text(true);
+    // NOTE: no trim_text here — it would trim each Text chunk independently
+    // and eat the spaces around entity splits ("&amp;" boundary); the
+    // accumulator below is trimmed once per element instead.
     let mut items: Vec<RssItem> = vec![];
     let mut cur: Option<RssItem> = None;
     let mut buf = Vec::new();
     let mut in_item = false;
     let mut cur_tag = String::new();
+    // Text accumulator — newer quick-xml splits Text events around entity
+    // boundaries ("…&amp; More" → 2+ events), so fields must be assembled
+    // across chunks and applied on the element's End event.
+    let mut text_acc = String::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -114,7 +120,9 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                         for attr in e.attributes().flatten() {
                             let k = tag_name(attr.key.as_ref());
                             if k == "url" {
-                                if let Ok(v) = attr.unescape_value() {
+                                if let Ok(v) =
+                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                {
                                     if let Some(ref mut item) = cur {
                                         if item.link.is_none() {
                                             item.link = Some(v.to_string());
@@ -125,6 +133,7 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                         }
                     }
                     cur_tag = tag;
+                    text_acc.clear();
                 }
             }
             Ok(Event::Empty(ref e)) if in_item => {
@@ -134,7 +143,9 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                         for attr in e.attributes().flatten() {
                             let k = tag_name(attr.key.as_ref());
                             if k == "url" {
-                                if let Ok(v) = attr.unescape_value() {
+                                if let Ok(v) =
+                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                {
                                     if let Some(ref mut item) = cur {
                                         if item.link.is_none() {
                                             item.link = Some(v.to_string());
@@ -142,7 +153,9 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                                     }
                                 }
                             } else if k == "length" {
-                                if let Ok(v) = attr.unescape_value() {
+                                if let Ok(v) =
+                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                {
                                     if let Some(ref mut item) = cur {
                                         if item.size.is_none() {
                                             item.size = v.parse().ok();
@@ -157,7 +170,8 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                         let mut val = String::new();
                         for attr in e.attributes().flatten() {
                             let k = tag_name(attr.key.as_ref());
-                            if let Ok(v) = attr.unescape_value() {
+                            if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                            {
                                 match k.as_str() {
                                     "name" => name = v.to_string(),
                                     "value" => val = v.to_string(),
@@ -181,8 +195,53 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                 }
             }
             Ok(Event::Text(ref e)) if in_item => {
-                if let Ok(text) = e.unescape() {
-                    let t = text.trim().to_string();
+                // quick-xml ≥0.37 splits Text events around entity boundaries;
+                // chunks are already unescaped by the reader, so just append.
+                if let Ok(chunk) = e.decode() {
+                    text_acc.push_str(&chunk);
+                }
+            }
+            Ok(Event::GeneralRef(ref e)) if in_item => {
+                // `&name;` / `&#nnn;` arrive as their own event. Resolve via
+                // the escape-html feature (full HTML5 set, so &ldquo; etc.
+                // render); unknown refs stay literal instead of vanishing.
+                let Ok(name) = e.decode() else {
+                    continue;
+                };
+                let replacement: Option<String> = if let Some(num) =
+                    name.strip_prefix("#x").or_else(|| name.strip_prefix("#X"))
+                {
+                    u32::from_str_radix(num, 16)
+                        .ok()
+                        .and_then(char::from_u32)
+                        .map(String::from)
+                } else if let Some(num) = name.strip_prefix('#') {
+                    num.parse::<u32>()
+                        .ok()
+                        .and_then(char::from_u32)
+                        .map(String::from)
+                } else {
+                    quick_xml::escape::resolve_predefined_entity(&name)
+                        .map(str::to_string)
+                        .or_else(|| Some(format!("&{name};")))
+                };
+                if let Some(s) = replacement {
+                    text_acc.push_str(&s);
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = tag_name(e.name().as_ref());
+                if tag == "item" {
+                    in_item = false;
+                    cur_tag = String::new();
+                    if let Some(item) = cur.take() {
+                        if !item.title.is_empty() {
+                            items.push(item);
+                        }
+                    }
+                } else if in_item {
+                    // Apply the accumulated text of the element that just closed.
+                    let t = text_acc.trim().to_string();
                     if !t.is_empty() {
                         if let Some(ref mut item) = cur {
                             match cur_tag.as_str() {
@@ -201,20 +260,8 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                             }
                         }
                     }
-                }
-            }
-            Ok(Event::End(ref e)) => {
-                let tag = tag_name(e.name().as_ref());
-                if tag == "item" {
-                    in_item = false;
                     cur_tag = String::new();
-                    if let Some(item) = cur.take() {
-                        if !item.title.is_empty() {
-                            items.push(item);
-                        }
-                    }
-                } else if in_item {
-                    cur_tag = String::new();
+                    text_acc.clear();
                 }
             }
             Ok(Event::Eof) => break,
@@ -374,9 +421,9 @@ mod tests {
     #[test]
     fn html_named_entities_in_title_are_decoded() {
         // Torznab titles carry HTML entities (&ldquo; &rdquo; &amp; &nbsp;).
-        // quick-xml's plain unescape() only decodes the 5 XML entities; the
-        // escape-html feature (Cargo.toml) adds full HTML5 named-entity
-        // decoding. Regression: literal "&ldquo;Sylvia&rdquo;" was rendered.
+        // quick-xml 0.41 emits them as separate GeneralRef events; the
+        // escape-html feature resolves the full HTML5 named-entity set.
+        // Regression: literal "&ldquo;Sylvia&rdquo;" was rendered.
         let xml = r#"<rss><channel><item>
             <title>Linux Mint 18.3 &ldquo;Sylvia&rdquo; KDE (64-bit) &amp; More</title>
         </item></channel></rss>"#;
@@ -386,5 +433,15 @@ mod tests {
             items[0].title,
             "Linux Mint 18.3 \u{201C}Sylvia\u{201D} KDE (64-bit) & More"
         );
+    }
+
+    #[test]
+    fn numeric_refs_resolve_and_unknown_entities_stay_literal() {
+        let xml = r#"<rss><channel><item>
+            <title>A &#65;&#x42;C &#160;D &notanentity; E</title>
+        </item></channel></rss>"#;
+        let items = parse_torznab_xml(xml).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "A ABC \u{a0}D &notanentity; E");
     }
 }

@@ -451,7 +451,7 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
     use quick_xml::events::Event;
     use quick_xml::Reader;
     let mut reader = Reader::from_str(body);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut out = vec![];
     let mut buf = Vec::new();
     loop {
@@ -465,7 +465,7 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
                 let mut configured = false;
                 for attr in e.attributes().flatten() {
                     let k = String::from_utf8_lossy(attr.key.as_ref()).to_lowercase();
-                    if let Ok(v) = attr.unescape_value() {
+                    if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                         match k.as_str() {
                             "id" => id = Some(v.to_string()),
                             "configured" => configured = v == "true",
