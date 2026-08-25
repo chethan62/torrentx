@@ -15,7 +15,7 @@ jobs:
     name: Linux binary + AppImage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install system deps (egui/GTK/tray)
         run: |
