@@ -35,7 +35,8 @@ cargo build --release   # Rust 1.82+
 ```
 
 System packages needed when building: `libxkbcommon-dev libgtk-3-dev
-libasound2-dev libxcb-*-dev libssl-dev pkg-config` (Debian/Ubuntu names).
+libasound2-dev libxcb-*-dev libssl-dev pkg-config libxdo-dev`
+(Debian/Ubuntu names).
 
 ## Quick start
 
