@@ -20,7 +20,7 @@ dirs-next = "2.0"
 url = "2.5"
 quick-xml = { version = "0.31", features = ["escape-html"] }
 uuid = { version = "1", features = ["v4"] }
-tray-icon = "0.19"
+tray-icon = "0.24"
 notify-rust = "4.11"
 
 [target.'cfg(target_os = "linux")'.dependencies]
