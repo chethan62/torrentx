@@ -9,6 +9,7 @@ mod themes;
 mod ui;
 
 use app::App;
+use config::save_cfg;
 
 use jackett::{SearchState, Tab};
 use themes::{tint, Pal};
@@ -584,6 +585,23 @@ impl eframe::App for App {
             t.ttl > 0.0
         });
 
+        // Persist window size (throttled to one write per 3s while resizing)
+        // so the next launch reopens at this size.
+        let vr = ctx.input(|i| i.viewport_rect());
+        if vr.width() >= 820.0 && vr.height() >= 560.0 {
+            let size = [vr.width(), vr.height()];
+            if self.cfg.win_size != Some(size)
+                && self
+                    .ui
+                    .win_save_at
+                    .is_none_or(|t| t.elapsed() >= Duration::from_secs(3))
+            {
+                self.ui.win_save_at = Some(Instant::now());
+                self.cfg.win_size = Some(size);
+                save_cfg(&self.cfg);
+            }
+        }
+
         // Row hover animation (smooth transition between rows)
         if self.ui.hovered != self.ui.prev_hovered {
             self.ui.prev_hovered = self.ui.hovered;
@@ -828,13 +846,21 @@ pub(crate) fn grid_row(
 // ─── Entry point ────────────────────────────────────────────────────────────
 
 fn native_options() -> eframe::NativeOptions {
+    // Restore the last window size (persisted in the config; see the
+    // throttled save in App::ui). Falls back to the 1300x800 default.
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title("TorrentX")
+        .with_inner_size([1300.0, 800.0])
+        // Min width tuned so the header right-side controls + search bar
+        // still fit without clipping on small screens (1280x720 laptops).
+        .with_min_inner_size([820.0, 560.0]);
+    if let Some([w, h]) = crate::config::load_cfg().win_size {
+        if w >= 820.0 && h >= 560.0 {
+            viewport = viewport.with_inner_size([w, h]);
+        }
+    }
     eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("TorrentX")
-            .with_inner_size([1300.0, 800.0])
-            // Min width tuned so the header right-side controls + search bar
-            // still fit without clipping on small screens (1280x720 laptops).
-            .with_min_inner_size([820.0, 560.0]),
+        viewport,
         ..Default::default()
     }
 }
@@ -875,21 +901,43 @@ fn setup_tray() {
                 return;
             }
 
-            // A tiny 16x16 TorrentX-ish icon (blue "T" on dark).
-            let mut rgba = Vec::with_capacity(16 * 16 * 4);
-            for y in 0..16 {
-                for x in 0..16 {
-                    let in_t = (4..=11).contains(&x)
-                        && (3..=12).contains(&y)
-                        && !((6..=9).contains(&x) && (6..=9).contains(&y));
-                    if in_t {
-                        rgba.extend_from_slice(&[122, 162, 247, 255]);
-                    } else {
-                        rgba.extend_from_slice(&[26, 27, 38, 255]);
+            // A 32x32 TorrentX icon — rounded dark tile + blue "T" — rendered
+            // with per-pixel SDF coverage so edges are smooth at tray size.
+            const TS: usize = 32;
+            let mut rgba = Vec::with_capacity(TS * TS * 4);
+            // Rounded-rect SDF: <0 inside, >0 outside.
+            let rr = |x: f32, y: f32, cx: f32, cy: f32, hw: f32, hh: f32, r: f32| {
+                let qx = (x - cx).abs() - hw + r;
+                let qy = (y - cy).abs() - hh + r;
+                let ox = qx.max(0.0);
+                let oy = qy.max(0.0);
+                ox.hypot(oy) + qx.max(qy).min(0.0) - r
+            };
+            for y in 0..TS {
+                for x in 0..TS {
+                    let px = x as f32 + 0.5;
+                    let py = y as f32 + 0.5;
+                    let cov = |d: f32| (0.5 - d).clamp(0.0, 1.0);
+                    let t = cov(rr(px, py, 16.0, 9.5, 10.0, 3.25, 2.0)) // T crossbar
+                        .max(cov(rr(px, py, 16.0, 20.75, 3.25, 8.0, 2.0))); // T stem
+                    let bg = cov(rr(px, py, 16.0, 16.0, 16.0, 16.0, 7.5)); // tile
+                    if bg <= 0.0 && t <= 0.0 {
+                        rgba.extend_from_slice(&[0, 0, 0, 0]);
+                        continue;
                     }
+                    // "Over"-composite the T (fg) onto the tile (bg).
+                    let (fr, fg_, fb) = (122.0, 162.0, 247.0);
+                    let (br, bgc, bb) = (26.0, 27.0, 38.0);
+                    let mix = |f: f32, b: f32| (f * t + b * (1.0 - t)).round() as u8;
+                    rgba.extend_from_slice(&[
+                        mix(fr, br),
+                        mix(fg_, bgc),
+                        mix(fb, bb),
+                        ((t + bg * (1.0 - t)) * 255.0).round() as u8,
+                    ]);
                 }
             }
-            let Ok(icon) = Icon::from_rgba(rgba, 16, 16) else {
+            let Ok(icon) = Icon::from_rgba(rgba, TS as u32, TS as u32) else {
                 return;
             };
 

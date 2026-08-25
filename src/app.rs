@@ -198,6 +198,8 @@ pub(crate) struct UiState {
     /// Cached detail row — survives `selected` being cleared on close so the
     /// fade-out animation has content to render.
     pub(crate) detail_row: Option<TorrentResult>,
+    /// Last window-size config write (throttles resize persistence).
+    pub(crate) win_save_at: Option<Instant>,
 }
 
 impl Default for UiState {
@@ -228,6 +230,9 @@ impl Default for UiState {
             detail_anim: 0.0, // Detail panel starts hidden
             prev_detail_open: false,
             detail_row: None,
+            // Grace period: don't persist size until 3s after launch, so the
+            // pre-restore default never clobbers the saved window size.
+            win_save_at: Some(Instant::now()),
         }
     }
 }

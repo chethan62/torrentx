@@ -43,6 +43,9 @@ pub(crate) struct Config {
     /// Tab shown at startup ("Search" | "Favorites" | "Rss" | "About").
     #[serde(default)]
     pub(crate) last_tab: Option<String>,
+    /// Last window size [w, h], restored at startup.
+    #[serde(default)]
+    pub(crate) win_size: Option<[f32; 2]>,
 }
 
 impl Default for Config {
@@ -71,6 +74,7 @@ impl Default for Config {
             col_order: default_col_order(),
             check_updates: true,
             last_tab: None,
+            win_size: None,
         }
     }
 }
