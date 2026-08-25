@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a problem with TorrentX
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Including your **Install ID**
+        (About tab → click "Install ID" to copy) helps me tell reports apart.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us what you expected to happen.
+      placeholder: A clear and concise description.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Search for …
+        3. See error
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: TorrentX version
+      description: Shown in the header badge and the About tab (e.g. 18.2.0)
+      placeholder: "18.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: How did you install TorrentX?
+      options:
+        - AppImage
+        - Binary from releases
+        - Built from source
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Distro, desktop environment, Wayland/X11, GPU — whatever seems relevant.
+      placeholder: Fedora 43, KDE Plasma 6, Wayland, AMD GPU
+
+  - type: input
+    id: install-id
+    attributes:
+      label: Install ID (optional)
+      description: About tab → click the ID to copy it.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal output / logs (optional)
+      render: shell

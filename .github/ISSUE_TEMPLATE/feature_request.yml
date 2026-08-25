@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an idea for TorrentX
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What are you trying to do, and what's missing or awkward?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen? Mockups welcome.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: alternatives
+    attributes:
+      label: Have you checked existing issues?
+      options:
+        - label: I searched for a similar request
+          required: true
