@@ -678,7 +678,7 @@ impl App {
                             }
                             "mag" => {
                                 if let Some(m) = &item.magnet {
-                                    let _ = open::that(m);
+                                    let _ = safe_open(m);
                                     self.toast("Opening magnet…", pal.accent);
                                 }
                             }
@@ -690,7 +690,7 @@ impl App {
                             }
                             "dl" => {
                                 if let Some(l) = &item.link {
-                                    let _ = open::that(l);
+                                    let _ = safe_open(l);
                                 }
                             }
                             "fav" => {
@@ -765,7 +765,7 @@ impl App {
                 if item.magnet.is_some() {
                     if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", pal.accent) {
                         if let Some(m) = &item.magnet {
-                            let _ = open::that(m);
+                            let _ = safe_open(m);
                         }
                     }
                     ui.add_space(4.0);
@@ -780,7 +780,7 @@ impl App {
                 if item.link.is_some() {
                     if wide_icon_btn(ui, SvgIcon::Download, "Download .torrent", pal.green) {
                         if let Some(l) = &item.link {
-                            let _ = open::that(l);
+                            let _ = safe_open(l);
                         }
                     }
                     ui.add_space(4.0);

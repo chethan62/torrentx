@@ -5,13 +5,13 @@
 // lives in `main.rs`.
 
 use crate::config::{save_cfg, Config, Favorite};
-use crate::csv_esc;
 use crate::jackett::{
     cat_col, fmt_size, is_magnet, normalize, now_str, pub_year, set_err, start_search, time_ago,
     Hlth, SearchState, SortCol, SortDir, TorrentResult,
 };
 use crate::rss::{start_rss_fetch, FeedStatus, RssFeedConfig, RssItem};
 use crate::themes::{tint, Pal, Theme, VisualTokens};
+use crate::{csv_esc, csv_safe};
 
 use eframe::egui::{self, Color32, Stroke, Visuals};
 use std::fs;
@@ -121,6 +121,12 @@ pub(crate) struct NetState {
     pub(crate) indexers_loading: bool,
     pub(crate) indexers_handle: std::sync::mpsc::Sender<Option<Vec<String>>>,
     pub(crate) indexers_rx: std::sync::mpsc::Receiver<Option<Vec<String>>>,
+    /// (jackett_url, api_key) of the last indexer fetch attempt — lets the UI
+    /// loop re-fetch automatically when settings change instead of only once.
+    pub(crate) indexers_fetched_for: Option<(String, String)>,
+    /// Earliest time to retry after a failed fetch (Jackett may still be
+    /// booting); None = retry allowed immediately.
+    pub(crate) indexers_retry_at: Option<Instant>,
     pub(crate) update_checked: bool,
     pub(crate) update_tx: std::sync::mpsc::Sender<Option<String>>,
     pub(crate) update_rx: std::sync::mpsc::Receiver<Option<String>>,
@@ -137,6 +143,8 @@ impl Default for NetState {
             indexers_loading: false,
             indexers_handle,
             indexers_rx,
+            indexers_fetched_for: None,
+            indexers_retry_at: None,
             update_checked: false,
             update_tx,
             update_rx,
@@ -676,9 +684,9 @@ impl App {
         for r in rows {
             out.push_str(&format!(
                 "{},{},{},{},{},{},{}\n",
-                csv_esc(&r.title),
-                csv_esc(r.tracker.as_deref().unwrap_or("")),
-                csv_esc(r.category_desc.as_deref().unwrap_or("")),
+                csv_safe(&r.title),
+                csv_safe(r.tracker.as_deref().unwrap_or("")),
+                csv_safe(r.category_desc.as_deref().unwrap_or("")),
                 csv_esc(&r.size.map(fmt_size).unwrap_or_default()),
                 r.seeders.unwrap_or(0),
                 r.peers.unwrap_or(0),

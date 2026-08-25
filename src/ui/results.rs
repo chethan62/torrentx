@@ -189,7 +189,7 @@ impl App {
                                     if cell_resp.double_clicked() {
                                         if let Some(m) = r.magnet_uri.as_deref() {
                                             if is_magnet(m) {
-                                                let _ = open::that(m);
+                                                let _ = safe_open(m);
                                                 self.toast(
                                                     "Opening in torrent client…",
                                                     self.pal.accent,
@@ -367,7 +367,7 @@ impl App {
                     }
                     "mag" => {
                         if let Some(m) = &r.magnet_uri {
-                            let _ = open::that(m);
+                            let _ = safe_open(m);
                             self.toast("Opening magnet…", self.pal.accent);
                         }
                     }
@@ -379,7 +379,7 @@ impl App {
                     }
                     "dl" => {
                         if let Some(l) = &r.link {
-                            let _ = open::that(l);
+                            let _ = safe_open(l);
                             self.toast("Downloading…", self.pal.green);
                         }
                     }
@@ -396,7 +396,7 @@ impl App {
                     }
                     "web" => {
                         if let Some(d) = &r.details {
-                            let _ = open::that(d);
+                            let _ = safe_open(d);
                         }
                     }
                     _ => {}
@@ -726,7 +726,7 @@ impl App {
                 if let Some(mag) = r.magnet_uri.clone() {
                     let mc = mag.clone();
                     if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", self.pal.accent) {
-                        let _ = open::that(mag);
+                        let _ = safe_open(mag);
                         self.toast("Opening magnet…", self.pal.accent);
                     }
                     ui.add_space(4.0);
@@ -738,14 +738,14 @@ impl App {
                 }
                 if let Some(link) = r.link.clone() {
                     if wide_icon_btn(ui, SvgIcon::Download, "Download .torrent", self.pal.green) {
-                        let _ = open::that(link);
+                        let _ = safe_open(link);
                         self.toast("Downloading…", self.pal.green);
                     }
                     ui.add_space(4.0);
                 }
                 if let Some(det) = r.details.clone() {
                     if wide_icon_btn(ui, SvgIcon::Web, "Open in Browser", self.pal.sub) {
-                        let _ = open::that(det);
+                        let _ = safe_open(det);
                     }
                     ui.add_space(4.0);
                 }

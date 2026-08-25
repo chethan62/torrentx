@@ -310,7 +310,7 @@ impl App {
                         if let Some(r) = page_s.get(i) {
                             if let Some(m) = &r.magnet_uri {
                                 if is_magnet(m) {
-                                    let _ = open::that(m);
+                                    let _ = safe_open(m);
                                     self.toast("Opening magnet…", self.pal.accent);
                                 } else {
                                     self.toast("No valid magnet link", self.pal.yellow);
@@ -337,7 +337,7 @@ impl App {
                         if let Some(r) = page_s.get(i) {
                             if let Some(m) = &r.magnet_uri {
                                 if is_magnet(m) {
-                                    let _ = open::that(m);
+                                    let _ = safe_open(m);
                                     self.toast("Opening magnet…", self.pal.accent);
                                 } else {
                                     self.toast("No valid magnet link", self.pal.yellow);

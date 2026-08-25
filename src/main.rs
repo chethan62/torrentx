@@ -14,7 +14,7 @@ use jackett::{SearchState, Tab};
 use themes::{tint, Pal};
 
 use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -27,6 +27,35 @@ pub(crate) const CATS: &[&str] = &[
 /// CSV field escaping: wrap in quotes, double any embedded quotes.
 pub(crate) fn csv_esc(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
+}
+
+/// Open a URL/URI only if its scheme is safe. Indexer-supplied strings are
+/// untrusted — never hand file:// or arbitrary schemes to xdg-open.
+pub(crate) fn safe_open(s: impl AsRef<str>) -> bool {
+    let t = s.as_ref().trim();
+    let ok = ["http://", "https://", "magnet:"]
+        .iter()
+        .any(|p| t.starts_with(p));
+    if ok {
+        open::that(t).is_ok()
+    } else {
+        false
+    }
+}
+
+/// CSV field escaping + formula-injection guard: spreadsheet apps execute
+/// cells that begin with = + - @ (tab/CR too). Indexer-supplied titles are
+/// untrusted, so prefix such payloads with `'`. The payload sits at index 1
+/// (index 0 is the opening quote added by `csv_esc`).
+pub(crate) fn csv_safe(s: &str) -> String {
+    let mut s = csv_esc(s);
+    if matches!(
+        s.as_bytes().get(1),
+        Some(b'=' | b'+' | b'-' | b'@' | b'\t' | b'\r')
+    ) {
+        s.insert(1, '\'');
+    }
+    s
 }
 
 // ─── Small UI buttons ──────────────────────────────────────────────────────
@@ -178,42 +207,6 @@ pub(crate) fn svg_image(icon: SvgIcon, size: f32, color: Color32) -> egui::Image
     egui::Image::from_bytes(icon.uri(), svg_white.into_bytes())
         .tint(color)
         .fit_to_exact_size(egui::vec2(size, size))
-}
-
-/// Compact vertical reorder control — a tight ↑/↓ pair (one SVG button above
-/// the other, no font glyphs) for the settings column-order row. Drawn as two
-/// frame-less native buttons in a vertical group (NOT `ui.put`/painter, whose
-/// cursor advancement caused the chips to staircase diagonally). Returns:
-///   None            — no click
-///   Some(-1)        — "up" clicked (move left)
-///   Some(1)         — "down" clicked (move right)
-pub(crate) fn reorder_control(
-    ui: &mut egui::Ui,
-    color: Color32,
-    can_up: bool,
-    can_down: bool,
-    tip_up: &str,
-    tip_down: &str,
-) -> Option<isize> {
-    let mut clicked: Option<isize> = None;
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
-        let up = egui::Button::new(svg_image(SvgIcon::ArrowUp, 8.0, color))
-            .fill(Color32::TRANSPARENT)
-            .frame(false)
-            .min_size(egui::vec2(14.0, 9.0));
-        if can_up && ui.add_enabled(true, up).on_hover_text(tip_up).clicked() {
-            clicked = Some(-1);
-        }
-        let dn = egui::Button::new(svg_image(SvgIcon::ArrowDown, 8.0, color))
-            .fill(Color32::TRANSPARENT)
-            .frame(false)
-            .min_size(egui::vec2(14.0, 9.0));
-        if can_down && ui.add_enabled(true, dn).on_hover_text(tip_down).clicked() {
-            clicked = Some(1);
-        }
-    });
-    clicked
 }
 
 /// A high-quality vector checkbox — drawn with the Painter (rounded rect +
@@ -493,11 +486,21 @@ impl eframe::App for App {
             }
         }
 
-        // Fetch indexer list once (background, so UI never blocks)
+        // Fetch indexer list (background, so UI never blocks). Re-fetches when
+        // the Jackett URL/key changes, and retries a minute after a failed
+        // attempt — e.g. when Jackett is still booting at app start.
+        let creds = (self.cfg.jackett_url.clone(), self.cfg.api_key.clone());
+        let tried = self.net.indexers_fetched_for.as_ref() == Some(&creds);
+        let retry_due = self
+            .net
+            .indexers_retry_at
+            .is_none_or(|t| Instant::now() >= t);
         if self.net.indexers.is_empty()
             && !self.net.indexers_loading
             && !self.cfg.api_key.is_empty()
+            && (!tried || retry_due)
         {
+            self.net.indexers_fetched_for = Some(creds);
             let url = self.cfg.jackett_url.clone();
             let key = self.cfg.api_key.clone();
             let handle = self.net.indexers_handle.clone();
@@ -511,8 +514,15 @@ impl eframe::App for App {
         if self.net.indexers_loading {
             if let Ok(list) = self.net.indexers_rx.try_recv() {
                 self.net.jackett_ok = Some(list.is_some()); // None = Jackett unreachable
-                if let Some(l) = list {
-                    self.net.indexers = l;
+                match list {
+                    Some(l) => {
+                        self.net.indexers = l;
+                        self.net.indexers_retry_at = None;
+                    }
+                    None => {
+                        // Unreachable — back off before retrying.
+                        self.net.indexers_retry_at = Some(Instant::now() + Duration::from_secs(60));
+                    }
                 }
                 self.net.indexers_loading = false;
             }
@@ -943,13 +953,19 @@ fn main() -> eframe::Result<()> {
     // System tray on a dedicated GTK thread (optional; non-fatal if unavailable).
     setup_tray();
 
-    // Try the normal (GPU-accelerated GL) run first.
+    // Try the normal (GPU-accelerated) run first.
     match eframe::run_native("TorrentX", native_options(), app_creator()) {
         Ok(()) => Ok(()),
         Err(e) => {
-            eprintln!("GPU/GL init failed ({e}); retrying with software rendering…");
-            // Retry with Mesa's software GL — fixes black windows on machines
-            // where the GPU driver/context can't initialize (VMs, NVIDIA+Wayland quirks).
+            eprintln!("GPU init failed ({e}); retrying with software rendering…");
+            // Retry with a software-friendly renderer. These env vars are read
+            // by egui-wgpu/Mesa at adapter-selection time — i.e. INSIDE the
+            // run_native call below — so setting them here is effective:
+            // WGPU_BACKEND=opengl + LIBGL_ALWAYS_SOFTWARE steer wgpu onto Mesa's
+            // software GL (llvmpipe), fixing black windows on machines where
+            // hardware Vulkan/GL can't initialize (VMs, NVIDIA+Wayland quirks).
+            std::env::set_var("WGPU_BACKEND", "opengl");
+            std::env::set_var("WGPU_POWER_PREF", "low");
             std::env::set_var("LIBGL_ALWAYS_SOFTWARE", "1");
             std::env::set_var("GALLIUM_DRIVER", "llvmpipe");
             eframe::run_native("TorrentX", native_options(), app_creator())
@@ -959,7 +975,7 @@ fn main() -> eframe::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::csv_esc;
+    use super::{csv_esc, csv_safe};
 
     #[test]
     fn csv_esc_quotes_and_doubles_embedded_quotes() {
@@ -968,5 +984,18 @@ mod tests {
         assert_eq!(csv_esc(""), "\"\"");
         // Commas are harmless inside quotes.
         assert_eq!(csv_esc("a,b,c"), "\"a,b,c\"");
+    }
+
+    #[test]
+    fn csv_safe_neutralizes_formula_injection() {
+        // Benign values pass through unchanged.
+        assert_eq!(csv_safe("Ubuntu 24.04"), "\"Ubuntu 24.04\"");
+        assert_eq!(csv_safe(""), "\"\"");
+        // Formula-leading characters get a `'` prefix (after the quote).
+        assert_eq!(csv_safe("=cmd|' /C calc'!A0"), "\"'=cmd|' /C calc'!A0\"");
+        assert_eq!(csv_safe("+1+1"), "\"'+1+1\"");
+        assert_eq!(csv_safe("-2"), "\"'-2\"");
+        assert_eq!(csv_safe("@SUM(1)"), "\"'@SUM(1)\"");
+        assert_eq!(csv_safe("\tTab"), "\"'\tTab\"");
     }
 }

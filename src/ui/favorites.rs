@@ -189,11 +189,11 @@ impl App {
             save_cfg(&self.cfg);
         }
         if let Some(m) = open_mag {
-            let _ = open::that(m);
+            let _ = safe_open(m);
             self.toast("Opening magnet…", self.pal.accent);
         }
         if let Some(l) = open_link {
-            let _ = open::that(l);
+            let _ = safe_open(l);
             self.toast("Downloading…", self.pal.green);
         }
     }

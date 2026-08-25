@@ -46,7 +46,7 @@
 ## Build from source
 
 ```bash
-# Prerequisites: Rust 1.70+, cargo
+# Prerequisites: Rust 1.82+, cargo
 cargo build --release
 # Binary: target/release/torrentx
 ```
