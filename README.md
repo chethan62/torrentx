@@ -4,6 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/chethan62/torrentx?label=latest)](https://github.com/chethan62/torrentx/releases/latest)
 [![License](https://img.shields.io/github/license/chethan62/torrentx)](LICENSE)
+[![Guide](https://img.shields.io/badge/docs-user%20guide-blue)](GUIDE.md)
 
 ## Screenshots
 
@@ -59,6 +60,9 @@ cargo build --release
 2. Click ⚙ **Settings**
 3. Enter your Jackett URL (default: `http://localhost:9117`) and API Key
 4. Start searching
+
+📖 **Full documentation**: [GUIDE.md](GUIDE.md) — installation, filters,
+RSS, settings reference, config file, troubleshooting, and privacy notes.
 
 ## Tech
 
