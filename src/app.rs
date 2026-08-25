@@ -11,7 +11,7 @@ use crate::jackett::{
 };
 use crate::rss::{start_rss_fetch, FeedStatus, RssFeedConfig, RssItem};
 use crate::themes::{tint, Pal, Theme, VisualTokens};
-use crate::{csv_esc, csv_safe};
+use crate::{csv_esc, csv_safe, jackett::Tab};
 
 use eframe::egui::{self, Color32, Stroke, Visuals};
 use std::fs;
@@ -54,6 +54,14 @@ pub(crate) struct Toast {
     pub(crate) ttl: f32,
     pub(crate) col: Color32,
     pub(crate) anim_progress: f32, // 0.0 = hidden, 1.0 = fully visible
+}
+
+/// The filtered+sorted result set for one frame. Computed once in the main
+/// loop and passed down to every drawer/handler that needs results.
+pub(crate) struct ResultsView {
+    /// Number of raw (unfiltered) results.
+    pub(crate) raw_total: usize,
+    pub(crate) sorted: Vec<TorrentResult>,
 }
 
 /// The main application state: config + theme, then four focused sub-structs
@@ -266,18 +274,45 @@ impl Default for App {
         let pal = Pal::from(&cfg.theme, cfg.accent);
         let tokens = VisualTokens::default();
         let rss = RssUi::new(&cfg.rss_feeds);
+        // Restore the last active tab (persisted across sessions).
+        let tab = match cfg.last_tab.as_deref() {
+            Some("Favorites") => Tab::Favorites,
+            Some("Rss") => Tab::Rss,
+            Some("About") => Tab::About,
+            _ => Tab::Search,
+        };
+        let ui = UiState {
+            tab,
+            ..UiState::default()
+        };
         Self {
             cfg,
             pal,
             tokens,
             search: SearchUi::default(),
             net: NetState::default(),
-            ui: UiState::default(),
+            ui,
             rss,
         }
     }
 }
+
 impl App {
+    /// Switch tabs, persisting the choice so the next launch reopens here.
+    pub(crate) fn set_tab(&mut self, tab: Tab) {
+        self.ui.tab = tab.clone();
+        self.cfg.last_tab = Some(
+            match tab {
+                Tab::Search => "Search",
+                Tab::Favorites => "Favorites",
+                Tab::Rss => "Rss",
+                Tab::About => "About",
+            }
+            .to_string(),
+        );
+        save_cfg(&self.cfg);
+    }
+
     pub(crate) fn do_search(&mut self) {
         let q = self.search.query.trim().to_string();
         if q.is_empty() {
@@ -331,9 +366,8 @@ impl App {
     }
 
     /// Copy all magnet links from the batch-selected rows (one per line).
-    pub(crate) fn copy_selected_magnets(&mut self, ui: &egui::Ui) {
-        let raw = self.all_results();
-        let sorted = self.filtered(&raw);
+    /// Takes the frame's shared `ResultsView` instead of recomputing it.
+    pub(crate) fn copy_selected_magnets(&mut self, ui: &egui::Ui, sorted: &[TorrentResult]) {
         let magnets: Vec<&str> = self
             .ui
             .sel_set
@@ -539,7 +573,20 @@ impl App {
         self.search.count.lock().map(|g| *g).unwrap_or(0)
     }
 
-    pub(crate) fn filtered(&self, raw: &[TorrentResult]) -> Vec<TorrentResult> {
+    /// Filter+sort the current results ONCE per frame. Every consumer in the
+    /// frame (search tab, detail panel, batch handlers) shares this view —
+    /// previously each recomputed its own clone+sort, up to 4× per frame.
+    pub(crate) fn compute_view(&mut self) -> ResultsView {
+        let raw = self.all_results();
+        let raw_total = raw.len();
+        let sorted = self.filtered(raw);
+        ResultsView { raw_total, sorted }
+    }
+
+    /// Filter + sort the raw results. Consumes `raw` (avoids a full clone of
+    /// every result on each call — this runs once per frame while results are
+    /// shown).
+    pub(crate) fn filtered(&self, raw: Vec<TorrentResult>) -> Vec<TorrentResult> {
         let min_s: u32 = self.search.f_seed.parse().unwrap_or(0);
         let max_b: u64 = self.search.f_size.parse::<f64>().unwrap_or(0.0).max(0.0) as u64;
         let max_b = max_b.saturating_mul(1_073_741_824);
@@ -549,7 +596,7 @@ impl App {
         let mut seen = std::collections::HashSet::new();
 
         let mut out: Vec<_> = raw
-            .iter()
+            .into_iter()
             .filter(|r| {
                 let s = r.seeders.unwrap_or(0);
                 if s < min_s {
@@ -590,7 +637,6 @@ impl App {
                 }
                 true
             })
-            .cloned()
             .collect();
 
         out.sort_by(|a, b| {
@@ -673,7 +719,7 @@ impl App {
         v
     }
 
-    pub(crate) fn export_csv(&self, rows: &[TorrentResult]) {
+    pub(crate) fn export_csv(&mut self, rows: &[TorrentResult]) {
         let path = dirs_next::download_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join(format!(
@@ -693,8 +739,16 @@ impl App {
                 csv_esc(&r.publish_date.as_deref().map(time_ago).unwrap_or_default()),
             ));
         }
-        if fs::write(&path, out).is_ok() {
-            let _ = open::that(&path);
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        match fs::write(&path, out) {
+            Ok(()) => {
+                let _ = open::that(&path);
+                self.toast(&format!("Exported {name}"), self.pal.green);
+            }
+            Err(e) => self.toast(&format!("Export failed: {e}"), self.pal.red),
         }
     }
 

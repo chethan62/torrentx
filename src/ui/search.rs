@@ -10,6 +10,7 @@ impl App {
         ui: &mut egui::Ui,
         ctx: &egui::Context,
         state: &SearchState,
+        view: Option<&crate::app::ResultsView>,
     ) {
         let fs = self.cfg.font_size;
         let busy = *state == SearchState::Searching;
@@ -126,7 +127,7 @@ impl App {
         ui.add_space(8.0);
 
         // Filter bar
-        self.draw_filter_bar(ui, fs);
+        self.draw_filter_bar(ui, fs, view);
 
         ui.add_space(8.0);
 
@@ -171,17 +172,19 @@ impl App {
                     });
             }
             SearchState::Done => {
+                let Some(view) = view else {
+                    return;
+                };
+                let sorted = &view.sorted;
                 // Fire a desktop notification on transition (once per search).
                 if !self.ui.notified {
                     self.ui.notified = true;
                     self.notify_search_done();
                 }
-                let raw = self.all_results();
-                let sorted = self.filtered(&raw);
                 let total = sorted.len();
 
                 // Clamp selected index after filtering (page-local index space)
-                let page_n = self.page_slice(&sorted).len();
+                let page_n = self.page_slice(sorted).len();
                 self.ui.selected = self.ui.selected.filter(|&i| i < page_n);
                 if self.ui.selected.is_none() {
                     self.ui.detail_open = false;
@@ -191,10 +194,10 @@ impl App {
                     ui.add_space(40.0);
                     ui.vertical_centered(|ui| {
                         lbl(ui, "No results match your filters", self.pal.sub, 17.0);
-                        if !raw.is_empty() {
+                        if view.raw_total > 0 {
                             lbl(
                                 ui,
-                                &format!("{} results hidden by filters", raw.len()),
+                                &format!("{} results hidden by filters", view.raw_total),
                                 self.pal.dim,
                                 fs,
                             );
@@ -208,7 +211,7 @@ impl App {
                     self.search.page = max_p.saturating_sub(1);
                 }
                 let pg = self.search.page;
-                let page_s = self.page_slice(&sorted).to_vec();
+                let page_s = self.page_slice(sorted);
                 let page_n = page_s.len();
 
                 // Stats bar
@@ -231,17 +234,15 @@ impl App {
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add_space(12.0);
-                        let sc = sorted.clone();
                         if outline_btn(ui, "Export CSV", self.pal.sub) {
-                            self.export_csv(&sc);
-                            self.toast("Exported to Downloads", self.pal.green);
+                            self.export_csv(sorted);
                         }
                     });
                 });
 
                 // Category chips
                 if self.cfg.show_cat_bar {
-                    let chips = App::cat_chips(&sorted);
+                    let chips = App::cat_chips(sorted);
                     if !chips.is_empty() {
                         ui.add_space(4.0);
                         ui.horizontal_wrapped(|ui| {
@@ -356,7 +357,7 @@ impl App {
                 } else {
                     pg * self.cfg.page_size
                 };
-                self.draw_results_table(ui, &page_s, base);
+                self.draw_results_table(ui, page_s, base);
             }
         }
     }
@@ -431,7 +432,11 @@ impl App {
             });
     }
 
-    pub(crate) fn draw_detail_panel(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn draw_detail_panel(
+        &mut self,
+        ui: &mut egui::Ui,
+        view: Option<&crate::app::ResultsView>,
+    ) {
         // Render while the panel is open OR still animating closed
         // (detail_anim drives the fade; the flag flips instantly on close).
         if !self.ui.detail_open && self.ui.detail_anim <= 0.0 {
@@ -440,13 +445,10 @@ impl App {
         if self.ui.tab != Tab::Search {
             return;
         }
-        let state = self.cur_state();
-        if state != SearchState::Done {
+        let Some(view) = view else {
             return;
-        }
-        let raw = self.all_results();
-        let sorted = self.filtered(&raw);
-        let page_s = self.page_slice(&sorted);
+        };
+        let page_s = self.page_slice(&view.sorted);
         // Cache the selected row so the fade-out animation still has content
         // after `selected` is cleared on close.
         if self.ui.detail_open {
@@ -600,7 +602,12 @@ impl App {
         }
     }
 
-    pub(crate) fn draw_filter_bar(&mut self, ui: &mut egui::Ui, fs: f32) {
+    pub(crate) fn draw_filter_bar(
+        &mut self,
+        ui: &mut egui::Ui,
+        fs: f32,
+        view: Option<&crate::app::ResultsView>,
+    ) {
         egui::Frame::NONE
             .fill(self.pal.surface)
             .corner_radius(PANEL_RADIUS)
@@ -708,7 +715,9 @@ impl App {
                         if n > 0
                             && icon_text_btn(ui, SvgIcon::Copy, &copy_label, self.pal.green, true)
                         {
-                            self.copy_selected_magnets(ui);
+                            if let Some(v) = view {
+                                self.copy_selected_magnets(ui, &v.sorted);
+                            }
                         }
                         ui.add_space(4.0);
                         // Select all visible / clear (no glyphs)
@@ -717,14 +726,14 @@ impl App {
                             .on_hover_text("Select all results on this page")
                             .clicked()
                         {
-                            let raw = self.all_results();
-                            let sorted = self.filtered(&raw);
-                            if self.cfg.page_size == 0 {
-                                self.ui.sel_set = (0..sorted.len()).collect();
-                            } else {
-                                let base = self.search.page * self.cfg.page_size;
-                                let end = (base + self.cfg.page_size).min(sorted.len());
-                                self.ui.sel_set = (base..end).collect();
+                            if let Some(v) = view {
+                                if self.cfg.page_size == 0 {
+                                    self.ui.sel_set = (0..v.sorted.len()).collect();
+                                } else {
+                                    let base = self.search.page * self.cfg.page_size;
+                                    let end = (base + self.cfg.page_size).min(v.sorted.len());
+                                    self.ui.sel_set = (base..end).collect();
+                                }
                             }
                         }
                         if !self.ui.sel_set.is_empty()

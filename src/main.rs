@@ -528,15 +528,18 @@ impl eframe::App for App {
             }
         }
 
-        // Check for updates once at startup (background); show a toast when found
+        // Check for updates once at startup (background); show a toast when
+        // found. Opt-out via Settings (check_updates).
         if !self.net.update_checked {
             self.net.update_checked = true;
-            let cur = env!("CARGO_PKG_VERSION").to_string();
-            let update_tx = self.net.update_tx.clone();
-            std::thread::spawn(move || {
-                let new = jackett::check_update(&cur);
-                let _ = update_tx.send(new);
-            });
+            if self.cfg.check_updates {
+                let cur = env!("CARGO_PKG_VERSION").to_string();
+                let update_tx = self.net.update_tx.clone();
+                std::thread::spawn(move || {
+                    let new = jackett::check_update(&cur);
+                    let _ = update_tx.send(new);
+                });
+            }
         }
         if let Ok(Some(new)) = self.net.update_rx.try_recv() {
             self.toast(&format!("Update available: {new}"), self.pal.accent);
@@ -629,6 +632,14 @@ impl eframe::App for App {
         };
         self.ui.prev_detail_open = self.ui.detail_open;
 
+        // Filter+sort the results once per frame; every consumer below
+        // (batch handlers, search tab, detail panel) shares this view.
+        let view = if state == SearchState::Done {
+            Some(self.compute_view())
+        } else {
+            None
+        };
+
         // Global shortcuts
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::F)) {
             ctx.memory_mut(|m| m.request_focus(egui::Id::new("q")));
@@ -641,17 +652,17 @@ impl eframe::App for App {
         // works inside the query/filters/settings inputs.
         let editing = ctx.memory(|m| m.focused().is_some());
         if !editing && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::A)) {
-            let raw = self.all_results();
-            let sorted = self.filtered(&raw);
-            if !sorted.is_empty() {
-                self.ui.sel_mode = true;
-                let page_s = self.page_slice(&sorted);
-                let base = self.search.page * self.cfg.page_size;
-                self.ui.sel_set = (0..page_s.len()).map(|i| base + i).collect();
-                self.toast(
-                    &format!("Selected {} results", page_s.len()),
-                    self.pal.green,
-                );
+            if let Some(v) = &view {
+                if !v.sorted.is_empty() {
+                    self.ui.sel_mode = true;
+                    let page_s = self.page_slice(&v.sorted);
+                    let base = self.search.page * self.cfg.page_size;
+                    self.ui.sel_set = (0..page_s.len()).map(|i| base + i).collect();
+                    self.toast(
+                        &format!("Selected {} results", page_s.len()),
+                        self.pal.green,
+                    );
+                }
             }
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -668,10 +679,8 @@ impl eframe::App for App {
             && !editing
             && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C))
         {
-            if let Some(idx) = self.ui.selected {
-                let raw = self.all_results();
-                let sorted = self.filtered(&raw);
-                let page_s = self.page_slice(&sorted);
+            if let (Some(idx), Some(v)) = (self.ui.selected, &view) {
+                let page_s = self.page_slice(&v.sorted);
                 if let Some(r) = page_s.get(idx) {
                     if let Some(m) = &r.magnet_uri {
                         ui.ctx().copy_text(m.clone());
@@ -775,14 +784,14 @@ impl eframe::App for App {
         // Added BEFORE CentralPanel so egui reserves the right strip and the
         // table shrinks to fit (no overlap). A plain Panel::right at frame
         // level is the correct egui pattern.
-        self.draw_detail_panel(ui);
+        self.draw_detail_panel(ui, view.as_ref());
         self.draw_rss_detail_panel(ui);
 
         // ── Central panel ────────────────────────────────────────────────
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(self.pal.bg))
             .show(ui, |ui| match self.ui.tab.clone() {
-                Tab::Search => self.draw_search(ui, &ctx, &state),
+                Tab::Search => self.draw_search(ui, &ctx, &state, view.as_ref()),
                 Tab::Favorites => self.draw_favorites(ui),
                 Tab::Rss => self.draw_rss(ui, &ctx),
                 Tab::About => self.draw_about(ui),

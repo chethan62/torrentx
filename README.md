@@ -32,16 +32,18 @@
 - **System tray** — minimize-to-tray with Show/Hide + Quit
 - **Desktop notifications** — alerted when a search completes
 - **`--config <path>`** — portable config for multiple profiles/installs
-- **Update checker** — notifies when a new release is out
+- **Update checker** — notifies when a new release is out (opt-out in Settings)
 - **Toast notifications** — animated, per-theme colored
 - **egui 0.36** — modern rendering, GPU-accelerated
 
 ## Download
 
+Grab the latest build from the [releases page](https://github.com/chethan62/torrentx/releases/latest):
+
 | Platform | File | Size |
 |----------|------|------|
-| Linux (AppImage) | [TorrentX-18.1.1-x86_64.AppImage](https://github.com/chethan62/torrentx/releases/tag/v18.1.1) | ~9 MB |
-| Linux (binary) | [torrentx](https://github.com/chethan62/torrentx/releases/tag/v18.1.1) | ~20 MB |
+| Linux (AppImage) | `TorrentX-<version>-x86_64.AppImage` | ~9 MB |
+| Linux (binary) | `torrentx` | ~20 MB (stripped, LTO) |
 
 ## Build from source
 
@@ -60,10 +62,10 @@ cargo build --release
 
 ## Tech
 
-- **GUI:** egui 0.36 + eframe (GPU-accelerated via wgpu/OpenGL)
+- **GUI:** egui 0.36 + eframe (GPU-accelerated via wgpu, software-GL fallback)
 - **HTTP:** reqwest (blocking)
 - **Config:** `~/.config/torrentx/config.json`
-- **Binary size:** ~5 MB (stripped, LTO)
+- **Binary size:** ~20 MB stripped + LTO; ~9 MB packed as AppImage
 
 ## License
 

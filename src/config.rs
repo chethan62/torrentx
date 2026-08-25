@@ -37,6 +37,12 @@ pub(crate) struct Config {
     /// Column display order (names of TableCol), left to right.
     #[serde(default)]
     pub(crate) col_order: Vec<String>,
+    /// Check GitHub for a newer release at startup (opt-out for privacy).
+    #[serde(default = "default_true")]
+    pub(crate) check_updates: bool,
+    /// Tab shown at startup ("Search" | "Favorites" | "Rss" | "About").
+    #[serde(default)]
+    pub(crate) last_tab: Option<String>,
 }
 
 impl Default for Config {
@@ -63,6 +69,8 @@ impl Default for Config {
             rss_refresh_secs: default_rss_refresh(),
             accent: None,
             col_order: default_col_order(),
+            check_updates: true,
+            last_tab: None,
         }
     }
 }
@@ -154,6 +162,10 @@ pub(crate) fn default_col_order() -> Vec<String> {
 /// Default RSS auto-refresh interval (10 minutes, in seconds).
 fn default_rss_refresh() -> u64 {
     600
+}
+
+fn default_true() -> bool {
+    true
 }
 
 pub(crate) fn save_cfg(c: &Config) {

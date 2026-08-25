@@ -108,7 +108,7 @@ impl App {
                                 if tab != Tab::Favorites {
                                     self.ui.fav_search.clear();
                                 }
-                                self.ui.tab = tab;
+                                self.set_tab(tab);
                                 self.ui.detail_open = false;
                                 self.ui.selected = None;
                                 // Clear cross-tab hover/selection state so a
@@ -357,13 +357,25 @@ impl App {
                     ui.add_space(8.0);
                     if ui
                         .add(egui::Button::selectable(
-                            self.cfg.dedupe,
-                            RichText::new("Dedupe").font(FontId::proportional(12.0)),
+                            self.cfg.check_updates,
+                            RichText::new("Updates").font(FontId::proportional(12.0)),
                         ))
-                        .on_hover_text("Merge near-duplicate titles across trackers")
+                        .on_hover_text("Check GitHub for a newer release at startup")
                         .clicked()
                     {
-                        self.cfg.dedupe = !self.cfg.dedupe;
+                        self.cfg.check_updates = !self.cfg.check_updates;
+                        save_cfg(&self.cfg);
+                    }
+                    ui.add_space(4.0);
+                    if ui
+                        .add(egui::Button::selectable(
+                            self.cfg.show_cat_bar,
+                            RichText::new("Cat bar").font(FontId::proportional(12.0)),
+                        ))
+                        .on_hover_text("Show category breakdown chips")
+                        .clicked()
+                    {
+                        self.cfg.show_cat_bar = !self.cfg.show_cat_bar;
                         save_cfg(&self.cfg);
                     }
                     ui.add_space(4.0);

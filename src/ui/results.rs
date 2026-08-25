@@ -17,7 +17,16 @@ impl App {
         let s_dir = self.search.s_dir.clone();
         let rh = self.cfg.row_height;
         let fsz = self.cfg.font_size;
-        let cfg = self.cfg.clone();
+        // Only the column-visibility flags are needed (NOT a full Config
+        // clone — that would copy history/favorites/rss every frame).
+        let col_shown = (
+            self.cfg.col_tracker,
+            self.cfg.col_size,
+            self.cfg.col_leech,
+            self.cfg.col_ratio,
+            self.cfg.col_health,
+            self.cfg.col_date,
+        );
         let sel = self.ui.selected;
         let det_open = self.ui.detail_open;
         // Use visual tokens for animation easing
@@ -56,12 +65,12 @@ impl App {
             .filter_map(|n| TableCol::from_name(n))
             .filter(|c| match c {
                 TableCol::Name | TableCol::Seeds => true,
-                TableCol::Tracker => cfg.col_tracker,
-                TableCol::Size => cfg.col_size,
-                TableCol::Leech => cfg.col_leech,
-                TableCol::Ratio => cfg.col_ratio,
-                TableCol::Health => cfg.col_health,
-                TableCol::Date => cfg.col_date,
+                TableCol::Tracker => col_shown.0,
+                TableCol::Size => col_shown.1,
+                TableCol::Leech => col_shown.2,
+                TableCol::Ratio => col_shown.3,
+                TableCol::Health => col_shown.4,
+                TableCol::Date => col_shown.5,
             })
             .collect();
 
