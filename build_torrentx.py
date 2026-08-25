@@ -9,7 +9,7 @@ import os, shutil, stat, subprocess, sys, urllib.request
 from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────
-PROJECT = Path.home() / "projects" / "torrentx"
+PROJECT = Path(os.environ.get("TORRENTX_PROJECT_DIR", str(Path.home() / "projects" / "torrentx")))
 BINARY  = "torrentx"
 WIN_TARGET = "x86_64-pc-windows-gnu"
 APPIMAGE_TOOL_URL = (
@@ -202,7 +202,7 @@ if __name__ == "__main__":
 
     linux_bin = build_linux()
     appimage  = build_appimage(linux_bin, version)
-    exe       = build_windows()
+    exe = None if os.environ.get("TORRENTX_SKIP_WINDOWS") == "1" else build_windows()
     collect_outputs(appimage, exe)
 
     print("\n✓ Build complete!")

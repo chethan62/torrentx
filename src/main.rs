@@ -34,14 +34,18 @@ pub(crate) fn csv_esc(s: &str) -> String {
 /// untrusted — never hand file:// or arbitrary schemes to xdg-open.
 pub(crate) fn safe_open(s: impl AsRef<str>) -> bool {
     let t = s.as_ref().trim();
-    let ok = ["http://", "https://", "magnet:"]
-        .iter()
-        .any(|p| t.starts_with(p));
-    if ok {
+    if safe_scheme(t) {
         open::that(t).is_ok()
     } else {
         false
     }
+}
+
+/// Scheme allow-list for `safe_open` (pure, unit-testable).
+pub(crate) fn safe_scheme(s: &str) -> bool {
+    ["http://", "https://", "magnet:"]
+        .iter()
+        .any(|p| s.starts_with(p))
 }
 
 /// CSV field escaping + formula-injection guard: spreadsheet apps execute
@@ -1032,7 +1036,7 @@ fn main() -> eframe::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{csv_esc, csv_safe};
+    use super::{csv_esc, csv_safe, safe_scheme};
 
     #[test]
     fn csv_esc_quotes_and_doubles_embedded_quotes() {
@@ -1054,5 +1058,17 @@ mod tests {
         assert_eq!(csv_safe("-2"), "\"'-2\"");
         assert_eq!(csv_safe("@SUM(1)"), "\"'@SUM(1)\"");
         assert_eq!(csv_safe("\tTab"), "\"'\tTab\"");
+    }
+
+    #[test]
+    fn scheme_allow_list() {
+        assert!(safe_scheme("magnet:?xt=urn:btih:abc"));
+        assert!(safe_scheme("https://example.com/x"));
+        assert!(safe_scheme("http://localhost:9117/y"));
+        // Untrusted / dangerous schemes are rejected before xdg-open.
+        assert!(!safe_scheme("file:///home/user/.ssh/id_rsa"));
+        assert!(!safe_scheme("ftp://host/f"));
+        assert!(!safe_scheme("javascript:alert(1)"));
+        assert!(!safe_scheme(""));
     }
 }

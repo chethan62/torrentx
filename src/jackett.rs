@@ -49,12 +49,34 @@ pub(crate) enum SortDir {
     Desc,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub(crate) enum Tab {
     Search,
     Favorites,
     Rss,
     About,
+}
+
+impl Tab {
+    /// Stable config-file key for this tab (persisted as `last_tab`).
+    pub(crate) fn key(&self) -> &'static str {
+        match self {
+            Tab::Search => "Search",
+            Tab::Favorites => "Favorites",
+            Tab::Rss => "Rss",
+            Tab::About => "About",
+        }
+    }
+    /// Inverse of `key`; unknown strings fall back to Search (via the caller).
+    pub(crate) fn from_key(s: &str) -> Option<Tab> {
+        Some(match s {
+            "Search" => Tab::Search,
+            "Favorites" => Tab::Favorites,
+            "Rss" => Tab::Rss,
+            "About" => Tab::About,
+            _ => return None,
+        })
+    }
 }
 
 /// Results-table columns (order is user-configurable via `Config::col_order`).
@@ -478,7 +500,7 @@ pub(crate) fn start_search(
     cat: String,
     indexer: String,
     timeout: u64,
-    results: Arc<Mutex<Vec<TorrentResult>>>,
+    results: Arc<Mutex<Arc<Vec<TorrentResult>>>>,
     state: Arc<Mutex<SearchState>>,
     count: Arc<Mutex<usize>>,
     epoch: Arc<AtomicU64>,
@@ -527,7 +549,7 @@ pub(crate) fn start_search(
                             }
                             let n = data.results.len();
                             if let Ok(mut r) = results.lock() {
-                                *r = data.results;
+                                *r = Arc::new(data.results);
                             }
                             if let Ok(mut c) = count.lock() {
                                 *c = n;
@@ -579,8 +601,16 @@ pub(crate) fn start_search(
 mod tests {
     use super::{
         category_id, fmt_size, is_magnet, normalize, parse_indexers_xml, parse_latest_tag,
-        pub_year, truncate_magnet, urlenc, validate_jackett_url,
+        pub_year, truncate_magnet, urlenc, validate_jackett_url, Tab,
     };
+
+    #[test]
+    fn tab_key_round_trip() {
+        for t in [Tab::Search, Tab::Favorites, Tab::Rss, Tab::About] {
+            assert_eq!(Tab::from_key(t.key()), Some(t));
+        }
+        assert_eq!(Tab::from_key("Nonsense"), None);
+    }
 
     #[test]
     fn category_mapping() {

@@ -173,15 +173,20 @@ fn default_true() -> bool {
 }
 
 pub(crate) fn save_cfg(c: &Config) {
-    if let Ok(j) = serde_json::to_string_pretty(c) {
-        let p = cfg_path();
-        let _ = fs::write(&p, j);
-        // Config holds the Jackett API key — keep it private to this user.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&p, fs::Permissions::from_mode(0o600));
-        }
+    let p = cfg_path();
+    let Ok(j) = serde_json::to_string_pretty(c) else {
+        eprintln!("torrentx: failed to serialize config");
+        return;
+    };
+    if let Err(e) = fs::write(&p, j) {
+        eprintln!("torrentx: failed to save {}: {e}", p.display());
+        return;
+    }
+    // Config holds the Jackett API key — keep it private to this user.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&p, fs::Permissions::from_mode(0o600));
     }
 }
 
@@ -211,5 +216,30 @@ mod tests {
     #[test]
     fn default_config_has_full_col_order() {
         assert_eq!(Config::default().col_order, default_col_order());
+    }
+
+    #[test]
+    fn config_round_trips_new_fields() {
+        let c = Config {
+            check_updates: false,
+            last_tab: Some("Rss".into()),
+            win_size: Some([1280.0, 720.0]),
+            ..Config::default()
+        };
+        let j = serde_json::to_string(&c).unwrap();
+        let back: Config = serde_json::from_str(&j).unwrap();
+        assert!(!back.check_updates);
+        assert_eq!(back.last_tab.as_deref(), Some("Rss"));
+        assert_eq!(back.win_size, Some([1280.0, 720.0]));
+    }
+
+    #[test]
+    fn config_defaults_apply_for_missing_fields() {
+        // An old config file without the newer fields still loads cleanly.
+        let old: Config =
+            serde_json::from_str(r#"{"jackett_url":"http://x","api_key":"k","history":[],"favorites":[],"theme":"TokyoNight","timeout_secs":45,"dedupe":false,"page_size":50,"row_height":44.0,"font_size":14.0,"show_cat_bar":true,"col_tracker":true,"col_size":true,"col_leech":true,"col_ratio":true,"col_health":true,"col_date":true}"#).unwrap();
+        assert!(old.check_updates); // serde default
+        assert_eq!(old.win_size, None);
+        assert_eq!(old.last_tab, None);
     }
 }

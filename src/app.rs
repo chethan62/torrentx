@@ -89,7 +89,7 @@ pub(crate) struct SearchUi {
     pub(crate) f_hlth: Hlth,
     pub(crate) s_col: SortCol,
     pub(crate) s_dir: SortDir,
-    pub(crate) results: Arc<Mutex<Vec<TorrentResult>>>,
+    pub(crate) results: Arc<Mutex<Arc<Vec<TorrentResult>>>>,
     pub(crate) state: Arc<Mutex<SearchState>>,
     pub(crate) count: Arc<Mutex<usize>>,
     /// Monotonic search counter; bumped per search so stale threads can
@@ -112,7 +112,8 @@ impl Default for SearchUi {
             f_hlth: Hlth::All,
             s_col: SortCol::Seeds,
             s_dir: SortDir::Desc,
-            results: Arc::new(Mutex::new(vec![])),
+            // Arc-shared so per-frame reads are refcount bumps, not deep copies.
+            results: Arc::new(Mutex::new(Arc::new(vec![]))),
             state: Arc::new(Mutex::new(SearchState::Idle)),
             count: Arc::new(Mutex::new(0)),
             epoch: Arc::new(AtomicU64::new(0)),
@@ -280,12 +281,11 @@ impl Default for App {
         let tokens = VisualTokens::default();
         let rss = RssUi::new(&cfg.rss_feeds);
         // Restore the last active tab (persisted across sessions).
-        let tab = match cfg.last_tab.as_deref() {
-            Some("Favorites") => Tab::Favorites,
-            Some("Rss") => Tab::Rss,
-            Some("About") => Tab::About,
-            _ => Tab::Search,
-        };
+        let tab = cfg
+            .last_tab
+            .as_deref()
+            .and_then(Tab::from_key)
+            .unwrap_or(Tab::Search);
         let ui = UiState {
             tab,
             ..UiState::default()
@@ -305,16 +305,8 @@ impl Default for App {
 impl App {
     /// Switch tabs, persisting the choice so the next launch reopens here.
     pub(crate) fn set_tab(&mut self, tab: Tab) {
-        self.ui.tab = tab.clone();
-        self.cfg.last_tab = Some(
-            match tab {
-                Tab::Search => "Search",
-                Tab::Favorites => "Favorites",
-                Tab::Rss => "Rss",
-                Tab::About => "About",
-            }
-            .to_string(),
-        );
+        self.cfg.last_tab = Some(tab.key().to_string());
+        self.ui.tab = tab;
         save_cfg(&self.cfg);
     }
 
@@ -349,7 +341,7 @@ impl App {
         self.ui.t_done = None;
         self.ui.notified = false;
         if let Ok(mut r) = self.search.results.lock() {
-            r.clear();
+            *r = Arc::new(vec![]);
         }
         if let Ok(mut c) = self.search.count.lock() {
             *c = 0;
@@ -567,7 +559,9 @@ impl App {
             .map(|g| g.clone())
             .unwrap_or(SearchState::Idle)
     }
-    pub(crate) fn all_results(&self) -> Vec<TorrentResult> {
+    /// Cheap snapshot of the current results (Arc refcount bump — no deep
+    /// copy). The vec inside is never mutated after publication.
+    pub(crate) fn all_results(&self) -> Arc<Vec<TorrentResult>> {
         self.search
             .results
             .lock()
@@ -584,14 +578,13 @@ impl App {
     pub(crate) fn compute_view(&mut self) -> ResultsView {
         let raw = self.all_results();
         let raw_total = raw.len();
-        let sorted = self.filtered(raw);
+        let sorted = self.filtered(&raw);
         ResultsView { raw_total, sorted }
     }
 
-    /// Filter + sort the raw results. Consumes `raw` (avoids a full clone of
-    /// every result on each call — this runs once per frame while results are
-    /// shown).
-    pub(crate) fn filtered(&self, raw: Vec<TorrentResult>) -> Vec<TorrentResult> {
+    /// Filter + sort the results. Clones only the rows that pass the filters
+    /// (the shared `Arc` input is never copied wholesale).
+    pub(crate) fn filtered(&self, raw: &[TorrentResult]) -> Vec<TorrentResult> {
         let min_s: u32 = self.search.f_seed.parse().unwrap_or(0);
         let max_b: u64 = self.search.f_size.parse::<f64>().unwrap_or(0.0).max(0.0) as u64;
         let max_b = max_b.saturating_mul(1_073_741_824);
@@ -601,7 +594,7 @@ impl App {
         let mut seen = std::collections::HashSet::new();
 
         let mut out: Vec<_> = raw
-            .into_iter()
+            .iter()
             .filter(|r| {
                 let s = r.seeders.unwrap_or(0);
                 if s < min_s {
@@ -642,6 +635,7 @@ impl App {
                 }
                 true
             })
+            .cloned()
             .collect();
 
         out.sort_by(|a, b| {
