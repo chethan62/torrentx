@@ -472,7 +472,7 @@ impl App {
                     .striped(false)
                     .resizable(true)
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .column(Column::remainder().at_least(180.0).clip(true))
+                    .column(Column::remainder().at_least(180.0).clip(true).resizable(false))
                     .column(Column::initial(80.0).at_least(50.0))
                     .column(Column::initial(60.0).at_least(44.0))
                     .column(Column::initial(60.0).at_least(44.0))

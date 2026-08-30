@@ -74,6 +74,14 @@ impl App {
             })
             .collect();
 
+        // egui_extras 0.36 hardcodes hscroll OFF inside the table; at
+        // narrow widths the fixed columns + Actions would clip off the
+        // right edge of the window. Wrap in a both-axis ScrollArea so the
+        // columns scroll horizontally instead.
+        egui::ScrollArea::both()
+            .id_salt("results_scroll")
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
         let mut tb = TableBuilder::new(ui)
             .striped(false)
             .resizable(true)
@@ -350,6 +358,7 @@ impl App {
                 });
             }
         });
+        }); // end ScrollArea::both
 
         if let Some((col, same)) = new_sort {
             if same {
