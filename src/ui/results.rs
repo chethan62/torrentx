@@ -89,7 +89,14 @@ impl App {
         // past the viewport, but every column is user-resizable.
         for c in &cols {
             if *c == TableCol::Name {
-                tb = tb.column(Column::remainder().at_least(120.0));
+                // Name is the ONLY remainder column — it must stay
+                // non-resizable so egui_extras re-computes it every frame to
+                // fill the current available width. A resizable remainder
+                // locks its width on the first frame (TableState::load:
+                // resizable columns keep `Size::exact(prev_width)`), so after
+                // a resize/maximize the table would end early and leave dead
+                // space after the Actions column.
+                tb = tb.column(Column::remainder().at_least(120.0).resizable(false));
             } else {
                 tb = tb.column(Column::initial(c.width()).at_least(36.0));
             }
