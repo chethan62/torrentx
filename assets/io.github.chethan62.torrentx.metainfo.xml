@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.chethan62.torrentx</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>TorrentX</name>
+  <summary>Native Rust torrent search GUI powered by Jackett</summary>
+  <description>
+    <p>
+      TorrentX queries all of your Jackett indexers from one fast, native
+      desktop app. Search 100+ trackers simultaneously or pick a single
+      indexer, then filter, sort, and act on results without leaving the
+      window.
+    </p>
+    <ul>
+      <li>Filters: text, minimum seeds, size, year, tracker, health, category chips</li>
+      <li>Batch mode: select many rows and copy all magnet links at once</li>
+      <li>Favorites and search history, persisted locally</li>
+      <li>RSS feeds (Torznab) with background auto-refresh and guid-based dedupe</li>
+      <li>19 themes (16 dark, 3 light) with custom accent color</li>
+      <li>CSV export, keyboard-driven workflow, system tray, desktop notifications</li>
+    </ul>
+    <p>
+      Requires a running Jackett instance (http://localhost:9117 by default)
+      with your trackers configured.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.chethan62.torrentx.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/chethan62/torrentx/main/docs/screenshots/dark.png</image>
+      <caption>Search tab — Tokyo Night theme</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/chethan62/torrentx/main/docs/screenshots/light.png</image>
+      <caption>Search tab — Catppuccin Latte theme</caption>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://github.com/chethan62/torrentx</url>
+  <url type="bugtracker">https://github.com/chethan62/torrentx/issues</url>
+  <url type="vcs-browser">https://github.com/chethan62/torrentx</url>
+  <developer>
+    <name>chethan62</name>
+    <url>https://github.com/chethan62</url>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="18.2.0" date="2026-08-25">
+      <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.2.0</url>
+      <description>
+        <ul>
+          <li>Fix search race: stale responses can no longer overwrite newer results</li>
+          <li>Fix shortcut hijacking while typing; working software-GL fallback</li>
+          <li>Indexer list auto-retry; window size and tab restore</li>
+          <li>Performance: single filter/sort pass per frame, Arc-shared results</li>
+          <li>Security: CSV formula-injection guard, URL scheme allow-list</li>
+          <li>About tab credits + install ID; RSS guid-based dedupe</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>
