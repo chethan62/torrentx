@@ -4,6 +4,17 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.2.2] — 2026-08-30
+
+### Fixed
+- **Actions column clipped off-screen** (search + RSS tabs): at narrow window
+  widths the fixed columns plus the Actions icon buttons exceeded the table
+  viewport. egui_extras hardcodes horizontal scroll OFF inside tables, so the
+  buttons were pushed past the right edge — unreachable. The search results
+  table is now wrapped in a both-axis scroll area (narrow windows scroll
+  horizontally), and the RSS Title remainder column is non-resizable so it
+  re-fills after resize (regression-tested offscreen).
+
 ## [18.2.1] — 2026-08-30
 
 ### Fixed
@@ -72,6 +83,7 @@ versions follow [SemVer](https://semver.org/).
 - First public release: Jackett/Torznab search, 19 themes, filters, sorting,
   favorites, RSS feeds, batch magnets, CSV export, tray, update checker
 
+[18.2.2]: https://github.com/chethan62/torrentx/releases/tag/v18.2.2
 [18.2.1]: https://github.com/chethan62/torrentx/releases/tag/v18.2.1
 [18.2.0]: https://github.com/chethan62/torrentx/releases/tag/v18.2.0
 [18.1.5]: https://github.com/chethan62/torrentx/releases/tag/v18.1.5

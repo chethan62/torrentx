@@ -1,6 +1,6 @@
 [package]
 name = "torrentx"
-version = "18.2.1"
+version = "18.2.2"
 edition = "2021"
 
 [[bin]]
