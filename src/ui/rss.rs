@@ -468,6 +468,9 @@ impl App {
             .id_salt("rss_items_scroll")
             .auto_shrink([false, true])
             .show(ui, |ui| {
+                // Hand-formatted column chain — skip keeps the one-line
+                // .column(...) instead of rustfmt exploding it vertically.
+                #[rustfmt::skip]
                 TableBuilder::new(ui)
                     .striped(false)
                     .resizable(true)

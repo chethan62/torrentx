@@ -78,6 +78,9 @@ impl App {
         // narrow widths the fixed columns + Actions would clip off the
         // right edge of the window. Wrap in a both-axis ScrollArea so the
         // columns scroll horizontally instead.
+        // Hand-formatted closure body — #[rustfmt::skip] keeps the compact
+        // single-level indentation instead of rustfmt's +1 level reflow.
+        #[rustfmt::skip]
         egui::ScrollArea::both()
             .id_salt("results_scroll")
             .auto_shrink([false, true])
