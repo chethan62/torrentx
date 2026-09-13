@@ -7,6 +7,14 @@ updates:
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # gtk is a tray-only dependency and cannot move past 0.18 today:
+      # tray-icon 0.24 -> libappindicator 0.9 -> gtk-sys ^0.18, while gtk 0.19
+      # pulls gtk-sys 0.19, and BOTH declare links = "gtk-3". Cargo allows only
+      # one package per links value, so the graph is rejected at resolution
+      # (that is why the 0.19 PR could never go green). Remove this rule once
+      # tray-icon and libappindicator ship gtk 0.19-compatible releases.
+      - dependency-name: "gtk"
   - package-ecosystem: github-actions
     directory: /
     schedule:
