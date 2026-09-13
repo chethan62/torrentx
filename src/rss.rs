@@ -197,17 +197,17 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
             Ok(Event::Text(ref e)) if in_item => {
                 // quick-xml ≥0.37 splits Text events around entity boundaries;
                 // chunks are already unescaped by the reader, so just append.
-                if let Ok(chunk) = e.decode() {
-                    text_acc.push_str(&chunk);
-                }
+                // 0.42 replaced `decode()` (fallible, byte-based) with the
+                // infallible str-based `xml10_content()` (EOL normalization only).
+                text_acc.push_str(&e.xml10_content());
             }
             Ok(Event::GeneralRef(ref e)) if in_item => {
                 // `&name;` / `&#nnn;` arrive as their own event. Resolve via
                 // the escape-html feature (full HTML5 set, so &ldquo; etc.
                 // render); unknown refs stay literal instead of vanishing.
-                let Ok(name) = e.decode() else {
-                    continue;
-                };
+                // 0.42: BytesRef content is str-based and infallible (was
+                // fallible byte-based `decode()` in ≤0.41).
+                let name = e.xml10_content();
                 let replacement: Option<String> = if let Some(num) =
                     name.strip_prefix("#x").or_else(|| name.strip_prefix("#X"))
                 {
@@ -278,8 +278,8 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
     Ok(items)
 }
 
-pub(crate) fn tag_name(raw: &[u8]) -> String {
-    std::str::from_utf8(raw).unwrap_or("").to_lowercase()
+pub(crate) fn tag_name(raw: &str) -> String {
+    raw.to_lowercase()
 }
 
 pub(crate) fn fetch_rss(url: &str, timeout: u64) -> Result<Vec<RssItem>, String> {

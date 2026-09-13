@@ -457,14 +457,15 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_lowercase();
+                // 0.42: QName/attribute keys borrow as `&str` (was `&[u8]` in ≤0.41).
+                let tag = e.name().as_ref().to_lowercase();
                 if tag != "indexer" {
                     continue;
                 }
                 let mut id = None;
                 let mut configured = false;
                 for attr in e.attributes().flatten() {
-                    let k = String::from_utf8_lossy(attr.key.as_ref()).to_lowercase();
+                    let k = attr.key.as_ref().to_lowercase();
                     if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                         match k.as_str() {
                             "id" => id = Some(v.to_string()),
