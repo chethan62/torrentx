@@ -18,7 +18,7 @@ chrono = { version = "0.4", features = ["serde"] }
 open = "5.1"
 dirs-next = "2.0"
 url = "2.5"
-quick-xml = { version = "0.41", features = ["escape-html"] }
+quick-xml = { version = "0.42", features = ["escape-html"] }
 uuid = { version = "1", features = ["v4"] }
 tray-icon = "0.24"
 notify-rust = "4.11"
