@@ -444,4 +444,38 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].title, "A ABC \u{a0}D &notanentity; E");
     }
+
+    #[test]
+    fn double_escaped_entity_decodes_exactly_one_level() {
+        // Captured from a live Jackett feed: a tracker double-escaped its own
+        // ampersand, so the wire format carried `&amp;amp;`. One decode yields
+        // the literal text "&amp;", and entities must NOT be resolved
+        // recursively — a second pass would corrupt titles that legitimately
+        // contain entity-looking text.
+        let xml = r#"<rss><channel><item>
+            <title>Linux Command Line (Hands-On) Ubuntu Linux &amp;amp; Linux Scripting</title>
+        </item></channel></rss>"#;
+        let items = parse_torznab_xml(xml).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].title,
+            "Linux Command Line (Hands-On) Ubuntu Linux &amp; Linux Scripting"
+        );
+    }
+
+    #[test]
+    fn entity_followed_by_text_keeps_both() {
+        // Also from a live feed, where the tracker truncated its own title
+        // mid-field: `+5&amp;a` decodes to "+5&a". The dangling text after the
+        // reference must survive instead of being dropped or merged wrongly.
+        let xml = r#"<rss><channel><item>
+            <title>The Official Ubuntu Book (7th Edition) 2012 - Prentice Hall +5&amp;a</title>
+        </item></channel></rss>"#;
+        let items = parse_torznab_xml(xml).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].title,
+            "The Official Ubuntu Book (7th Edition) 2012 - Prentice Hall +5&a"
+        );
+    }
 }
