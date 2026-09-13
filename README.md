@@ -3,6 +3,7 @@
 **Native Rust desktop torrent search app** — query all your [Jackett](https://github.com/Jackett/Jackett) indexers from one blazing-fast GUI.
 
 [![Release](https://img.shields.io/github/v/release/chethan62/torrentx?label=latest)](https://github.com/chethan62/torrentx/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/chethan62/torrentx/ci.yml?branch=main&label=CI)](https://github.com/chethan62/torrentx/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chethan62/torrentx)](LICENSE)
 [![Guide](https://img.shields.io/badge/docs-user%20guide-blue)](GUIDE.md)
 

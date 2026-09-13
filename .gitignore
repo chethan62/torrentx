@@ -3,7 +3,5 @@
 /AppDir
 *.AppImage
 .cargo/
-Cargo.lock
-*.AppImage
 *.exe
 torrentx-linux-amd64
