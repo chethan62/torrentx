@@ -7,27 +7,12 @@ updates:
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
-    ignore:
-      # --- gtk 0.18 fork: both rules below are removed together ---
-      #
-      # gtk: cannot move past 0.18 while the tray integration pins 0.18 —
-      #   tray-icon 0.24 -> libappindicator 0.9 -> gtk-sys ^0.18, while gtk 0.19
-      #   pulls gtk-sys 0.19, and BOTH declare links = "gtk-3". Cargo allows
-      #   only one package per links value, so the graph is rejected at
-      #   resolution (why the gtk 0.19 PR could never go green).
-      #
-      # glib: GHSA-wrw7-89jp-8q8g (medium, published 2024-12-23,
-      #   `VariantStrIter` iterator unsoundness -> NULL deref crash) is fixed
-      #   only in glib 0.20, which gtk 0.18's `glib ^0.18` requirement makes
-      #   unreachable, so the security update job can never succeed. Traced as
-      #   NOT reachable in this app: impl_get() runs only when iterating a
-      #   VariantStrIter, obtainable solely via Variant::array_iter_str(), and
-      #   no crate in the resolved graph (glib 0.18.5) calls it — the app's own
-      #   gtk use is just gtk::init()/gtk::main() for the tray. The GitHub
-      #   security alert stays visible in the Security tab; this rule only
-      #   silences a guaranteed-failing auto-update. Re-trace if gtk moves.
-      - dependency-name: "gtk"
-      - dependency-name: "glib"
+    # No `ignore` rules are needed: the tray uses tray-icon's `ksni` backend, so
+    # the gtk and glib families (gtk, gtk-sys, glib, atk, gdk, gio, pango, cairo)
+    # are not in the dependency graph at all. Re-enabling the `libappindicator`
+    # backend brings gtk 0.18 back, and its bump is unresolvable then (gtk-sys
+    # 0.18 and 0.19 both declare links = "gtk-3"); git history has the ignore
+    # rules and the reachability trace that were needed while it was in use.
   - package-ecosystem: github-actions
     directory: /
     schedule:

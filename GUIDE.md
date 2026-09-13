@@ -34,9 +34,9 @@ cargo build --release   # Rust 1.82+
 # Binary at target/release/torrentx
 ```
 
-System packages needed when building: `libxkbcommon-dev libgtk-3-dev
-libasound2-dev libxcb-*-dev libssl-dev pkg-config libxdo-dev`
-(Debian/Ubuntu names).
+System packages needed when building: `libxkbcommon-dev libasound2-dev
+libxcb-*-dev libssl-dev pkg-config` (Debian/Ubuntu names). No GTK, appindicator
+or xdotool system libraries are required — the tray is published over D-Bus.
 
 ## Quick start
 

@@ -474,6 +474,9 @@ pub(crate) fn labeled_input(
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        // Publish the context once so the tray thread can wake this loop when a
+        // tray item is activated (see `wake_ui`).
+        let _ = UI_CTX.set(ctx.clone());
         self.apply_theme(&ctx);
         let state = self.cur_state();
 
@@ -890,9 +893,25 @@ static QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(
 /// Set when the tray "Show / Hide" is clicked; the app toggles window visibility.
 static TOGGLE_VIS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Create the system tray icon + menu (Show/Hide, Quit) on a dedicated GTK
-/// thread (tray-icon requires a GTK event loop on Linux). Returns immediately;
-/// the tray lives for the app's lifetime. Failure is non-fatal.
+/// The running app's egui context. The tray thread needs it to wake the event
+/// loop after setting a flag: the flags are polled in `App::ui`, so while the
+/// app is idle (no repaint scheduled) a tray click would otherwise not be
+/// observed until the window happened to receive an event — and a hidden
+/// window receives none, so "Show" could never bring it back.
+static UI_CTX: std::sync::OnceLock<egui::Context> = std::sync::OnceLock::new();
+
+/// Wake the UI thread so it consumes a tray flag set by the tray thread.
+fn wake_ui() {
+    if let Some(ctx) = UI_CTX.get() {
+        ctx.request_repaint();
+    }
+}
+
+/// Create the system tray icon + menu (Show/Hide, Quit) on a dedicated thread.
+/// The `ksni` backend publishes a StatusNotifierItem over D-Bus and runs its
+/// service on its own worker thread, so no GTK event loop (and no GTK at all)
+/// is needed. Returns immediately; the tray lives for the app's lifetime.
+/// Failure is non-fatal.
 fn setup_tray() {
     #[cfg(target_os = "linux")]
     {
@@ -901,9 +920,6 @@ fn setup_tray() {
                 menu::{Menu, MenuEvent, MenuItem},
                 Icon, TrayIconBuilder,
             };
-            if gtk::init().is_err() {
-                return;
-            }
 
             // A 32x32 TorrentX icon — rounded dark tile + blue "T" — rendered
             // with per-pixel SDF coverage so edges are smooth at tray size.
@@ -952,15 +968,16 @@ fn setup_tray() {
                 return;
             }
 
-            if TrayIconBuilder::new()
+            // Hold the handle: the tray is torn down when it is dropped (the
+            // ksni backend stops its D-Bus service on Drop).
+            let Ok(_tray) = TrayIconBuilder::new()
                 .with_menu(Box::new(menu))
                 .with_tooltip("TorrentX")
                 .with_icon(icon)
                 .build()
-                .is_err()
-            {
+            else {
                 return;
-            }
+            };
 
             // Menu events arrive on this thread's channel; signal the app.
             let show_id = show.id().clone();
@@ -969,16 +986,22 @@ fn setup_tray() {
                 while let Ok(ev) = MenuEvent::receiver().recv() {
                     if ev.id == quit_id {
                         QUIT.store(true, std::sync::atomic::Ordering::SeqCst);
+                        wake_ui();
                         break;
                     }
                     if ev.id == show_id {
                         TOGGLE_VIS.store(true, std::sync::atomic::Ordering::SeqCst);
+                        wake_ui();
                     }
                 }
             });
 
-            // Run the GTK event loop (blocks; keeps the tray alive).
-            gtk::main();
+            // Park this thread for the app's lifetime so the tray handle above is
+            // never dropped. The ksni backend runs its D-Bus service on its own
+            // worker thread, so there is no GTK event loop to run here.
+            loop {
+                std::thread::park_timeout(std::time::Duration::from_secs(3600));
+            }
         });
     }
 }

@@ -20,11 +20,8 @@ dirs-next = "2.0"
 url = "2.5"
 quick-xml = { version = "0.42", features = ["escape-html"] }
 uuid = { version = "1", features = ["v4"] }
-tray-icon = "0.24"
+tray-icon = { version = "0.25", default-features = false, features = ["ksni"] }
 notify-rust = "4.11"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-gtk = "0.18"
 
 [profile.release]
 opt-level = 3
