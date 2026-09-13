@@ -206,6 +206,8 @@ fn search_table_actions_clips_at_narrow_width() {
     // Actions is reachable instead of clipped. The content width must stay
     // consistent across viewport sizes (no weird reflow), and at a wide
     // window the table fills exactly.
+    // Hand-formatted boolean chain kept on its own lines.
+    #[rustfmt::skip]
     let consistent = (w1000 - w900).abs() < 2.0
         && (w900 - w800).abs() < 2.0
         && (w800 - w700).abs() < 2.0;
@@ -305,6 +307,8 @@ fn rss_resizable_title_remainder_pushes_actions_offscreen() {
                         .id_salt("rss_items_scroll")
                         .auto_shrink([false, true])
                         .show(ui, |ui| {
+                            // Hand-formatted two-line bind kept compact.
+                            #[rustfmt::skip]
                             let title_col =
                                 Column::remainder().at_least(180.0).clip(true).resizable(true);
                             let mut tb = TableBuilder::new(ui)
