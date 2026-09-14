@@ -4161,7 +4161,7 @@ dependencies = [
 
 [[package]]
 name = "torrentx"
-version = "18.2.2"
+version = "18.3.0"
 dependencies = [
  "chrono",
  "dirs-next",
