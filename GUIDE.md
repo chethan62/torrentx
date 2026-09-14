@@ -38,6 +38,12 @@ System packages needed when building: `libxkbcommon-dev libasound2-dev
 libxcb-*-dev libssl-dev pkg-config` (Debian/Ubuntu names). No GTK, appindicator
 or xdotool system libraries are required — the tray is published over D-Bus.
 
+**Tray on Wayland**: a Wayland client cannot hide or raise its own window
+(`set_visible` and `focus_window` are no-ops, and un-minimizing is ignored), so
+the tray item reads **Minimize** there and only minimizes — restoring is then a
+compositor action (click the taskbar / panel entry). On X11 the item is a real
+**Show / Hide** toggle.
+
 ## Quick start
 
 TorrentX is a frontend for [Jackett](https://github.com/Jackett/Jackett) — it
