@@ -511,29 +511,46 @@ impl App {
 
     /// Auto-refresh enabled feeds whose `auto_refresh` flag is set.
     /// Re-checks every `cfg.rss_refresh_secs`; skips feeds already loading.
-    pub(crate) fn auto_refresh_feeds(&mut self) {
+    ///
+    /// Returns how long until this needs to run again, or `None` when there is
+    /// nothing to wait for. The caller must turn that into a wake
+    /// (`ctx.request_repaint_after`): the UI loop is otherwise parked while the
+    /// app sits idle, so a timer only ever checked from the paint loop would
+    /// never fire — feeds refreshed only while the user was interacting.
+    pub(crate) fn auto_refresh_feeds(&mut self) -> Option<Duration> {
         // Keep timestamps in sync with the feed list (add/remove).
         while self.rss.rss_last_refresh.len() < self.rss.rss_feeds.len() {
             self.rss.rss_last_refresh.push(Instant::now());
         }
         self.rss.rss_last_refresh.truncate(self.rss.rss_feeds.len());
         let interval = self.cfg.rss_refresh_secs;
+        if interval == 0 {
+            return None;
+        }
+        let interval = Duration::from_secs(interval);
+        // Shortest wait wins, so one wake serves every feed.
+        let mut wake_in: Option<Duration> = None;
+        let sooner = |d: Duration, cur: Option<Duration>| Some(cur.map_or(d, |c| c.min(d)));
         for i in 0..self.rss.rss_feeds.len() {
             let cfg = self.rss.rss_feeds[i].config.clone();
             if !cfg.enabled || !cfg.auto_refresh {
                 continue;
             }
             if self.rss.rss_feeds[i].status == FeedStatus::Loading {
+                // Fetch in flight: come back soon to drain the result.
+                wake_in = sooner(Duration::from_millis(500), wake_in);
                 continue;
             }
-            if interval == 0 {
-                continue;
-            }
-            let due = self.rss.rss_last_refresh[i].elapsed() >= Duration::from_secs(interval);
-            if due {
+            let elapsed = self.rss.rss_last_refresh[i].elapsed();
+            if elapsed >= interval {
                 self.refresh_feed(i);
+                // The timestamp was just reset by refresh_feed.
+                wake_in = sooner(interval, wake_in);
+            } else {
+                wake_in = sooner(interval - elapsed, wake_in);
             }
         }
+        wake_in
     }
 
     pub(crate) fn add_fav_from_rss(&mut self, item: &RssItem) {

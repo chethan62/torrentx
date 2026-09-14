@@ -789,7 +789,11 @@ impl eframe::App for App {
 
         // ── RSS polling ───────────────────────────────────────────────
         self.poll_rss();
-        self.auto_refresh_feeds();
+        // Wake again when the next auto-refresh is due; without this the loop
+        // stays parked while the app is idle and the timer never fires.
+        if let Some(after) = self.auto_refresh_feeds() {
+            ctx.request_repaint_after(after);
+        }
 
         // ── Settings panel ───────────────────────────────────────────────
         if self.ui.show_settings {
