@@ -375,7 +375,7 @@ fn parse_latest_tag(body: &str) -> Option<String> {
     Some(l.tag_name)
 }
 
-/// Validate a Jackett base URL: http/https scheme, non-empty host.
+/// Validate a Jackett base URL: http/https scheme with a real host.
 /// Returns an error message, or None if the URL is acceptable.
 pub(crate) fn validate_jackett_url(s: &str) -> Option<&'static str> {
     let t = s.trim();
@@ -383,32 +383,51 @@ pub(crate) fn validate_jackett_url(s: &str) -> Option<&'static str> {
         return Some("URL is empty");
     }
     let lower = t.to_lowercase();
-    if lower.starts_with("http://") {
-        // Allowed (Jackett commonly runs on plain http locally), but warn.
-        None
-    } else if lower.starts_with("https://") {
-        None
-    } else {
-        Some("URL must start with http:// or https://")
+    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+        return Some("URL must start with http:// or https://");
     }
+    // The scheme alone is not a Jackett address. A host is required, and it must
+    // be checked on the raw string: `url::Url::parse("http:///api")` normalizes
+    // to a URL that *has* a host, so parsing lets exactly the cases we are
+    // guarding against through.
+    let after_scheme = t.split_once("://").map(|(_, rest)| rest).unwrap_or("");
+    let authority = after_scheme.split(['/', '?', '#']).next().unwrap_or("");
+    let host = authority.split(':').next().unwrap_or("");
+    if host.is_empty() {
+        return Some("URL must include a host, e.g. http://localhost:9117");
+    }
+    None
 }
 
-/// Validate a magnet link: must start with `magnet:?xt=urn:btih:` and carry
-/// a 32- or 40-char hex/base32 info-hash. Rejects empty / malformed strings.
+/// Validate a magnet link: it must carry an `xt=urn:btih:` (or BitTorrent v2
+/// `xt=urn:btmh:`) exact-topic parameter with a plausible hash.
+///
+/// The parameter may appear anywhere in the query. Real feeds send
+/// `magnet:?dn=…&xt=urn:btih:…` as well, which an exact-prefix check rejected —
+/// hiding the magnet/copy buttons for a perfectly valid link.
 pub(crate) fn is_magnet(s: &str) -> bool {
     let s = s.trim();
-    if !s.starts_with("magnet:?xt=urn:btih:") {
+    let Some(query) = s.strip_prefix("magnet:?") else {
         return false;
+    };
+    for param in query.split('&') {
+        let Some(v) = param.strip_prefix("xt=") else {
+            continue;
+        };
+        if let Some(hash) = v.strip_prefix("urn:btih:") {
+            let hash = hash.trim_end_matches(';');
+            return match hash.len() {
+                40 => hash.chars().all(|c| c.is_ascii_hexdigit()),
+                32 => hash.chars().all(|c| c.is_ascii_alphanumeric()), // base32
+                _ => false,
+            };
+        }
+        // BitTorrent v2 hash, e.g. urn:btmh:1220<64 hex chars>.
+        if let Some(mh) = v.strip_prefix("urn:btmh:") {
+            return mh.len() >= 40 && mh.chars().all(|c| c.is_ascii_alphanumeric());
+        }
     }
-    // Grab the xt=urn:btih:<hash> value (may be followed by &dn=... etc.)
-    let rest = &s["magnet:?xt=urn:btih:".len()..];
-    let hash = rest.split('&').next().unwrap_or("");
-    let hash = hash.trim_end_matches(';');
-    match hash.len() {
-        40 => hash.chars().all(|c| c.is_ascii_hexdigit()),
-        32 => hash.chars().all(|c| c.is_ascii_alphanumeric()), // base32
-        _ => false,
-    }
+    false
 }
 
 /// Map UI category labels to Jackett/Torznab numeric category IDs.
@@ -692,6 +711,57 @@ mod tests {
         assert_eq!(parse_latest_tag(body).as_deref(), Some("v18.2.0"));
         assert_eq!(parse_latest_tag("not json"), None);
         assert_eq!(parse_latest_tag(r#"{"tag_name":42}"#), None);
+    }
+
+    #[test]
+    fn is_magnet_accepts_any_xt_position_and_v2_hashes() {
+        let h40 = "a".repeat(40);
+        // Canonical form, and the reordered form real feeds send.
+        assert!(is_magnet(&format!("magnet:?xt=urn:btih:{h40}")));
+        assert!(is_magnet(&format!(
+            "magnet:?dn=Name&xt=urn:btih:{h40}&tr=udp://t"
+        )));
+        // Trailing semicolon is tolerated, as before.
+        assert!(is_magnet(&format!("magnet:?xt=urn:btih:{h40};")));
+        // 32-char base32 info-hash.
+        assert!(is_magnet(&format!(
+            "magnet:?xt=urn:btih:{}",
+            "A".repeat(32)
+        )));
+        // BitTorrent v2 multihash.
+        assert!(is_magnet(&format!(
+            "magnet:?xt=urn:btmh:1220{}",
+            "b".repeat(64)
+        )));
+        // Still rejected: wrong hash length, bad chars, no xt, not a magnet.
+        assert!(!is_magnet("magnet:?xt=urn:btih:tooshort"));
+        assert!(!is_magnet(&format!(
+            "magnet:?xt=urn:btih:{}",
+            "z".repeat(40)
+        )));
+        assert!(!is_magnet("magnet:?dn=NoXt"));
+        assert!(!is_magnet("http://example.invalid/x.torrent"));
+        assert!(!is_magnet(""));
+    }
+
+    #[test]
+    fn validates_jackett_url_requires_a_host() {
+        // Scheme alone is not an address — these used to pass Save and then fail
+        // every request.
+        assert_eq!(
+            validate_jackett_url("http://"),
+            Some("URL must include a host, e.g. http://localhost:9117")
+        );
+        assert_eq!(
+            validate_jackett_url("http:///api"),
+            Some("URL must include a host, e.g. http://localhost:9117")
+        );
+        assert_eq!(
+            validate_jackett_url("http://:9117"),
+            Some("URL must include a host, e.g. http://localhost:9117")
+        );
+        // Whitespace is tolerated around a real host.
+        assert_eq!(validate_jackett_url("  http://localhost:9117  "), None);
     }
 
     #[test]

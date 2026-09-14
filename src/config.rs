@@ -134,7 +134,15 @@ pub(crate) fn load_cfg() -> Config {
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_secs())
                     .unwrap_or(0);
-                let backup = path.with_extension(format!("corrupt-{ts}"));
+                // Append to the file name so the backup is recognisable as one of
+                // THIS config: `with_extension` would replace ".json", producing
+                // "config.corrupt-123" instead of "config.json.corrupt-123".
+                let mut name = path
+                    .file_name()
+                    .unwrap_or_else(|| std::ffi::OsStr::new("config.json"))
+                    .to_os_string();
+                name.push(format!(".corrupt-{ts}"));
+                let backup = path.with_file_name(name);
                 eprintln!(
                     "torrentx: failed to parse {} ({e}); using defaults",
                     path.display()
@@ -168,7 +176,7 @@ pub(crate) fn load_cfg() -> Config {
     // First run: mint the anonymous per-install GUID and persist it.
     if c.install_id.is_empty() {
         c.install_id = uuid::Uuid::new_v4().to_string();
-        save_cfg(&c);
+        let _ = save_cfg(&c);
     }
     c
 }
@@ -205,19 +213,17 @@ fn default_true() -> bool {
     true
 }
 
-pub(crate) fn save_cfg(c: &Config) {
+pub(crate) fn save_cfg(c: &Config) -> Result<(), String> {
     let p = cfg_path();
-    let Ok(j) = serde_json::to_string_pretty(c) else {
-        eprintln!("torrentx: failed to serialize config");
-        return;
-    };
+    let j = serde_json::to_string_pretty(c).map_err(|e| format!("serialize config: {e}"))?;
     // Write a sibling temp file and rename over the config: a plain fs::write
     // truncates first, so an interrupted save (kill, power loss) would leave an
     // unparseable config behind — which used to be replaced by defaults.
     let tmp = p.with_extension("json.tmp");
     if let Err(e) = fs::write(&tmp, j) {
-        eprintln!("torrentx: failed to save {}: {e}", tmp.display());
-        return;
+        let msg = format!("write {}: {e}", tmp.display());
+        eprintln!("torrentx: failed to save config: {msg}");
+        return Err(msg);
     }
     // Config holds the Jackett API key — keep it private to this user.
     #[cfg(unix)]
@@ -226,9 +232,12 @@ pub(crate) fn save_cfg(c: &Config) {
         let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
     }
     if let Err(e) = fs::rename(&tmp, &p) {
-        eprintln!("torrentx: failed to save {}: {e}", p.display());
         let _ = fs::remove_file(&tmp);
+        let msg = format!("save {}: {e}", p.display());
+        eprintln!("torrentx: failed to save config: {msg}");
+        return Err(msg);
     }
+    Ok(())
 }
 
 #[cfg(test)]
