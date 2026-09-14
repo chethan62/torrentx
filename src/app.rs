@@ -6,8 +6,8 @@
 
 use crate::config::{save_cfg, Config, Favorite};
 use crate::jackett::{
-    cat_col, fmt_size, is_magnet, normalize, now_str, pub_year, set_err, start_search, time_ago,
-    Hlth, SearchState, SortCol, SortDir, TorrentResult,
+    cat_col, dedupe_best_seeded, fmt_size, is_magnet, normalize, now_str, pub_date_key, pub_year,
+    set_err, start_search, time_ago, Hlth, SearchState, SortCol, SortDir, TorrentResult,
 };
 use crate::rss::{start_rss_fetch, FeedStatus, RssFeedConfig, RssItem};
 use crate::themes::{tint, Pal, Theme, VisualTokens};
@@ -630,7 +630,6 @@ impl App {
         let min_y: u32 = self.search.f_year.parse().unwrap_or(0);
         let trk = self.search.f_trk.to_lowercase();
         let txt = self.search.f_text.to_lowercase();
-        let mut seen = std::collections::HashSet::new();
 
         let mut out: Vec<_> = raw
             .iter()
@@ -669,13 +668,15 @@ impl App {
                 if !self.search.f_hlth.ok(s) {
                     return false;
                 }
-                if self.cfg.dedupe && !seen.insert(normalize(&r.title)) {
-                    return false;
-                }
                 true
             })
             .cloned()
             .collect();
+
+        // Dedupe AFTER filtering, keeping the best-seeded copy of each title.
+        if self.cfg.dedupe {
+            out = dedupe_best_seeded(out);
+        }
 
         out.sort_by(|a, b| {
             let c = match self.search.s_col {
@@ -702,11 +703,10 @@ impl App {
                     .unwrap_or("")
                     .to_lowercase()
                     .cmp(&a.tracker.as_deref().unwrap_or("").to_lowercase()),
-                SortCol::Date => b
-                    .publish_date
-                    .as_deref()
-                    .unwrap_or("")
-                    .cmp(a.publish_date.as_deref().unwrap_or("")),
+                // Parsed, not lexical: RFC 2822 dates compare wrongly as strings
+                // ("07 May" > "12 Apr"), which is the format torznab feeds use.
+                SortCol::Date => pub_date_key(b.publish_date.as_deref().unwrap_or(""))
+                    .cmp(&pub_date_key(a.publish_date.as_deref().unwrap_or(""))),
             };
             if self.search.s_dir == SortDir::Asc {
                 c.reverse()

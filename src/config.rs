@@ -181,12 +181,27 @@ pub(crate) fn load_cfg() -> Config {
     c
 }
 
-/// Heal a config that's missing the column-order field (old configs).
-/// Pure and testable: returns the config with a default col_order if empty.
+/// Heal a config whose column order is missing or incomplete (old configs, hand
+/// edits). Pure and testable.
+///
+/// An EMPTY list gets the default order; a PARTIAL list gets the missing columns
+/// appended. Without that, a column absent from the stored order could never be
+/// displayed again — its Settings toggle would flip and nothing would appear.
 pub(crate) fn heal_col_order(mut c: Config) -> Config {
+    let known = default_col_order();
     if c.col_order.is_empty() {
-        c.col_order = default_col_order();
+        c.col_order = known;
+        return c;
     }
+    for name in &known {
+        if !c.col_order.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            c.col_order.push(name.clone());
+        }
+    }
+    // Keep only real columns, and only once each.
+    let mut seen = std::collections::HashSet::new();
+    c.col_order
+        .retain(|n| known.iter().any(|k| k == n) && seen.insert(n.clone()));
     c
 }
 
@@ -255,12 +270,30 @@ mod tests {
     }
 
     #[test]
-    fn heal_preserves_custom_order() {
+    fn heal_preserves_custom_order_and_appends_missing() {
+        // A stored order naming only some columns keeps its own prefix order and
+        // gets the rest appended. Previously a partial list hid the unnamed columns
+        // for good: their Settings toggles flipped and nothing ever appeared.
         let healed = heal_col_order(Config {
             col_order: vec!["Seeds".into(), "Name".into()],
             ..Config::default()
         });
-        assert_eq!(healed.col_order, vec!["Seeds", "Name"]);
+        assert_eq!(&healed.col_order[..2], &["Seeds", "Name"]);
+        assert_eq!(healed.col_order.len(), default_col_order().len());
+        for c in default_col_order() {
+            assert!(healed.col_order.contains(&c), "{c} must stay reachable");
+        }
+    }
+
+    #[test]
+    fn heal_drops_unknown_columns_and_duplicates() {
+        let healed = heal_col_order(Config {
+            col_order: vec!["Name".into(), "Nope".into(), "Name".into(), "Seeds".into()],
+            ..Config::default()
+        });
+        assert_eq!(&healed.col_order[..2], &["Name", "Seeds"]);
+        assert!(!healed.col_order.iter().any(|n| n == "Nope"));
+        assert_eq!(healed.col_order.len(), default_col_order().len());
     }
 
     #[test]

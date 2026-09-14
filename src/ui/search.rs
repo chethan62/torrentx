@@ -555,46 +555,57 @@ impl App {
                                 );
                             });
                             ui.add_space(4.0);
-                            for h in hist.iter().take(10) {
-                                ui.horizontal_wrapped(|ui| {
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                RichText::new(h.as_str())
-                                                    .font(FontId::proportional(fs))
-                                                    .color(self.pal.text),
-                                            )
-                                            .fill(Color32::TRANSPARENT)
-                                            .frame(false)
-                                            .min_size(egui::vec2((w - 50.0).max(120.0), 26.0)),
-                                        )
-                                        .clicked()
-                                    {
-                                        clicked = Some(h.clone());
-                                    }
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
+                            // Show the whole stored history (20 entries), not the
+                            // first 10 — the rest was unreachable. Capped in height
+                            // so a full history cannot overflow the window.
+                            egui::ScrollArea::vertical()
+                                .id_salt("hist_list")
+                                .max_height(320.0)
+                                .show(ui, |ui| {
+                                    for h in hist.iter() {
+                                        ui.horizontal_wrapped(|ui| {
                                             if ui
                                                 .add(
-                                                    egui::Button::new(svg_image(
-                                                        SvgIcon::Close,
-                                                        10.0,
-                                                        self.pal.dim,
-                                                    ))
+                                                    egui::Button::new(
+                                                        RichText::new(h.as_str())
+                                                            .font(FontId::proportional(fs))
+                                                            .color(self.pal.text),
+                                                    )
                                                     .fill(Color32::TRANSPARENT)
                                                     .frame(false)
-                                                    .min_size(egui::vec2(18.0, 18.0)),
+                                                    .min_size(egui::vec2(
+                                                        (w - 50.0).max(120.0),
+                                                        26.0,
+                                                    )),
                                                 )
-                                                .on_hover_text("Remove")
                                                 .clicked()
                                             {
-                                                deleted = Some(h.clone());
+                                                clicked = Some(h.clone());
                                             }
-                                        },
-                                    );
-                                });
-                            }
+                                            ui.with_layout(
+                                                egui::Layout::right_to_left(egui::Align::Center),
+                                                |ui| {
+                                                    if ui
+                                                        .add(
+                                                            egui::Button::new(svg_image(
+                                                                SvgIcon::Close,
+                                                                10.0,
+                                                                self.pal.dim,
+                                                            ))
+                                                            .fill(Color32::TRANSPARENT)
+                                                            .frame(false)
+                                                            .min_size(egui::vec2(18.0, 18.0)),
+                                                        )
+                                                        .on_hover_text("Remove")
+                                                        .clicked()
+                                                    {
+                                                        deleted = Some(h.clone());
+                                                    }
+                                                },
+                                            );
+                                        });
+                                    }
+                                }); // end history ScrollArea
                         });
                 });
             if let Some(h) = clicked {
@@ -769,7 +780,14 @@ impl App {
                     ui.add_space(6.0);
                     lbl(ui, "Health", self.pal.dim, fs);
                     ui.add_space(4.0);
-                    for hf in [Hlth::All, Hlth::Hot, Hlth::Good, Hlth::Slow, Hlth::Dead] {
+                    for hf in [
+                        Hlth::All,
+                        Hlth::Hot,
+                        Hlth::Good,
+                        Hlth::Slow,
+                        Hlth::Dying,
+                        Hlth::Dead,
+                    ] {
                         let on = self.search.f_hlth == hf;
                         if ui
                             .add(egui::Button::selectable(
