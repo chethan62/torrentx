@@ -99,6 +99,12 @@ pub(crate) struct Favorite {
 /// Optional config-file override set by `--config <path>` (parsed in main()).
 static CONFIG_OVERRIDE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 
+/// Set when a config file existed but could not be parsed, so the UI can tell the
+/// user their settings were reset and where the backup lives. stderr is invisible
+/// in a GUI launch, and silently replacing a config loses favourites, history and
+/// the API key.
+pub(crate) static CONFIG_LOAD_WARNING: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 pub(crate) fn set_config_override(p: std::path::PathBuf) {
     let _ = CONFIG_OVERRIDE.set(p);
 }
@@ -121,10 +127,27 @@ pub(crate) fn load_cfg() -> Config {
         Some(s) => match serde_json::from_str(s) {
             Ok(c) => c,
             Err(e) => {
+                // Never silently destroy the user's settings. Keep a copy of the
+                // unparseable file first, so favourites, history and the Jackett
+                // API key stay recoverable, and leave a note for the UI.
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let backup = path.with_extension(format!("corrupt-{ts}"));
                 eprintln!(
                     "torrentx: failed to parse {} ({e}); using defaults",
                     path.display()
                 );
+                let note = if fs::copy(&path, &backup).is_ok() {
+                    format!(
+                        "Settings unreadable — kept a backup at {}",
+                        backup.display()
+                    )
+                } else {
+                    "Settings unreadable — using defaults".to_string()
+                };
+                let _ = CONFIG_LOAD_WARNING.set(note);
                 Config::default()
             }
         },
@@ -188,15 +211,23 @@ pub(crate) fn save_cfg(c: &Config) {
         eprintln!("torrentx: failed to serialize config");
         return;
     };
-    if let Err(e) = fs::write(&p, j) {
-        eprintln!("torrentx: failed to save {}: {e}", p.display());
+    // Write a sibling temp file and rename over the config: a plain fs::write
+    // truncates first, so an interrupted save (kill, power loss) would leave an
+    // unparseable config behind — which used to be replaced by defaults.
+    let tmp = p.with_extension("json.tmp");
+    if let Err(e) = fs::write(&tmp, j) {
+        eprintln!("torrentx: failed to save {}: {e}", tmp.display());
         return;
     }
     // Config holds the Jackett API key — keep it private to this user.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&p, fs::Permissions::from_mode(0o600));
+        let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
+    }
+    if let Err(e) = fs::rename(&tmp, &p) {
+        eprintln!("torrentx: failed to save {}: {e}", p.display());
+        let _ = fs::remove_file(&tmp);
     }
 }
 

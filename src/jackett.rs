@@ -589,7 +589,10 @@ pub(crate) fn start_search(
                         } else if e.is_timeout() {
                             format!("Timed out after {timeout}s — increase timeout in Settings")
                         } else {
-                            format!("Network error: {e}")
+                            // Strip the URL: reqwest's Display appends
+                            // " for url (…)" and the query string carries the
+                            // Jackett API key, which must not reach the UI.
+                            format!("Network error: {}", e.without_url())
                         },
                     )
                 }

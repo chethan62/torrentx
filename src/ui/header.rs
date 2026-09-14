@@ -378,18 +378,6 @@ impl App {
                         self.cfg.show_cat_bar = !self.cfg.show_cat_bar;
                         save_cfg(&self.cfg);
                     }
-                    ui.add_space(4.0);
-                    if ui
-                        .add(egui::Button::selectable(
-                            self.cfg.show_cat_bar,
-                            RichText::new("Cat bar").font(FontId::proportional(12.0)),
-                        ))
-                        .on_hover_text("Show category breakdown chips")
-                        .clicked()
-                    {
-                        self.cfg.show_cat_bar = !self.cfg.show_cat_bar;
-                        save_cfg(&self.cfg);
-                    }
                     ui.add_space(8.0);
                     // Custom accent color
                     lbl(ui, "Accent", self.pal.sub, 12.0);
