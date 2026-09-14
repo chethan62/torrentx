@@ -14,7 +14,7 @@ pub(crate) struct JackettResponse {
     pub(crate) results: Vec<TorrentResult>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct TorrentResult {
     #[serde(default)]
@@ -146,6 +146,10 @@ pub(crate) enum Hlth {
     Hot,
     Good,
     Slow,
+    /// 1..=10 seeds — the band the row badge calls DYING. The chip was named
+    /// DEAD while selecting this band too, so filtering "DEAD" listed rows
+    /// labelled DYING.
+    Dying,
     Dead,
 }
 
@@ -156,16 +160,21 @@ impl Hlth {
             Hlth::Hot => "HOT",
             Hlth::Good => "GOOD",
             Hlth::Slow => "SLOW",
+            Hlth::Dying => "DYING",
             Hlth::Dead => "DEAD",
         }
     }
+    /// The bands must partition exactly as `hlth_lbl` (the row badge) does — a chip
+    /// must select precisely the rows it is named after. Enforced by
+    /// `health_chips_match_the_row_badge_bands`.
     pub(crate) fn ok(&self, s: u32) -> bool {
         match self {
             Hlth::All => true,
             Hlth::Hot => s > 500,
             Hlth::Good => (101..=500).contains(&s),
             Hlth::Slow => (11..=100).contains(&s),
-            Hlth::Dead => s <= 10,
+            Hlth::Dying => (1..=10).contains(&s),
+            Hlth::Dead => s == 0,
         }
     }
 }
@@ -373,6 +382,73 @@ fn parse_latest_tag(body: &str) -> Option<String> {
     }
     let l: Latest = serde_json::from_str(body).ok()?;
     Some(l.tag_name)
+}
+
+/// Keep one row per normalised title — the best-seeded one.
+///
+/// Deduping with a seen-set while filtering kept whichever tracker Jackett listed
+/// first, so the surviving row (the one the user downloads) could be a 1-seeder
+/// copy while a 900-seeder copy was discarded. Ties keep the earlier row, so feed
+/// order still breaks equal-seed cases.
+pub(crate) fn dedupe_best_seeded(rows: Vec<TorrentResult>) -> Vec<TorrentResult> {
+    let mut best: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (i, r) in rows.iter().enumerate() {
+        let key = normalize(&r.title);
+        match best.get(&key) {
+            Some(&j) if rows[j].seeders.unwrap_or(0) >= r.seeders.unwrap_or(0) => {}
+            _ => {
+                best.insert(key, i);
+            }
+        }
+    }
+    let mut keep: Vec<usize> = best.into_values().collect();
+    keep.sort_unstable();
+    keep.into_iter().map(|i| rows[i].clone()).collect()
+}
+
+/// Sortable key for the date formats feeds actually emit: RFC 3339
+/// (`2024-05-01T10:20:30+00:00`), a bare `2024-05-01`, and RFC 2822/RFC 1123
+/// (`Tue, 07 May 2024 10:20:30 +0000`, which is what Jackett's torznab `pubDate`
+/// usually is). Sorting the raw strings was wrong even within one format, since
+/// "07 May" compares before "12 Apr" lexically although April comes first.
+pub(crate) fn pub_date_key(s: &str) -> (u32, u32, u32, u32, u32, u32) {
+    const MONTHS: [&str; 12] = [
+        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+    ];
+    let s = s.trim();
+    // ISO / RFC 3339: year is already the leading field.
+    let b = s.as_bytes();
+    if s.len() >= 10 && b[4] == b'-' && b[7] == b'-' {
+        let n = |a: usize, z: usize| s.get(a..z).and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+        return (n(0, 4), n(5, 7), n(8, 10), n(11, 13), n(14, 16), n(17, 19));
+    }
+    // RFC 2822 / RFC 1123: fields in any order, weekday optional.
+    let (mut day, mut mon, mut year) = (0u32, 0u32, 0u32);
+    let (mut hh, mut mm, mut ss) = (0u32, 0u32, 0u32);
+    for tok in s.split([' ', ',']).filter(|t| !t.is_empty()) {
+        let low = tok.to_ascii_lowercase();
+        if low.len() >= 3 {
+            if let Some(i) = MONTHS.iter().position(|m| low.starts_with(m)) {
+                mon = i as u32 + 1;
+                continue;
+            }
+        }
+        if let Some((h, rest)) = tok.split_once(':') {
+            let (m, sec) = rest.split_once(':').unwrap_or((rest, "0"));
+            hh = h.parse().unwrap_or(0);
+            mm = m.parse().unwrap_or(0);
+            ss = sec.parse().unwrap_or(0);
+            continue;
+        }
+        if let Ok(v) = tok.parse::<u32>() {
+            if v > 999 {
+                year = v; // 4-digit year
+            } else if day == 0 {
+                day = v; // leading day-of-month; the offset ("+0000") is skipped
+            }
+        }
+    }
+    (year, mon, day, hh, mm, ss)
 }
 
 /// Validate a Jackett base URL: http/https scheme with a real host.
@@ -623,8 +699,9 @@ pub(crate) fn start_search(
 #[cfg(test)]
 mod tests {
     use super::{
-        category_id, fmt_size, is_magnet, normalize, parse_indexers_xml, parse_latest_tag,
-        pub_year, truncate_magnet, urlenc, validate_jackett_url, Tab,
+        category_id, dedupe_best_seeded, fmt_size, hlth_lbl, is_magnet, normalize,
+        parse_indexers_xml, parse_latest_tag, pub_date_key, pub_year, truncate_magnet, urlenc,
+        validate_jackett_url, Hlth, Tab, TorrentResult,
     };
 
     #[test]
@@ -762,6 +839,74 @@ mod tests {
         );
         // Whitespace is tolerated around a real host.
         assert_eq!(validate_jackett_url("  http://localhost:9117  "), None);
+    }
+
+    #[test]
+    fn dedupe_keeps_the_best_seeded_copy() {
+        let row = |title: &str, seeds: u32, tracker: &str| TorrentResult {
+            title: title.into(),
+            seeders: Some(seeds),
+            tracker: Some(tracker.into()),
+            ..Default::default()
+        };
+        // Same title once normalised (case/whitespace folded) → one row survives,
+        // and it must be the 900-seeder copy, not whichever came first.
+        let out = dedupe_best_seeded(vec![
+            row("Ubuntu Linux", 2, "1337x"),
+            row("ubuntu  linux", 900, "thepiratebay"),
+            row("Other Thing", 5, "yts"),
+        ]);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].seeders, Some(900));
+        assert_eq!(out[0].tracker.as_deref(), Some("thepiratebay"));
+        assert_eq!(out[1].title, "Other Thing");
+        // Feed order is preserved, and a tie keeps the earlier row.
+        let tied = dedupe_best_seeded(vec![row("X", 7, "a"), row("X", 7, "b")]);
+        assert_eq!(tied.len(), 1);
+        assert_eq!(tied[0].tracker.as_deref(), Some("a"));
+        assert!(dedupe_best_seeded(vec![]).is_empty());
+    }
+
+    #[test]
+    fn health_chips_match_the_row_badge_bands() {
+        // The chip a user clicks must select exactly the rows it is named after.
+        // Hlth::Dead used to cover 1..=10 too, while the row badge called those
+        // DYING — so filtering "DEAD" listed rows labelled DYING.
+        let chips = [Hlth::Hot, Hlth::Good, Hlth::Slow, Hlth::Dying, Hlth::Dead];
+        for s in [0u32, 1, 5, 10, 11, 100, 101, 500, 501, 10_000] {
+            let hits: Vec<&str> = chips
+                .iter()
+                .filter(|c| c.ok(s))
+                .map(|c| c.label())
+                .collect();
+            assert_eq!(
+                hits.len(),
+                1,
+                "{s} seeds must match exactly one chip: {hits:?}"
+            );
+            assert_eq!(hits[0], hlth_lbl(s), "badge/chip disagree at {s} seeds");
+        }
+    }
+
+    #[test]
+    fn pub_date_key_orders_across_formats() {
+        // RFC 2822 — the format torznab pubDate usually uses. Lexical comparison
+        // puts "07 May" before "12 Apr", which is backwards.
+        let apr = pub_date_key("Fri, 12 Apr 2024 10:00:00 +0000");
+        let may = pub_date_key("Tue, 07 May 2024 10:00:00 +0000");
+        assert!(apr < may, "April must sort before May");
+        assert_eq!(may, (2024, 5, 7, 10, 0, 0));
+        // Same instant in RFC 3339 must order identically, so mixed feeds sort
+        // coherently rather than in two independent blocks.
+        let may_iso = pub_date_key("2024-05-07T10:00:00+00:00");
+        assert_eq!(may, may_iso);
+        // Within one day, the time breaks the tie.
+        assert!(pub_date_key("2024-05-07T09:00:00Z") < pub_date_key("2024-05-07T17:30:00Z"));
+        // A bare date still yields a usable (zeroed-time) key, and unparseable
+        // input sorts first instead of panicking.
+        assert_eq!(pub_date_key("2024-05-07"), (2024, 5, 7, 0, 0, 0));
+        assert_eq!(pub_date_key("garbage"), (0, 0, 0, 0, 0, 0));
+        assert_eq!(pub_date_key(""), (0, 0, 0, 0, 0, 0));
     }
 
     #[test]
