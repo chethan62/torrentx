@@ -629,7 +629,7 @@ impl eframe::App for App {
             {
                 self.ui.win_save_at = Some(Instant::now());
                 self.cfg.win_size = Some(size);
-                save_cfg(&self.cfg);
+                let _ = save_cfg(&self.cfg);
             }
         }
 

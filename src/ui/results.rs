@@ -574,7 +574,7 @@ impl App {
                         lbl(ui, "3. Search for anything!", self.pal.sub, fs - 1.0);
                         ui.add_space(10.0);
                         if outline_btn(ui, "Open Settings", self.pal.accent) {
-                            self.ui.show_settings = true;
+                            self.set_settings_open(true);
                         }
                     });
             }

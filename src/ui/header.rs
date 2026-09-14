@@ -167,7 +167,7 @@ impl App {
                             })
                             .inner
                         {
-                            self.ui.show_settings = !self.ui.show_settings;
+                            self.set_settings_open(!self.ui.show_settings);
                         }
                         ui.add_space(10.0);
 
@@ -262,35 +262,34 @@ impl App {
                     }
                     ui.add_space(6.0);
                     lbl(ui, "Timeout", self.pal.sub, 12.0);
-                    let mut ts = self.cfg.timeout_secs.to_string();
-                    if ui
-                        .add(
-                            egui::TextEdit::singleline(&mut ts)
-                                .desired_width(30.0)
-                                .font(FontId::monospace(12.0)),
-                        )
-                        .changed()
-                    {
-                        if let Ok(v) = ts.parse::<u64>() {
+                    let te = ui.add(
+                        egui::TextEdit::singleline(&mut self.ui.timeout_buf)
+                            .desired_width(30.0)
+                            .font(FontId::monospace(12.0)),
+                    );
+                    if te.lost_focus() {
+                        // Commit once, on focus loss: clamping every keystroke and
+                        // writing the result back into the buffer made "10"
+                        // impossible to type (it became 50).
+                        if let Ok(v) = self.ui.timeout_buf.trim().parse::<u64>() {
                             self.cfg.timeout_secs = v.clamp(5, 120);
                         }
+                        self.ui.timeout_buf = self.cfg.timeout_secs.to_string();
                     }
                     lbl(ui, "s", self.pal.dim, 11.0);
                     ui.add_space(8.0);
                     lbl(ui, "RSS", self.pal.sub, 12.0);
-                    let mut rs = self.cfg.rss_refresh_secs.to_string();
-                    if ui
-                        .add(
-                            egui::TextEdit::singleline(&mut rs)
-                                .desired_width(SETTINGS_SMALL_W)
-                                .font(FontId::monospace(12.0))
-                                .hint_text("600"),
-                        )
-                        .changed()
-                    {
-                        if let Ok(v) = rs.parse::<u64>() {
+                    let rs_te = ui.add(
+                        egui::TextEdit::singleline(&mut self.ui.rss_secs_buf)
+                            .desired_width(SETTINGS_SMALL_W)
+                            .font(FontId::monospace(12.0))
+                            .hint_text("600"),
+                    );
+                    if rs_te.lost_focus() {
+                        if let Ok(v) = self.ui.rss_secs_buf.trim().parse::<u64>() {
                             self.cfg.rss_refresh_secs = v.clamp(0, 86_400);
                         }
+                        self.ui.rss_secs_buf = self.cfg.rss_refresh_secs.to_string();
                     }
                     lbl(ui, "s", self.pal.dim, 11.0);
                     ui.add_space(2.0);
@@ -320,7 +319,7 @@ impl App {
                             .clicked()
                         {
                             self.cfg.row_height = h;
-                            save_cfg(&self.cfg);
+                            let _ = save_cfg(&self.cfg);
                         }
                     }
                     ui.add_space(8.0);
@@ -335,7 +334,7 @@ impl App {
                             .clicked()
                         {
                             self.cfg.font_size = sz;
-                            save_cfg(&self.cfg);
+                            let _ = save_cfg(&self.cfg);
                         }
                     }
                     ui.add_space(8.0);
@@ -351,7 +350,7 @@ impl App {
                         {
                             self.cfg.page_size = ps;
                             self.search.page = 0;
-                            save_cfg(&self.cfg);
+                            let _ = save_cfg(&self.cfg);
                         }
                     }
                     ui.add_space(8.0);
@@ -364,7 +363,7 @@ impl App {
                         .clicked()
                     {
                         self.cfg.check_updates = !self.cfg.check_updates;
-                        save_cfg(&self.cfg);
+                        let _ = save_cfg(&self.cfg);
                     }
                     ui.add_space(4.0);
                     if ui
@@ -376,7 +375,7 @@ impl App {
                         .clicked()
                     {
                         self.cfg.show_cat_bar = !self.cfg.show_cat_bar;
-                        save_cfg(&self.cfg);
+                        let _ = save_cfg(&self.cfg);
                     }
                     ui.add_space(8.0);
                     // Custom accent color
@@ -411,7 +410,7 @@ impl App {
                         {
                             self.cfg.accent = None;
                             self.pal = Pal::from(&self.cfg.theme, None);
-                            save_cfg(&self.cfg);
+                            let _ = save_cfg(&self.cfg);
                         }
                     }
                     // Color picker popup
@@ -442,6 +441,10 @@ impl App {
                                         (col[2] * 255.0).round() as u8,
                                     ]);
                                     self.pal = Pal::from(&self.cfg.theme, self.cfg.accent);
+                                    // Persist on change, not only on "Done": closing
+                                    // the picker by switching tabs or the Settings
+                                    // toggle used to discard the colour.
+                                    let _ = save_cfg(&self.cfg);
                                 }
                                 ui.add_space(6.0);
                                 if ui.button("Done").clicked() {
@@ -450,7 +453,7 @@ impl App {
                             });
                         if close {
                             self.ui.show_color_picker = false;
-                            save_cfg(&self.cfg);
+                            let _ = save_cfg(&self.cfg);
                         }
                     }
                 });
@@ -485,7 +488,7 @@ impl App {
                         ui.add_space(2.0);
                     }
                     if col_changed {
-                        save_cfg(&self.cfg);
+                        let _ = save_cfg(&self.cfg);
                     }
                 });
                 ui.add_space(5.0);
@@ -506,13 +509,22 @@ impl App {
                         )
                         .clicked()
                     {
-                        if let Some(err) =
-                            crate::jackett::validate_jackett_url(&self.cfg.jackett_url)
-                        {
+                        // Validate what will actually be STORED: the validator trims,
+                        // so a padded URL used to pass validation and then fail every
+                        // request. Same for the API key.
+                        let url = self.cfg.jackett_url.trim().to_string();
+                        if let Some(err) = crate::jackett::validate_jackett_url(&url) {
                             self.toast(&format!("Jackett URL invalid: {err}"), self.pal.red);
                         } else {
-                            save_cfg(&self.cfg);
-                            self.toast("Settings saved", self.pal.green);
+                            self.cfg.jackett_url = url;
+                            self.cfg.api_key = self.cfg.api_key.trim().to_string();
+                            // Report the real outcome — the old code toasted success
+                            // even when the write failed (read-only dir, full disk).
+                            match save_cfg(&self.cfg) {
+                                Ok(()) => self.toast("Settings saved", self.pal.green),
+                                Err(e) => self
+                                    .toast(&format!("Could not save settings: {e}"), self.pal.red),
+                            }
                         }
                     }
                 });

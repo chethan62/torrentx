@@ -180,6 +180,11 @@ pub(crate) struct UiState {
     pub(crate) t_start: Option<Instant>,
     pub(crate) t_done: Option<f64>,
     pub(crate) notified: bool,
+    /// Edit buffers for the Settings numeric fields. They cannot be rebuilt from
+    /// the (clamped) config every frame: each keystroke was clamped and fed back
+    /// into the widget, so typing "10" landed on 50 and "100" on 120.
+    pub(crate) timeout_buf: String,
+    pub(crate) rss_secs_buf: String,
     /// Signature of everything that decides which torrent sits at which row.
     /// When it changes, row-indexed selection state is dropped (see
     /// `view_signature` / `clear_row_selection`).
@@ -236,6 +241,8 @@ impl Default for UiState {
             prev_detail_open: false,
             detail_row: None,
             view_sig: None,
+            timeout_buf: String::new(),
+            rss_secs_buf: String::new(),
             // Grace period: don't persist size until 3s after launch, so the
             // pre-restore default never clobbers the saved window size.
             win_save_at: Some(Instant::now()),
@@ -320,7 +327,7 @@ impl App {
     pub(crate) fn set_tab(&mut self, tab: Tab) {
         self.cfg.last_tab = Some(tab.key().to_string());
         self.ui.tab = tab;
-        save_cfg(&self.cfg);
+        let _ = save_cfg(&self.cfg);
     }
 
     pub(crate) fn do_search(&mut self) {
@@ -333,13 +340,13 @@ impl App {
                 &self.search.state,
                 "No API key — open Settings and paste your Jackett API key.".into(),
             );
-            self.ui.show_settings = true;
+            self.set_settings_open(true);
             return;
         }
         self.cfg.history.retain(|h| h != &q);
         self.cfg.history.insert(0, q.clone());
         self.cfg.history.truncate(20);
-        save_cfg(&self.cfg);
+        let _ = save_cfg(&self.cfg);
         self.ui.selected = None;
         self.ui.detail_open = false;
         self.ui.detail_row = None; // drop cached detail from previous search
@@ -418,7 +425,7 @@ impl App {
             seeders: r.seeders,
             saved_at: now_str(),
         });
-        save_cfg(&self.cfg);
+        let _ = save_cfg(&self.cfg);
         self.toast("Saved to Favorites", self.pal.yellow);
     }
 
@@ -451,7 +458,7 @@ impl App {
     pub(crate) fn set_theme(&mut self, t: Theme) {
         self.cfg.theme = t;
         self.pal = Pal::from(&self.cfg.theme, self.cfg.accent);
-        save_cfg(&self.cfg);
+        let _ = save_cfg(&self.cfg);
     }
 
     // ── RSS helpers ───────────────────────────────────────────────────────
@@ -463,7 +470,7 @@ impl App {
             .iter()
             .map(|f| f.config.clone())
             .collect();
-        save_cfg(&self.cfg);
+        let _ = save_cfg(&self.cfg);
     }
 
     pub(crate) fn refresh_feed(&mut self, idx: usize) {
@@ -580,7 +587,7 @@ impl App {
             seeders: item.seeders,
             saved_at: now_str(),
         });
-        save_cfg(&self.cfg);
+        let _ = save_cfg(&self.cfg);
         self.toast("Saved to Favorites", self.pal.yellow);
     }
 
@@ -787,6 +794,16 @@ impl App {
         self.ui.detail_row = None;
         self.ui.sel_set.clear();
         self.ui.hovered = None;
+    }
+
+    /// Open or close the Settings panel, seeding the numeric edit buffers from the
+    /// config. They cannot be derived per frame (see `timeout_buf`).
+    pub(crate) fn set_settings_open(&mut self, open: bool) {
+        self.ui.show_settings = open;
+        if open {
+            self.ui.timeout_buf = self.cfg.timeout_secs.to_string();
+            self.ui.rss_secs_buf = self.cfg.rss_refresh_secs.to_string();
+        }
     }
 
     pub(crate) fn export_csv(&mut self, rows: &[TorrentResult]) {

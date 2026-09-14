@@ -174,7 +174,7 @@ impl App {
                         }
                         ui.add_space(8.0);
                         if outline_btn(ui, "Open Settings", self.pal.accent) {
-                            self.ui.show_settings = true;
+                            self.set_settings_open(true);
                         }
                     });
             }
@@ -604,11 +604,11 @@ impl App {
             }
             if let Some(h) = deleted {
                 self.cfg.history.retain(|x| x != &h);
-                save_cfg(&self.cfg);
+                let _ = save_cfg(&self.cfg);
             }
             if clear_all {
                 self.cfg.history.clear();
-                save_cfg(&self.cfg);
+                let _ = save_cfg(&self.cfg);
                 self.ui.show_hist = false;
             }
         }

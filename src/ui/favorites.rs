@@ -20,7 +20,7 @@ impl App {
                 ui.add_space(14.0);
                 if !self.cfg.favorites.is_empty() && outline_btn(ui, "Clear all", self.pal.red) {
                     self.cfg.favorites.clear();
-                    save_cfg(&self.cfg);
+                    let _ = save_cfg(&self.cfg);
                 }
             });
         });
@@ -194,7 +194,7 @@ impl App {
 
         if let Some(i) = remove {
             self.cfg.favorites.remove(i);
-            save_cfg(&self.cfg);
+            let _ = save_cfg(&self.cfg);
         }
         if let Some(m) = open_mag {
             let _ = safe_open(m);
