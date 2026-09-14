@@ -33,7 +33,8 @@
 - **Search history** — with per-item delete
 - **RSS feeds** — Jackett Torznab indexer feeds with auto-refresh (10 min), deduped
 - **Custom accent color** — override any theme's accent
-- **System tray** — minimize-to-tray with Show/Hide + Quit
+- **System tray** — show/hide + quit from the tray menu (on Wayland, where a
+  window cannot be restored by the app itself, the item minimizes instead)
 - **Desktop notifications** — alerted when a search completes
 - **`--config <path>`** — portable config for multiple profiles/installs
 - **Update checker** — notifies when a new release is out (opt-out in Settings)

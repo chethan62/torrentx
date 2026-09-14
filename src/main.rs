@@ -485,12 +485,24 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
-        // Tray "Show / Hide" → toggle window visibility.
+        // Tray "Show / Hide" (X11) / "Minimize" (Wayland) → window visibility.
         if TOGGLE_VIS.swap(false, std::sync::atomic::Ordering::SeqCst) {
-            let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(!focused));
-            if focused {
-                ctx.request_repaint();
+            if wayland_session() {
+                // Wayland gives a client exactly one window-state lever: minimize.
+                // `set_visible` is a no-op ("Not possible on Wayland"),
+                // `set_minimized(false)` and `focus_window()` are ignored, and an
+                // xdg-activation request does not unminimize on KWin (all verified
+                // on KDE Wayland). So this is deliberately one-way — the menu item
+                // says "Minimize" there, and restoring is the compositor's job
+                // (panel / taskbar click).
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+            } else {
+                // X11: a hidden window is restorable, so keep true show/hide.
+                let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(!focused));
+                if focused {
+                    ctx.request_repaint();
+                }
             }
         }
 
@@ -911,6 +923,13 @@ fn wake_ui() {
     }
 }
 
+/// Whether this session runs on Wayland, where a window cannot be hidden or
+/// raised by the client (see the tray "Show / Hide" handler).
+fn wayland_session() -> bool {
+    std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && std::env::var("WINIT_UNIX_BACKEND").map_or(true, |b| b != "x11")
+}
+
 /// Create the system tray icon + menu (Show/Hide, Quit) on a dedicated thread.
 /// The `ksni` backend publishes a StatusNotifierItem over D-Bus and runs its
 /// service on its own worker thread, so no GTK event loop (and no GTK at all)
@@ -965,7 +984,17 @@ fn setup_tray() {
                 return;
             };
 
-            let show = MenuItem::new("Show / Hide", true, None);
+            // On Wayland the window cannot be restored by the client, so the item
+            // is an honest one-way "Minimize" there; X11 keeps the real toggle.
+            let show = MenuItem::new(
+                if wayland_session() {
+                    "Minimize"
+                } else {
+                    "Show / Hide"
+                },
+                true,
+                None,
+            );
             let quit = MenuItem::new("Quit", true, None);
             let menu = Menu::new();
             if menu.append_items(&[&show, &quit]).is_err() {
