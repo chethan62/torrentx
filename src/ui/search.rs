@@ -37,8 +37,15 @@ impl App {
             if resp.changed() && self.search.query.is_empty() {
                 self.ui.show_hist = false;
             }
-            if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                self.do_search();
+            if resp.lost_focus() {
+                // Dismiss the recent-searches popup when the field loses focus:
+                // otherwise it stays on screen over the filter bar, and its entry
+                // rows are topmost there — so a click meant for a filter silently
+                // re-runs that history entry instead.
+                self.ui.show_hist = false;
+                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    self.do_search();
+                }
             }
 
             ui.add_space(6.0);
@@ -176,10 +183,15 @@ impl App {
                     return;
                 };
                 let sorted = &view.sorted;
-                // Fire a desktop notification on transition (once per search).
+                // Fire a desktop notification when the search completes while the
+                // window is NOT focused — that is the only case where it is useful
+                // (the helper's contract), and unconditional firing spams the
+                // desktop on every search.
                 if !self.ui.notified {
                     self.ui.notified = true;
-                    self.notify_search_done();
+                    if !ui.input(|i| i.viewport().focused.unwrap_or(true)) {
+                        self.notify_search_done();
+                    }
                 }
                 let total = sorted.len();
 

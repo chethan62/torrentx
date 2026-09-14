@@ -528,6 +528,9 @@ impl eframe::App for App {
             std::thread::spawn(move || {
                 let list = jackett::fetch_indexers(&url, &key);
                 let _ = handle.send(list);
+                // Wake the parked UI loop: otherwise the Jackett status dot and the
+                // indexer list stay stale until the user happens to move the mouse.
+                wake_ui();
             });
         }
         // Drain indexer fetch result
@@ -558,6 +561,9 @@ impl eframe::App for App {
                 std::thread::spawn(move || {
                     let new = jackett::check_update(&cur);
                     let _ = update_tx.send(new);
+                    // Wake the parked loop so the "update available" toast actually
+                    // renders instead of waiting for the next input event.
+                    wake_ui();
                 });
             }
         }
@@ -603,6 +609,12 @@ impl eframe::App for App {
             t.anim_progress = (t.anim_progress + dt / 0.15).min(1.0);
             t.ttl > 0.0
         });
+        // Keep painting while a toast lives: its TTL and fade only advance on
+        // frames, and the loop parks when nothing requests a repaint — otherwise a
+        // toast freezes on screen and covers the UI until the next input event.
+        if !self.ui.toasts.is_empty() {
+            ctx.request_repaint();
+        }
 
         // Persist window size (throttled to one write per 3s while resizing)
         // so the next launch reopens at this size.
@@ -705,7 +717,13 @@ impl eframe::App for App {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             if self.ui.detail_open {
                 self.ui.detail_open = false;
-            } else {
+            } else if self.rss.rss_detail.is_some() {
+                // The RSS tab keeps its own detail index: Esc must close that panel
+                // instead of silently clearing the (hidden) search query.
+                self.rss.rss_detail = None;
+                self.ui.detail_row = None;
+            } else if ctx.memory(|m| m.focused()).is_none() {
+                // Only clear the query when no text field owns the keyboard.
                 self.search.query.clear();
                 self.ui.show_hist = false;
             }
@@ -798,6 +816,16 @@ impl eframe::App for App {
 
         // ── Header ───────────────────────────────────────────────────────
         self.draw_header(ui);
+
+        // Drop row-indexed selection whenever the view changes underneath it
+        // (sort, filter, page, page size, new result set): the highlight, the
+        // detail panel and the batch set would otherwise target a different
+        // torrent than the one the user picked.
+        let sig = self.view_signature();
+        if self.ui.view_sig.is_some_and(|prev| prev != sig) {
+            self.clear_row_selection();
+        }
+        self.ui.view_sig = Some(sig);
 
         // ── RSS polling ───────────────────────────────────────────────
         self.poll_rss();

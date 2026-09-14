@@ -348,6 +348,11 @@ impl App {
                 }
                 if let Some(i) = del {
                     self.rss.rss_feeds.remove(i);
+                    // The item panel indexes into rss_feeds[rss_selected].items, so
+                    // it must be dropped too — otherwise it shows another feed's
+                    // item (or a stale item from the feed just deleted).
+                    self.rss.rss_detail = None;
+                    self.ui.detail_row = None;
                     if self.rss.rss_selected >= self.rss.rss_feeds.len()
                         && !self.rss.rss_feeds.is_empty()
                     {

@@ -180,6 +180,10 @@ pub(crate) struct UiState {
     pub(crate) t_start: Option<Instant>,
     pub(crate) t_done: Option<f64>,
     pub(crate) notified: bool,
+    /// Signature of everything that decides which torrent sits at which row.
+    /// When it changes, row-indexed selection state is dropped (see
+    /// `view_signature` / `clear_row_selection`).
+    pub(crate) view_sig: Option<u64>,
     /// Animation progress for row hover (0.0 = not hovering, 1.0 = fully hovered)
     pub(crate) row_hover_anim: f32,
     /// Previously hovered row index for animation
@@ -231,6 +235,7 @@ impl Default for UiState {
             detail_anim: 0.0, // Detail panel starts hidden
             prev_detail_open: false,
             detail_row: None,
+            view_sig: None,
             // Grace period: don't persist size until 3s after launch, so the
             // pre-restore default never clobbers the saved window size.
             win_save_at: Some(Instant::now()),
@@ -290,7 +295,7 @@ impl Default for App {
             tab,
             ..UiState::default()
         };
-        Self {
+        let mut app = Self {
             cfg,
             pal,
             tokens,
@@ -298,7 +303,15 @@ impl Default for App {
             net: NetState::default(),
             ui,
             rss,
+        };
+        // Report an unreadable config in the UI: stderr is invisible in a GUI
+        // launch and the user needs to know their settings were reset (and that a
+        // backup was kept).
+        if let Some(w) = crate::config::CONFIG_LOAD_WARNING.get() {
+            let (msg, col) = (w.clone(), app.pal.yellow);
+            app.toast(&msg, col);
         }
+        app
     }
 }
 
@@ -674,13 +687,14 @@ impl App {
                     r(b).partial_cmp(&r(a)).unwrap_or(std::cmp::Ordering::Equal)
                 }
                 SortCol::Size => b.size.unwrap_or(0).cmp(&a.size.unwrap_or(0)),
-                SortCol::Name => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
-                SortCol::Tracker => a
+                // Descending like the arms above; the Asc case reverses below.
+                SortCol::Name => b.title.to_lowercase().cmp(&a.title.to_lowercase()),
+                SortCol::Tracker => b
                     .tracker
                     .as_deref()
                     .unwrap_or("")
                     .to_lowercase()
-                    .cmp(&b.tracker.as_deref().unwrap_or("").to_lowercase()),
+                    .cmp(&a.tracker.as_deref().unwrap_or("").to_lowercase()),
                 SortCol::Date => b
                     .publish_date
                     .as_deref()
@@ -737,6 +751,44 @@ impl App {
         v
     }
 
+    /// Cheap signature of everything that decides which torrent sits at which row
+    /// (filters, sort, page, page size, result count). Compared once per frame so
+    /// row-indexed selection can be dropped when the view changes underneath it.
+    pub(crate) fn view_signature(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        self.search.cat.hash(&mut h);
+        self.search.f_text.hash(&mut h);
+        self.search.f_seed.hash(&mut h);
+        self.search.f_size.hash(&mut h);
+        self.search.f_year.hash(&mut h);
+        self.search.f_trk.hash(&mut h);
+        (self.search.f_hlth.clone() as u8).hash(&mut h);
+        (self.search.s_col.clone() as u8).hash(&mut h);
+        (self.search.s_dir.clone() as u8).hash(&mut h);
+        self.search.page.hash(&mut h);
+        self.cfg.page_size.hash(&mut h);
+        self.search
+            .count
+            .lock()
+            .map(|c| *c)
+            .unwrap_or(0)
+            .hash(&mut h);
+        h.finish()
+    }
+
+    /// Drop row-keyed selection state. `selected`, `sel_set` and the detail panel
+    /// all address rows by index, so after any reorder/reslice they would point at
+    /// a different torrent — the highlight moves, F/Enter/M act on the wrong item,
+    /// and a batch copy would export torrents the user never ticked.
+    pub(crate) fn clear_row_selection(&mut self) {
+        self.ui.selected = None;
+        self.ui.detail_open = false;
+        self.ui.detail_row = None;
+        self.ui.sel_set.clear();
+        self.ui.hovered = None;
+    }
+
     pub(crate) fn export_csv(&mut self, rows: &[TorrentResult]) {
         let path = dirs_next::download_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -754,7 +806,7 @@ impl App {
                 csv_esc(&r.size.map(fmt_size).unwrap_or_default()),
                 r.seeders.unwrap_or(0),
                 r.peers.unwrap_or(0),
-                csv_esc(&r.publish_date.as_deref().map(time_ago).unwrap_or_default()),
+                csv_safe(&r.publish_date.as_deref().map(time_ago).unwrap_or_default()),
             ));
         }
         let name = path

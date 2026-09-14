@@ -293,13 +293,16 @@ pub(crate) fn fetch_rss(url: &str, timeout: u64) -> Result<Vec<RssItem>, String>
             } else if e.is_timeout() {
                 format!("Timed out after {timeout}s")
             } else {
-                format!("Network error: {e}")
+                // Never surface the URL: it carries the API key.
+                format!("Network error: {}", e.without_url())
             }
         })?;
     if !resp.status().is_success() {
         return Err(format!("HTTP {}", resp.status().as_u16()));
     }
-    let body = resp.text().map_err(|e| format!("Read error: {e}"))?;
+    let body = resp
+        .text()
+        .map_err(|e| format!("Read error: {}", e.without_url()))?;
     parse_torznab_xml(&body)
 }
 
