@@ -92,102 +92,108 @@ impl App {
                 } else {
                     self.pal.row_even
                 };
-                egui::Frame::NONE
-                    .fill(bg)
-                    .inner_margin(egui::Margin::symmetric(16, 10))
-                    .show(ui, |ui| {
-                        // Full-row click layer FIRST (covers the whole row rect,
-                        // text included). Drawn before content so the row's own
-                        // buttons win the hit test. It must be taken INSIDE the
-                        // frame: the rect then starts at this row's top, whereas
-                        // at the scroll-area level `ui.max_rect()` is the whole
-                        // list viewport and identical for every row — egui
-                        // resolves a hit to the last registered widget, so every
-                        // click used to act on the LAST favorite.
-                        let row_resp = ui.interact(
-                            ui.max_rect(),
-                            egui::Id::new(("favrow", i)),
-                            egui::Sense::click(),
-                        );
-                        if row_resp.clicked() {
-                            if let Some(m) = &fav.magnet {
-                                if is_magnet(m) {
-                                    open_mag = Some(m.clone());
-                                }
-                            }
+                // Row band, allocated BEFORE the contents — see the note in
+                // ui/rss.rs. `ui.max_rect()` inside a Frame inside a ScrollArea is
+                // the AVAILABLE rect, so every favourite's click layer reached the
+                // bottom of the list: all layers overlapped, egui settles a hit on
+                // the LAST one registered, and so clicking any favourite opened the
+                // LAST favourite's magnet (and Magnet/Download/Remove only worked on
+                // the last row). Allocating the band first keeps the layers disjoint
+                // and registers the row below its own buttons.
+                let title_h = ui
+                    .painter()
+                    .layout_no_wrap("X".to_owned(), FontId::proportional(fs), Color32::WHITE)
+                    .size()
+                    .y;
+                let meta_h = ui
+                    .painter()
+                    .layout_no_wrap(
+                        "X".to_owned(),
+                        FontId::proportional(fs - 1.5),
+                        Color32::WHITE,
+                    )
+                    .size()
+                    .y;
+                let band_h = (title_h + ui.spacing().item_spacing.y + meta_h).max(28.0) // svg_btn is 32x28
+                    + 20.0; // the Frame margins this replaces (10 top + 10 bottom)
+                let (band, row_resp) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), band_h),
+                    egui::Sense::click(),
+                );
+                ui.painter().rect_filled(band, 0.0, bg);
+                if row_resp.clicked() {
+                    if let Some(m) = &fav.magnet {
+                        if is_magnet(m) {
+                            open_mag = Some(m.clone());
                         }
-                        if row_resp.hovered() {
-                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                        }
-                        ui.horizontal(|ui| {
-                            ui.vertical(|ui| {
-                                // Never negative — actions row takes ~130px;
-                                // at very narrow widths let the title wrap.
-                                ui.set_min_width((ui.available_width() - 130.0).max(60.0));
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(&fav.title)
-                                            .font(FontId::proportional(fs))
-                                            .color(self.pal.text),
-                                    )
-                                    .truncate(),
-                                );
-                                ui.horizontal(|ui| {
-                                    if let Some(t) = &fav.tracker {
-                                        lbl(ui, t, self.pal.sub, fs - 1.5);
-                                    }
-                                    if let Some(s) = fav.size {
-                                        lbl(
-                                            ui,
-                                            &format!("·  {}", fmt_size(s)),
-                                            self.pal.dim,
-                                            fs - 1.5,
-                                        );
-                                    }
-                                    if let Some(s) = fav.seeders {
-                                        lbl(ui, &format!("·  {} seeds", s), seed_col(s), fs - 1.5);
-                                    }
-                                    if !fav.saved_at.is_empty() {
-                                        lbl(
-                                            ui,
-                                            &format!("·  saved {}", fav.saved_at),
-                                            self.pal.dim,
-                                            fs - 2.0,
-                                        );
-                                    }
-                                });
-                            });
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.spacing_mut().item_spacing.x = 5.0;
-                                    if fav.magnet.as_deref().map(is_magnet).unwrap_or(false)
-                                        && svg_btn(
-                                            ui,
-                                            SvgIcon::Magnet,
-                                            "Open magnet",
-                                            self.pal.accent,
-                                        )
-                                    {
-                                        open_mag = fav.magnet.clone();
-                                    }
-                                    if fav.link.is_some()
-                                        && svg_btn(
-                                            ui,
-                                            SvgIcon::Download,
-                                            "Download .torrent",
-                                            self.pal.green,
-                                        )
-                                    {
-                                        open_link = fav.link.clone();
-                                    }
-                                    if svg_btn(ui, SvgIcon::Close, "Remove", self.pal.red) {
-                                        remove = Some(i);
-                                    }
-                                },
+                    }
+                }
+                if row_resp.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+                {
+                    let mut content = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(band.shrink2(egui::vec2(16.0, 10.0)))
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    let ui = &mut content;
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            // Never negative — actions row takes ~130px;
+                            // at very narrow widths let the title wrap.
+                            ui.set_min_width((ui.available_width() - 130.0).max(60.0));
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(&fav.title)
+                                        .font(FontId::proportional(fs))
+                                        .color(self.pal.text),
+                                )
+                                .truncate(),
                             );
+                            ui.horizontal(|ui| {
+                                if let Some(t) = &fav.tracker {
+                                    lbl(ui, t, self.pal.sub, fs - 1.5);
+                                }
+                                if let Some(s) = fav.size {
+                                    lbl(ui, &format!("·  {}", fmt_size(s)), self.pal.dim, fs - 1.5);
+                                }
+                                if let Some(s) = fav.seeders {
+                                    lbl(ui, &format!("·  {} seeds", s), seed_col(s), fs - 1.5);
+                                }
+                                if !fav.saved_at.is_empty() {
+                                    lbl(
+                                        ui,
+                                        &format!("·  saved {}", fav.saved_at),
+                                        self.pal.dim,
+                                        fs - 2.0,
+                                    );
+                                }
+                            });
+                        });
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.spacing_mut().item_spacing.x = 5.0;
+                            if fav.magnet.as_deref().map(is_magnet).unwrap_or(false)
+                                && svg_btn(ui, SvgIcon::Magnet, "Open magnet", self.pal.accent)
+                            {
+                                open_mag = fav.magnet.clone();
+                            }
+                            if fav.link.is_some()
+                                && svg_btn(
+                                    ui,
+                                    SvgIcon::Download,
+                                    "Download .torrent",
+                                    self.pal.green,
+                                )
+                            {
+                                open_link = fav.link.clone();
+                            }
+                            if svg_btn(ui, SvgIcon::Close, "Remove", self.pal.red) {
+                                remove = Some(i);
+                            }
                         });
                     });
+                }
                 ui.separator();
             }
         });

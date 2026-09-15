@@ -249,93 +249,117 @@ impl App {
                         Color32::TRANSPARENT
                     };
 
-                    egui::Frame::NONE
-                        .fill(bg)
-                        .corner_radius(6.0)
-                        .inner_margin(egui::Margin::symmetric(10, 7))
-                        .show(ui, |ui| {
-                            // Full-row click layer — clicking anywhere in the feed
-                            // row (name, count badge, empty space) selects it, not
-                            // just the name text.
-                            let row_resp = ui.interact(
-                                ui.max_rect(),
-                                egui::Id::new(("feedrow", i)),
-                                egui::Sense::click(),
+                    // Row band, allocated BEFORE the contents.
+                    //
+                    // `ui.max_rect()` cannot be used here: inside a Frame inside a
+                    // ScrollArea it is the AVAILABLE rect, so every row's click layer
+                    // reached the bottom of the viewport, all layers overlapped, and
+                    // egui settles a hit on the LAST one registered. Clicking feed 1
+                    // therefore selected the last feed, and the selected feed's
+                    // Refresh/Edit/Delete buttons never fired unless it happened to be
+                    // the last feed. Allocating the band first keeps the layers
+                    // disjoint AND registers the row below its own children, so those
+                    // icon buttons still win their clicks.
+                    let text_h = ui
+                        .painter()
+                        .layout_no_wrap(
+                            "X".to_owned(),
+                            FontId::proportional(fs - 0.5),
+                            Color32::WHITE,
+                        )
+                        .size()
+                        .y;
+                    let band_h = text_h.max(10.0)
+                        + if is_sel { 4.0 + 28.0 } else { 0.0 } // action row: svg_btn is 32x28
+                        + 14.0; // the Frame margins this replaces (7 top + 7 bottom)
+                    let (band, row_resp) = ui.allocate_exact_size(
+                        egui::vec2(ui.available_width(), band_h),
+                        egui::Sense::click(),
+                    );
+                    if bg != Color32::TRANSPARENT {
+                        ui.painter().rect_filled(band, 6.0, bg);
+                    }
+                    if row_resp.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+                    if row_resp.clicked() {
+                        sel = Some(i);
+                    }
+                    {
+                        let mut content = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(band.shrink2(egui::vec2(10.0, 7.0)))
+                                .layout(egui::Layout::top_down(egui::Align::Min)),
+                        );
+                        let ui = &mut content;
+                        ui.horizontal(|ui| {
+                            let (dc, icon) = match st {
+                                FeedStatus::Ok => (pal.green, SvgIcon::Circle),
+                                FeedStatus::Loading => (pal.accent, SvgIcon::Refresh),
+                                FeedStatus::Error => (pal.red, SvgIcon::Close),
+                                FeedStatus::Idle => (pal.dim, SvgIcon::CircleDot),
+                            };
+                            svg_icon(ui, icon, 10.0, dc);
+                            ui.add_space(4.0);
+                            let nc = if en { pal.text } else { pal.dim };
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(&name)
+                                        .font(FontId::proportional(fs - 0.5))
+                                        .color(nc),
+                                )
+                                .truncate(),
                             );
-                            if row_resp.hovered() {
-                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                            }
-                            if row_resp.clicked() {
-                                sel = Some(i);
-                            }
-                            ui.horizontal(|ui| {
-                                let (dc, icon) = match st {
-                                    FeedStatus::Ok => (pal.green, SvgIcon::Circle),
-                                    FeedStatus::Loading => (pal.accent, SvgIcon::Refresh),
-                                    FeedStatus::Error => (pal.red, SvgIcon::Close),
-                                    FeedStatus::Idle => (pal.dim, SvgIcon::CircleDot),
-                                };
-                                svg_icon(ui, icon, 10.0, dc);
-                                ui.add_space(4.0);
-                                let nc = if en { pal.text } else { pal.dim };
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(&name)
-                                            .font(FontId::proportional(fs - 0.5))
-                                            .color(nc),
-                                    )
-                                    .truncate(),
+                            // Auto-refresh marker
+                            if self.rss.rss_feeds[i].config.auto_refresh {
+                                let ac = if en { pal.accent } else { pal.dim };
+                                ui.add(svg_image(SvgIcon::Refresh, 10.0, ac)).on_hover_text(
+                                    format!(
+                                        "Auto-refreshes every {} min",
+                                        self.cfg.rss_refresh_secs / 60
+                                    ),
                                 );
-                                // Auto-refresh marker
-                                if self.rss.rss_feeds[i].config.auto_refresh {
-                                    let ac = if en { pal.accent } else { pal.dim };
-                                    ui.add(svg_image(SvgIcon::Refresh, 10.0, ac)).on_hover_text(
-                                        format!(
-                                            "Auto-refreshes every {} min",
-                                            self.cfg.rss_refresh_secs / 60
-                                        ),
-                                    );
-                                }
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        if n > 0 {
-                                            egui::Frame::NONE
-                                                .fill(tint(pal.accent, 25))
-                                                .corner_radius(PANEL_RADIUS)
-                                                .inner_margin(egui::Margin::symmetric(5, 1))
-                                                .show(ui, |ui| {
-                                                    ui.label(
-                                                        RichText::new(n.to_string())
-                                                            .font(FontId::monospace(fs - 3.0))
-                                                            .color(pal.accent),
-                                                    );
-                                                });
-                                        }
-                                    },
-                                );
-                            });
-                            if is_sel {
-                                ui.add_space(4.0);
-                                ui.horizontal(|ui| {
-                                    if svg_btn(ui, SvgIcon::Refresh, "Refresh", pal.accent) {
-                                        refr = Some(i);
-                                    }
-                                    if act_btn(ui, "Edit", "Edit feed", pal.sub) {
-                                        ed = Some(i);
-                                    }
-                                    if svg_btn(ui, SvgIcon::Close, "Delete feed", pal.red) {
-                                        del = Some(i);
-                                    }
-                                    let ec = if en { pal.green } else { pal.dim };
-                                    let el = if en { "On" } else { "Off" };
-                                    if act_btn(ui, el, "Toggle enabled", ec) {
-                                        self.rss.rss_feeds[i].config.enabled = !en;
-                                        self.sync_rss_configs();
-                                    }
-                                });
                             }
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if n > 0 {
+                                        egui::Frame::NONE
+                                            .fill(tint(pal.accent, 25))
+                                            .corner_radius(PANEL_RADIUS)
+                                            .inner_margin(egui::Margin::symmetric(5, 1))
+                                            .show(ui, |ui| {
+                                                ui.label(
+                                                    RichText::new(n.to_string())
+                                                        .font(FontId::monospace(fs - 3.0))
+                                                        .color(pal.accent),
+                                                );
+                                            });
+                                    }
+                                },
+                            );
                         });
+                        if is_sel {
+                            ui.add_space(4.0);
+                            ui.horizontal(|ui| {
+                                if svg_btn(ui, SvgIcon::Refresh, "Refresh", pal.accent) {
+                                    refr = Some(i);
+                                }
+                                if act_btn(ui, "Edit", "Edit feed", pal.sub) {
+                                    ed = Some(i);
+                                }
+                                if svg_btn(ui, SvgIcon::Close, "Delete feed", pal.red) {
+                                    del = Some(i);
+                                }
+                                let ec = if en { pal.green } else { pal.dim };
+                                let el = if en { "On" } else { "Off" };
+                                if act_btn(ui, el, "Toggle enabled", ec) {
+                                    self.rss.rss_feeds[i].config.enabled = !en;
+                                    self.sync_rss_configs();
+                                }
+                            });
+                        }
+                    }
                 }
                 if let Some(i) = sel {
                     self.rss.rss_selected = i;

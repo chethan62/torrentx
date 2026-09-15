@@ -4,6 +4,28 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.3.1] — 2026-09-15
+
+### Fixed
+- **Scroll-list rows gave their clicks to the wrong row — 18.3.0's fix for this was
+  incomplete.** `ui.max_rect()` is the *available* rect, not the row's rect: inside a
+  Frame inside a ScrollArea it reaches the bottom of the list, so **every** row's
+  click layer covered every later row as well. egui settles a hit on the last layer
+  registered, so:
+  - the Favorites list still opened the **last** favourite's magnet when you clicked
+    any row (18.3.0 only moved the layer inside the frame, which shortened it but did
+    not make the layers disjoint), and its Magnet/Download/Remove buttons only worked
+    on the last row;
+  - the RSS feed list selected the **last** feed on any click, and the selected
+    feed's Refresh/Edit/Delete buttons never fired unless it happened to be the last
+    feed.
+
+  Rows now allocate their own band up front and draw into it, so the layers are
+  disjoint *and* the row's own buttons still win their clicks. Regression-tested:
+  `tests/row_hit_bands.rs` asserts disjoint bands, correct routing and that an inner
+  button receives its click — and asserts that the previous pattern *fails* those
+  same expectations, so the test cannot silently stop covering the bug.
+
 ## [18.3.0] — 2026-09-14
 
 ### Changed
@@ -157,6 +179,7 @@ versions follow [SemVer](https://semver.org/).
 - First public release: Jackett/Torznab search, 19 themes, filters, sorting,
   favorites, RSS feeds, batch magnets, CSV export, tray, update checker
 
+[18.3.1]: https://github.com/chethan62/torrentx/releases/tag/v18.3.1
 [18.3.0]: https://github.com/chethan62/torrentx/releases/tag/v18.3.0
 [18.2.2]: https://github.com/chethan62/torrentx/releases/tag/v18.2.2
 [18.2.1]: https://github.com/chethan62/torrentx/releases/tag/v18.2.1
