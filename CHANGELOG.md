@@ -18,6 +18,10 @@ versions follow [SemVer](https://semver.org/).
 - `quick-xml` 0.41 → 0.42 (parser API migration).
 
 ### Fixed
+- **The tray item had a different identity on every launch.** Its SNI `Id` defaulted
+  to `"<pid>-<n>"`, but the spec says `Id` is how the host identifies an item across
+  sessions — it is what per-item placement state is keyed on. It is now the stable
+  `"torrentx"`.
 - **The tray icon was effectively invisible on a dark panel.** It was a
   near-black tile with thin strokes; measured in the panel it rendered as dim
   slate with no trace of the icon colour, because the tile merged into the panel

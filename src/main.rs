@@ -1031,7 +1031,12 @@ fn setup_tray() {
 
             // Hold the handle: the tray is torn down when it is dropped (the
             // ksni backend stops its D-Bus service on Drop).
+            // A STABLE id. Without it tray-icon generates "<pid>-<n>", so every
+            // launch registers what the host sees as a brand-new item — and the SNI
+            // spec says Id is how the host identifies an item across sessions (it is
+            // what per-item placement/pinning state is keyed on).
             let Ok(_tray) = TrayIconBuilder::new()
+                .with_id("torrentx")
                 .with_menu(Box::new(menu))
                 .with_tooltip("TorrentX")
                 .with_icon(icon)
