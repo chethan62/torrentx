@@ -18,6 +18,11 @@ versions follow [SemVer](https://semver.org/).
 - `quick-xml` 0.41 → 0.42 (parser API migration).
 
 ### Fixed
+- **The tray icon was effectively invisible on a dark panel.** It was a
+  near-black tile with thin strokes; measured in the panel it rendered as dim
+  slate with no trace of the icon colour, because the tile merged into the panel
+  once Plasma scaled 32px down to tray size. It is now a transparent-background
+  glyph with bold, bright strokes.
 - **Tray menu actions did nothing until you clicked the window.** The app only
   repainted while a search was running, so menu events — including Quit — sat
   unprocessed while idle. Tray events now wake the UI.
