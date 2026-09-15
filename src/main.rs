@@ -972,8 +972,14 @@ fn setup_tray() {
                 Icon, TrayIconBuilder,
             };
 
-            // A 32x32 TorrentX icon — rounded dark tile + blue "T" — rendered
-            // with per-pixel SDF coverage so edges are smooth at tray size.
+            // A 32x32 TorrentX glyph — a bold blue "T", transparent background —
+            // rendered with per-pixel SDF coverage so edges are smooth at tray size.
+            //
+            // The original design was a near-black rounded tile with a thin blue
+            // "T". Measured in the panel, the result was a dim slate mark (peak
+            // (41,46,66)) with no trace of the icon blue: the tile merged into the
+            // dark panel and the thin strokes anti-aliased away when Plasma scaled
+            // 32px down to tray size, leaving the item effectively invisible.
             const TS: usize = 32;
             let mut rgba = Vec::with_capacity(TS * TS * 4);
             // Rounded-rect SDF: <0 inside, >0 outside.
@@ -989,23 +995,17 @@ fn setup_tray() {
                     let px = x as f32 + 0.5;
                     let py = y as f32 + 0.5;
                     let cov = |d: f32| (0.5 - d).clamp(0.0, 1.0);
-                    let t = cov(rr(px, py, 16.0, 9.5, 10.0, 3.25, 2.0)) // T crossbar
-                        .max(cov(rr(px, py, 16.0, 20.75, 3.25, 8.0, 2.0))); // T stem
-                    let bg = cov(rr(px, py, 16.0, 16.0, 16.0, 16.0, 7.5)); // tile
-                    if bg <= 0.0 && t <= 0.0 {
+                    // Thick strokes filling most of the frame: they must survive
+                    // being scaled to ~20px.
+                    let t = cov(rr(px, py, 16.0, 10.0, 12.0, 4.0, 2.0)) // T crossbar
+                        .max(cov(rr(px, py, 16.0, 21.0, 4.0, 10.0, 2.0))); // T stem
+                    if t <= 0.0 {
                         rgba.extend_from_slice(&[0, 0, 0, 0]);
                         continue;
                     }
-                    // "Over"-composite the T (fg) onto the tile (bg).
-                    let (fr, fg_, fb) = (122.0, 162.0, 247.0);
-                    let (br, bgc, bb) = (26.0, 27.0, 38.0);
-                    let mix = |f: f32, b: f32| (f * t + b * (1.0 - t)).round() as u8;
-                    rgba.extend_from_slice(&[
-                        mix(fr, br),
-                        mix(fg_, bgc),
-                        mix(fb, bb),
-                        ((t + bg * (1.0 - t)) * 255.0).round() as u8,
-                    ]);
+                    // Bright blue: legible on dark panels (where a dark tile was
+                    // invisible) and on light ones.
+                    rgba.extend_from_slice(&[137, 180, 250, (t * 255.0).round() as u8]);
                 }
             }
             let Ok(icon) = Icon::from_rgba(rgba, TS as u32, TS as u32) else {
