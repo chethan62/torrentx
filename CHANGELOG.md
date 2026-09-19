@@ -4,6 +4,28 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.4.1] — 2026-09-15
+
+### Fixed
+- **Deduplication was hiding real results.** The key was `normalize(title)` — the first
+  four words once quality noise is stripped — so different releases sharing an opening
+  collapsed into one row and only the best-seeded survived. Measured against live
+  Jackett output:
+  - `One Piece Episode of East Blue (2017)`, `… Sabo (2015)` and `… Skypiea (2018)` —
+    three different films, one visible row;
+  - episodes **1177 and 1178** merged; episodes **227-259, 260-292 and 293-325** merged;
+  - `ubuntu 22.04.3` merged with `ubuntu 23.10`.
+
+  That sample had 12 such merges out of 382 results, and 10 out of 141 for `ubuntu`.
+  The key is now the same normalised title **plus content markers** — episode numbers in
+  any of their usual forms (`s02e07`, `ep1178`, `1x02`, bare `1177`), years, and other
+  numbers that are not encoding — so those cases separate (0 wrong merges in both
+  samples) while the same release in another encoding still collapses.
+
+  Resolutions and codec numbers (`1080`, `720`, `264`, `265`, …) are explicitly
+  excluded from the markers, because they differ between two copies of the *same*
+  release and must not split them.
+
 ## [18.4.0] — 2026-09-15
 
 ### Added

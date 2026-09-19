@@ -384,7 +384,54 @@ fn parse_latest_tag(body: &str) -> Option<String> {
     Some(l.tag_name)
 }
 
-/// Keep one row per normalised title — the best-seeded one.
+/// Numbers that mean "encoding", not "content" — they differ between two copies of
+/// the SAME release, so they must not separate them.
+const NOT_CONTENT: [&str; 10] = [
+    "264", "265", "720", "1080", "2160", "480", "576", "10", "12", "8",
+];
+
+/// Content markers: episode/season/part/year numbers found anywhere in the title.
+fn content_markers(t: &str) -> Vec<String> {
+    let mut m: Vec<String> = t
+        .to_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|tok| {
+            if tok.chars().all(|c| c.is_ascii_digit()) && (2..=4).contains(&tok.len()) {
+                return !NOT_CONTENT.contains(tok);
+            }
+            // s02e07 / ep1178 / 1x02 style episode markers
+            let b = tok.as_bytes();
+            (b.len() >= 4 && b[0] == b's' && tok.contains('e'))
+                || tok
+                    .strip_prefix("ep")
+                    .is_some_and(|r| r.parse::<u32>().is_ok())
+                || (tok.contains('x') && tok.split('x').all(|p| p.parse::<u32>().is_ok()))
+        })
+        .map(String::from)
+        .collect();
+    m.sort();
+    m.dedup();
+    m
+}
+
+/// Dedupe key: `normalize` (which strips quality noise) PLUS the content markers.
+///
+/// `normalize` alone keys on the first four words, which hid real results: over live
+/// Jackett data it merged `Episode of East Blue (2017)`, `Episode of Sabo (2015)` and
+/// `Episode of Skypiea (2018)` into one row, merged episodes 1177 and 1178, and merged
+/// Ubuntu 2022 with 2023 — 12 and 10 wrong merges in two 400-item samples. With the
+/// markers appended those samples have none, while same-release-different-encode rows
+/// still collapse.
+pub(crate) fn dedupe_key(t: &str) -> String {
+    let marks = content_markers(t);
+    if marks.is_empty() {
+        normalize(t)
+    } else {
+        format!("{}|{}", normalize(t), marks.join(","))
+    }
+}
+
+/// Keep one row per title — the best-seeded one.
 ///
 /// Deduping with a seen-set while filtering kept whichever tracker Jackett listed
 /// first, so the surviving row (the one the user downloads) could be a 1-seeder
@@ -393,7 +440,7 @@ fn parse_latest_tag(body: &str) -> Option<String> {
 pub(crate) fn dedupe_best_seeded(rows: Vec<TorrentResult>) -> Vec<TorrentResult> {
     let mut best: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for (i, r) in rows.iter().enumerate() {
-        let key = normalize(&r.title);
+        let key = dedupe_key(&r.title);
         match best.get(&key) {
             Some(&j) if rows[j].seeders.unwrap_or(0) >= r.seeders.unwrap_or(0) => {}
             _ => {
@@ -930,10 +977,11 @@ pub(crate) fn stop_local() {
 #[cfg(test)]
 mod tests {
     use super::{
-        asset_prefix, category_id, dedupe_best_seeded, find_bin, fmt_size, free_port, hlth_lbl,
-        is_magnet, managed_config, managed_root, normalize, parse_indexers_xml, parse_latest_tag,
-        port_open, pub_date_key, pub_year, read_server_config, start_local, stop_local,
-        truncate_magnet, urlenc, user_config, validate_jackett_url, Hlth, Tab, TorrentResult,
+        asset_prefix, category_id, dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port,
+        hlth_lbl, is_magnet, managed_config, managed_root, normalize, parse_indexers_xml,
+        parse_latest_tag, port_open, pub_date_key, pub_year, read_server_config, start_local,
+        stop_local, truncate_magnet, urlenc, user_config, validate_jackett_url, Hlth, Tab,
+        TorrentResult,
     };
     use std::thread;
     use std::time::Duration;
@@ -1166,6 +1214,53 @@ mod tests {
         assert_eq!(asset_prefix("x86_64"), Some("LinuxAMDx64"));
         assert_eq!(asset_prefix("aarch64"), Some("LinuxARM64"));
         assert_eq!(asset_prefix("riscv64"), None); // refuse rather than fetch a wrong build
+    }
+
+    /// Regression from live Jackett data. `normalize()` alone keys on the first four
+    /// words, which merged all three of these films into a single row (11 more such
+    /// merges in that sample, and 10 in an Ubuntu sample — including 2022 vs 2023).
+    #[test]
+    fn dedupe_key_keeps_different_episodes_apart() {
+        let k = dedupe_key;
+        // Three different films whose first four words match ("one piece episode of").
+        let east_blue = k("One Piece Episode of East Blue Luffy to 4-nin no Nakama no Daiboken (2017) 1080p BRRip 5.1 x264 -YTS");
+        let sabo = k("One Piece Episode of Sabo Bond of Three Brothers, A Miraculous Reunion and an Inherited Will (2015) 1080p BRRip 5.1 x264 -YTS");
+        let skypiea = k("One Piece Episode of Skypiea (2018) 1080p BRRip x264 -YTS");
+        assert_ne!(east_blue, sabo);
+        assert_ne!(sabo, skypiea);
+        // Adjacent episodes of a long runner (the tracker's own numbering).
+        assert_ne!(
+            k("[Erai-raws] One Piece - 1177 [1080p CR WEBRip HEVC AAC][MultiSub][4AFFFCF0]"),
+            k("[Erai-raws] One Piece - 1178 [1080p CR WEBRip HEVC AAC][MultiSub][5B00D1D2]")
+        );
+        // Season/episode form.
+        assert_ne!(
+            k("ONE PIECE 2023 S02E03 1080p WEBRip HDR10 10bit DDP5 1 HEVC-d3g"),
+            k("ONE PIECE 2023 S02E07 1080p WEBRip HDR10 10bit DDP5 1 HEVC-d3g")
+        );
+        // Different OS releases.
+        assert_ne!(
+            k("ubuntu-22.04.3-desktop-amd64.iso"),
+            k("ubuntu-23.10-desktop-amd64.iso")
+        );
+    }
+
+    /// The other half of the deal: the same release in different encodings must STILL
+    /// collapse, or dedupe stops doing anything useful.
+    #[test]
+    fn dedupe_key_still_merges_the_same_release() {
+        let k = dedupe_key;
+        assert_eq!(
+            k("ONE PIECE 2023 S02E03 1080p WEBRip HDR10 10bit DDP5 1 HEVC-d3g"),
+            k("ONE PIECE 2023 S02E03 720p HEVC x265-MeGusta")
+        );
+        // Resolutions and codec numbers are encoding, not content.
+        assert_eq!(
+            k("[ToonsHub] One Piece EP1178 1080p BILI WEB-DL AAC2.0 H.265 (Multi-Subs)"),
+            k("[ToonsHub] One Piece EP1178 1080p BILI WEB-DL AAC2.0 H.264 (Multi-Subs)")
+        );
+        // Titles with no numbers at all behave exactly as before.
+        assert_eq!(k("Ubuntu Linux"), k("ubuntu  linux"));
     }
 
     #[test]
