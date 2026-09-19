@@ -878,6 +878,10 @@ pub(crate) fn start_local(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
     if let Some(dir) = &env_cfg {
+        // Jackett writes <XDG_CONFIG_HOME>/Jackett, so the parent has to exist —
+        // don't rely on Jackett creating the whole chain on a fresh machine.
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
         cmd.env("XDG_CONFIG_HOME", dir);
     }
     let child = cmd
@@ -927,9 +931,9 @@ pub(crate) fn stop_local() {
 mod tests {
     use super::{
         asset_prefix, category_id, dedupe_best_seeded, find_bin, fmt_size, free_port, hlth_lbl,
-        is_magnet, managed_config, normalize, parse_indexers_xml, parse_latest_tag, port_open,
-        pub_date_key, pub_year, read_server_config, start_local, stop_local, truncate_magnet,
-        urlenc, user_config, validate_jackett_url, Hlth, Tab, TorrentResult,
+        is_magnet, managed_config, managed_root, normalize, parse_indexers_xml, parse_latest_tag,
+        port_open, pub_date_key, pub_year, read_server_config, start_local, stop_local,
+        truncate_magnet, urlenc, user_config, validate_jackett_url, Hlth, Tab, TorrentResult,
     };
     use std::thread;
     use std::time::Duration;
@@ -1189,6 +1193,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&xdg);
         std::fs::create_dir_all(&xdg).unwrap();
         std::env::set_var("XDG_CONFIG_HOME", &xdg);
+        // Leave the machine as found: only clean up a managed dir this test created.
+        let pre_existing = managed_root().exists();
         assert!(
             read_server_config(&user_config()).is_none(),
             "redirect failed — refusing to spawn against the user's real Jackett config"
@@ -1224,6 +1230,9 @@ mod tests {
             "stop_local must stop what it started"
         );
         let _ = std::fs::remove_dir_all(&xdg);
+        if !pre_existing {
+            let _ = std::fs::remove_dir_all(managed_root());
+        }
     }
 
     #[test]
