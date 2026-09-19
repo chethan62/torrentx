@@ -221,6 +221,8 @@ versions follow [SemVer](https://semver.org/).
 - First public release: Jackett/Torznab search, 19 themes, filters, sorting,
   favorites, RSS feeds, batch magnets, CSV export, tray, update checker
 
+[18.4.1]: https://github.com/chethan62/torrentx/releases/tag/v18.4.1
+[18.4.0]: https://github.com/chethan62/torrentx/releases/tag/v18.4.0
 [18.3.1]: https://github.com/chethan62/torrentx/releases/tag/v18.3.1
 [18.3.0]: https://github.com/chethan62/torrentx/releases/tag/v18.3.0
 [18.2.2]: https://github.com/chethan62/torrentx/releases/tag/v18.2.2
