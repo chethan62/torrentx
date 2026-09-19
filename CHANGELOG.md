@@ -4,6 +4,26 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.4.0] — 2026-09-15
+
+### Added
+- **Settings can start a local Jackett for you.** No more installing and running one
+  by hand: if nothing answers at the configured URL, the button starts the Jackett
+  copy already on your machine, or — with a single click — downloads the official
+  build once into `~/.local/share/torrentx`. It waits for it to come up, fills in the
+  URL, and reads the generated API key from Jackett's own `ServerConfig.json`. It
+  binds localhost only, reuses your existing Jackett config when there is one (so
+  your indexers come with it), and is stopped when the app exits — the app only ever
+  kills the instance it started itself.
+  Jackett is deliberately **not** bundled: 48MB packed / 116MB unpacked and GPL-2.0
+  against this MIT app, and an AppImage payload is a read-only squashfs that Jackett
+  could never update itself from.
+- An **Open Jackett** button beside it, for adding indexers in Jackett's own page.
+
+### Changed
+- The "cannot reach Jackett" message now points at Settings → Start Jackett before
+  falling back to the systemd command.
+
 ## [18.3.1] — 2026-09-15
 
 ### Fixed
