@@ -945,7 +945,7 @@ static TOGGLE_VIS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool
 static UI_CTX: std::sync::OnceLock<egui::Context> = std::sync::OnceLock::new();
 
 /// Wake the UI thread so it consumes a tray flag set by the tray thread.
-fn wake_ui() {
+pub(crate) fn wake_ui() {
     if let Some(ctx) = UI_CTX.get() {
         ctx.request_repaint();
     }
@@ -1104,7 +1104,7 @@ fn main() -> eframe::Result<()> {
     setup_tray();
 
     // Try the normal (GPU-accelerated) run first.
-    match eframe::run_native("TorrentX", native_options(), app_creator()) {
+    let result = match eframe::run_native("TorrentX", native_options(), app_creator()) {
         Ok(()) => Ok(()),
         Err(e) => {
             eprintln!("GPU init failed ({e}); retrying with software rendering…");
@@ -1120,7 +1120,10 @@ fn main() -> eframe::Result<()> {
             std::env::set_var("GALLIUM_DRIVER", "llvmpipe");
             eframe::run_native("TorrentX", native_options(), app_creator())
         }
-    }
+    };
+    // Stop the Jackett we started, if any (a no-op when the user runs their own).
+    jackett::stop_local();
+    result
 }
 
 #[cfg(test)]

@@ -260,6 +260,68 @@ impl App {
                     {
                         self.ui.key_vis = !self.ui.key_vis;
                     }
+                    ui.add_space(8.0);
+                    // Run a local Jackett instead of asking the user to install and
+                    // start one themselves. Not bundled: 48MB + GPL-2.0 against an
+                    // MIT 18MB app, and an AppImage payload is read-only.
+                    let have_bin = crate::jackett::find_bin().is_some();
+                    ui.horizontal(|ui| {
+                        let busy =
+                            crate::jackett::MANAGED_BUSY.load(std::sync::atomic::Ordering::SeqCst);
+                        let label = if busy {
+                            "Starting Jackett…"
+                        } else if have_bin {
+                            "Start Jackett"
+                        } else {
+                            "Install Jackett (48 MB)"
+                        };
+                        if ui
+                            .add_enabled(
+                                !busy,
+                                egui::Button::new(RichText::new(label).size(11.5))
+                                    .min_size(egui::vec2(0.0, 25.0)),
+                            )
+                            .on_hover_text(if have_bin {
+                                "Starts the Jackett on this machine (localhost only)"
+                            } else {
+                                "Downloads Jackett once into ~/.local/share/torrentx"
+                            })
+                            .clicked()
+                        {
+                            crate::jackett::start_local_async(
+                                self.cfg.jackett_url.clone(),
+                                self.cfg.api_key.clone(),
+                            );
+                        }
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new("Open Jackett").size(11.5))
+                                    .min_size(egui::vec2(0.0, 25.0)),
+                            )
+                            .on_hover_text("Add or change indexers in Jackett's own page")
+                            .clicked()
+                        {
+                            let _ = crate::safe_open(self.cfg.jackett_url.clone());
+                        }
+                    });
+                    // Worker result: adopt the url/key, or report why not.
+                    let done = crate::jackett::MANAGED.lock().unwrap().take();
+                    if let Some(res) = done {
+                        match res {
+                            Ok((url, key)) => {
+                                self.cfg.jackett_url = url;
+                                if !key.is_empty() {
+                                    self.cfg.api_key = key;
+                                }
+                                let _ = save_cfg(&self.cfg);
+                                self.toast(
+                                    "Jackett is running — add indexers, then search",
+                                    self.pal.green,
+                                );
+                            }
+                            Err(e) => self.toast(&format!("Jackett: {e}"), self.pal.red),
+                        }
+                    }
                     ui.add_space(6.0);
                     lbl(ui, "Timeout", self.pal.sub, 12.0);
                     let te = ui.add(

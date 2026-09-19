@@ -3,7 +3,7 @@ use crate::themes::rgb;
 use eframe::egui::Color32;
 use reqwest::blocking::Client;
 use serde::Deserialize;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -679,7 +679,7 @@ pub(crate) fn start_search(
                         &state,
                         if e.is_connect() {
                             format!(
-                                "Cannot reach Jackett at {url}\nRun: sudo systemctl start jackett"
+                                "Cannot reach Jackett at {url}\nSettings → Start Jackett, or: sudo systemctl start jackett"
                             )
                         } else if e.is_timeout() {
                             format!("Timed out after {timeout}s — increase timeout in Settings")
@@ -696,13 +696,243 @@ pub(crate) fn start_search(
     });
 }
 
+// ─── Managed Jackett (start one, or install a copy once) ────────────────────
+//
+// Deliberately NOT bundled: Jackett is 48MB packed / 116MB unpacked and GPL-2.0
+// (this app is MIT), and an AppImage payload is a read-only squashfs it could
+// never update itself from. Instead we run a local copy the same way the user
+// would, on localhost only.
+
+/// Result of the last start/install attempt, polled (and taken) by the Settings
+/// panel: `Ok((url, api_key))` or `Err(message)`.
+pub(crate) static MANAGED: Mutex<Option<Result<(String, String), String>>> = Mutex::new(None);
+/// True while a start/install worker is running.
+pub(crate) static MANAGED_BUSY: AtomicBool = AtomicBool::new(false);
+/// The Jackett we started, so exit can stop it (we only kill our own).
+static JACKETT_CHILD: Mutex<Option<std::process::Child>> = Mutex::new(None);
+
+fn managed_root() -> std::path::PathBuf {
+    dirs_next::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("torrentx")
+}
+/// Jackett's own config: the user's existing one if present (it holds their
+/// indexers), else a private one under our data dir.
+fn user_config() -> std::path::PathBuf {
+    dirs_next::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("Jackett/ServerConfig.json")
+}
+fn managed_config() -> std::path::PathBuf {
+    managed_root().join("Jackett/ServerConfig.json")
+}
+
+/// A local Jackett binary: a copy we installed, or a system install.
+pub(crate) fn find_bin() -> Option<std::path::PathBuf> {
+    [
+        managed_root().join("Jackett/jackett"),
+        std::path::PathBuf::from("/opt/Jackett/jackett"),
+        std::path::PathBuf::from("/usr/lib/jackett/jackett"),
+        std::path::PathBuf::from("/usr/share/jackett/jackett"),
+    ]
+    .into_iter()
+    .find(|p| p.is_file())
+}
+
+/// `(port, api_key)` out of a Jackett ServerConfig.json.
+pub(crate) fn read_server_config(path: &std::path::Path) -> Option<(u16, String)> {
+    let txt = std::fs::read_to_string(path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&txt).ok()?;
+    let port = u16::try_from(v.get("Port")?.as_u64()?).ok()?;
+    let key = v.get("APIKey")?.as_str()?.to_string();
+    (!key.is_empty()).then_some((port, key))
+}
+
+/// Jackett's release asset prefix for this architecture.
+pub(crate) fn asset_prefix(arch: &str) -> Option<&'static str> {
+    match arch {
+        "x86_64" => Some("LinuxAMDx64"),
+        "aarch64" => Some("LinuxARM64"),
+        _ => None,
+    }
+}
+
+/// A free localhost port.
+/// ponytail: bind-then-release races with anything grabbing the port in the gap;
+/// fine on a single-user desktop, and Jackett reports a failed bind which we surface.
+pub(crate) fn free_port() -> Option<u16> {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .ok()
+        .and_then(|l| l.local_addr().ok())
+        .map(|a| a.port())
+}
+
+fn port_open(host: &str, port: u16) -> bool {
+    let Ok(addr) = format!("{host}:{port}").parse() else {
+        return false;
+    };
+    std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok()
+}
+
+/// Download the official tarball and unpack it into our data dir.
+fn install() -> Result<std::path::PathBuf, String> {
+    let want = asset_prefix(std::env::consts::ARCH).ok_or_else(|| {
+        format!(
+            "no Jackett build for {} — install Jackett yourself",
+            std::env::consts::ARCH
+        )
+    })?;
+    let root = managed_root();
+    std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+    let tar = root.join("jackett.tar.gz");
+
+    let body = shared_client()
+        .get("https://api.github.com/repos/Jackett/Jackett/releases/latest")
+        .header("User-Agent", "torrentx")
+        .send()
+        .and_then(|r| r.error_for_status())
+        .map_err(|e| format!("release lookup failed: {}", e.without_url()))?
+        .text()
+        .map_err(|e| e.to_string())?;
+    let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    let url = json["assets"]
+        .as_array()
+        .and_then(|a| {
+            a.iter().find_map(|x| {
+                let n = x["name"].as_str()?;
+                n.starts_with(want)
+                    .then(|| x["browser_download_url"].as_str().map(String::from))
+                    .flatten()
+            })
+        })
+        .ok_or_else(|| format!("no {want} asset in the latest Jackett release"))?;
+
+    let mut resp = shared_client().get(url).send().map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("download failed: HTTP {}", resp.status()));
+    }
+    let mut f = std::fs::File::create(&tar).map_err(|e| e.to_string())?;
+    std::io::copy(&mut resp, &mut f).map_err(|e| e.to_string())?; // streamed, ~48MB
+    drop(f);
+
+    let ok = std::process::Command::new("tar")
+        .args(["xzf", &tar.to_string_lossy(), "-C", &root.to_string_lossy()])
+        .status()
+        .map_err(|e| format!("tar: {e}"))?
+        .success();
+    let _ = std::fs::remove_file(&tar);
+    if !ok {
+        return Err("could not unpack the Jackett archive".into());
+    }
+    find_bin().ok_or_else(|| "Jackett unpacked but no binary found".into())
+}
+
+/// Start a local Jackett and return `(url, api_key)`. Blocking (~48MB download /
+/// ~10s start) so call it from a worker thread, via [`start_local_async`].
+pub(crate) fn start_local(
+    cfg_url: &str,
+    cfg_key: &str,
+    timeout_secs: u64,
+) -> Result<(String, String), String> {
+    let base = url::Url::parse(cfg_url).map_err(|e| format!("bad Jackett URL: {e}"))?;
+    let host = base.host_str().unwrap_or("127.0.0.1").to_string();
+    let cur_port = base.port_or_known_default().unwrap_or(9117);
+    if port_open(&host, cur_port) {
+        return Ok((cfg_url.to_string(), cfg_key.to_string())); // already running
+    }
+
+    let bin = find_bin().map_or_else(install, Ok)?;
+
+    // Reuse the user's real Jackett config when it exists: it already has their
+    // indexers. Otherwise give Jackett a private config dir (on Linux that is what
+    // XDG_CONFIG_HOME selects — `--DataFolder` is explicitly not for Unix).
+    let reuse = read_server_config(&user_config());
+    let (env_cfg, port) = match &reuse {
+        Some((p, _)) => (None, *p),
+        None => (
+            Some(managed_root()),
+            free_port().ok_or("no free local port")?,
+        ),
+    };
+    let cfg_path = if env_cfg.is_some() {
+        managed_config()
+    } else {
+        user_config()
+    };
+    // Something already listening on that port IS the instance — e.g. the user's own
+    // Jackett on the port from their ServerConfig — so there is nothing to start.
+    let read_key = || {
+        read_server_config(&cfg_path)
+            .map(|(_, k)| k)
+            .unwrap_or_else(|| cfg_key.to_string())
+    };
+    if port_open(&host, port) {
+        return Ok((format!("http://{host}:{port}"), read_key()));
+    }
+
+    let mut cmd = std::process::Command::new(&bin);
+    cmd.args(["--NoRestart", "--ListenPrivate"])
+        .arg("--Port")
+        .arg(port.to_string())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    if let Some(dir) = &env_cfg {
+        cmd.env("XDG_CONFIG_HOME", dir);
+    }
+    let child = cmd
+        .spawn()
+        .map_err(|e| format!("cannot start Jackett ({}): {e}", bin.display()))?;
+    *JACKETT_CHILD.lock().unwrap() = Some(child);
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs.max(15));
+    while std::time::Instant::now() < deadline {
+        if port_open(&host, port) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    if !port_open(&host, port) {
+        return Err(format!("Jackett did not come up on port {port}"));
+    }
+
+    // Fresh instances generate their key on first start.
+    let key = read_key();
+    Ok((format!("http://{host}:{port}"), key))
+}
+
+/// Run [`start_local`] on a worker thread; the Settings panel polls `MANAGED`.
+pub(crate) fn start_local_async(url: String, key: String) {
+    if MANAGED_BUSY.swap(true, Ordering::SeqCst) {
+        return; // one at a time
+    }
+    *MANAGED.lock().unwrap() = None;
+    thread::spawn(move || {
+        let r = start_local(&url, &key, 60);
+        *MANAGED.lock().unwrap() = Some(r);
+        MANAGED_BUSY.store(false, Ordering::SeqCst);
+        crate::wake_ui();
+    });
+}
+
+/// Stop the Jackett we started (no-op if we didn't start one). Called on exit.
+pub(crate) fn stop_local() {
+    if let Some(mut c) = JACKETT_CHILD.lock().unwrap().take() {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        category_id, dedupe_best_seeded, fmt_size, hlth_lbl, is_magnet, normalize,
-        parse_indexers_xml, parse_latest_tag, pub_date_key, pub_year, truncate_magnet, urlenc,
-        validate_jackett_url, Hlth, Tab, TorrentResult,
+        asset_prefix, category_id, dedupe_best_seeded, find_bin, fmt_size, free_port, hlth_lbl,
+        is_magnet, managed_config, normalize, parse_indexers_xml, parse_latest_tag, port_open,
+        pub_date_key, pub_year, read_server_config, start_local, stop_local, truncate_magnet,
+        urlenc, user_config, validate_jackett_url, Hlth, Tab, TorrentResult,
     };
+    use std::thread;
+    use std::time::Duration;
 
     #[test]
     fn tab_key_round_trip() {
@@ -907,6 +1137,93 @@ mod tests {
         assert_eq!(pub_date_key("2024-05-07"), (2024, 5, 7, 0, 0, 0));
         assert_eq!(pub_date_key("garbage"), (0, 0, 0, 0, 0, 0));
         assert_eq!(pub_date_key(""), (0, 0, 0, 0, 0, 0));
+    }
+
+    #[test]
+    fn reads_jackett_server_config() {
+        let p = std::env::temp_dir().join("tx_jackett_serverconfig_test.json");
+        std::fs::write(&p, r#"{"Port":9117,"APIKey":"abc123","CacheEnabled":true}"#).unwrap();
+        assert_eq!(read_server_config(&p), Some((9117, "abc123".to_string())));
+        // An empty key must read as absent, so the caller falls back rather than
+        // saving "" over a good key.
+        std::fs::write(&p, r#"{"Port":9117,"APIKey":""}"#).unwrap();
+        assert_eq!(read_server_config(&p), None);
+        std::fs::write(&p, "not json at all").unwrap();
+        assert_eq!(read_server_config(&p), None);
+        assert_eq!(
+            read_server_config(std::path::Path::new("/nonexistent/x.json")),
+            None
+        );
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn maps_arch_to_jackett_asset() {
+        assert_eq!(asset_prefix("x86_64"), Some("LinuxAMDx64"));
+        assert_eq!(asset_prefix("aarch64"), Some("LinuxARM64"));
+        assert_eq!(asset_prefix("riscv64"), None); // refuse rather than fetch a wrong build
+    }
+
+    #[test]
+    fn free_port_is_actually_free() {
+        let p = free_port().expect("should find a free port");
+        assert!(p > 0);
+        std::net::TcpListener::bind(("127.0.0.1", p)).expect("port must be bindable");
+    }
+
+    /// The only test that starts a real Jackett. Ignored by default (needs a local
+    /// Jackett binary and ~10s); run with `cargo test -- --ignored`.
+    ///
+    /// Isolation matters: XDG_CONFIG_HOME is redirected to a temp dir, so
+    /// `user_config()` does not exist and the managed branch runs — spawning an
+    /// isolated instance on a free port instead of colliding with the Jackett the
+    /// user already has on their own port.
+    #[test]
+    #[ignore = "starts a real Jackett; run explicitly with --ignored"]
+    fn starts_a_real_jackett_isolated() {
+        if find_bin().is_none() {
+            eprintln!("skipped: no local Jackett binary");
+            return;
+        }
+        let xdg = std::env::temp_dir().join("tx_jackett_e2e_xdg");
+        let _ = std::fs::remove_dir_all(&xdg);
+        std::fs::create_dir_all(&xdg).unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", &xdg);
+        assert!(
+            read_server_config(&user_config()).is_none(),
+            "redirect failed — refusing to spawn against the user's real Jackett config"
+        );
+
+        // Port 9 (discard) is never Jackett's, so the "already running" check misses.
+        let (url, key) = start_local("http://127.0.0.1:9", "", 60).expect("start");
+        let port: u16 = url.rsplit(':').next().unwrap().parse().unwrap();
+        assert_ne!(
+            port, 9117,
+            "must not have taken over the user's port: {url}"
+        );
+        assert!(
+            port_open("127.0.0.1", port),
+            "Jackett should be listening: {url}"
+        );
+        assert!(!key.is_empty(), "a generated API key was expected");
+        // The key we hand back is the one Jackett wrote.
+        assert_eq!(
+            read_server_config(&managed_config()).map(|(_, k)| k),
+            Some(key)
+        );
+
+        stop_local();
+        for _ in 0..20 {
+            if !port_open("127.0.0.1", port) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(300));
+        }
+        assert!(
+            !port_open("127.0.0.1", port),
+            "stop_local must stop what it started"
+        );
+        let _ = std::fs::remove_dir_all(&xdg);
     }
 
     #[test]
