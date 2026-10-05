@@ -78,3 +78,13 @@ RSS, settings reference, config file, troubleshooting, and privacy notes.
 ## License
 
 MIT © [chethan62](https://github.com/chethan62)
+
+### Bundled font
+
+`assets/NotoSansCJKjp-subset.otf` is a subset of **Noto Sans CJK JP**, embedded into every build
+(`include_bytes!` in `src/app.rs`) so CJK torrent titles render instead of □□□□. That font is
+Adobe/Google font software under the **SIL Open Font License 1.1** — © 2014-2021 Adobe, and
+"Noto" is a trademark of Google Inc. A subset is a *modified* version under the OFL, so its
+copyright notice and licence ship alongside the font itself at
+[`assets/NotoSansCJKjp-subset.LICENSE.txt`](assets/NotoSansCJKjp-subset.LICENSE.txt), which also
+notes the Reserved Font Name rule that applies to modified versions.
