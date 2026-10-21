@@ -49,8 +49,8 @@ Grab the latest build from the [releases page](https://github.com/chethan62/torr
 
 | Platform | File | Size |
 |----------|------|------|
-| Linux (AppImage) | `TorrentX-<version>-x86_64.AppImage` | ~9 MB |
-| Linux (binary) | `torrentx` | ~20 MB (stripped, LTO) |
+| Linux (AppImage) | `TorrentX-<version>-x86_64.AppImage` | ~16 MB |
+| Linux (binary) | `torrentx` | ~32 MB (stripped, LTO) |
 
 ## Build from source
 
@@ -75,18 +75,34 @@ RSS, settings reference, config file, troubleshooting, and privacy notes.
 - **GUI:** egui 0.36 + eframe (GPU-accelerated via wgpu, software-GL fallback)
 - **HTTP:** reqwest (blocking)
 - **Config:** `~/.config/torrentx/config.json`
-- **Binary size:** ~20 MB stripped + LTO; ~9 MB packed as AppImage
+- **Binary size:** ~32 MB stripped + LTO; ~16 MB packed as AppImage (measured)
 
 ## License
 
 MIT © [chethan62](https://github.com/chethan62)
 
-### Bundled font
+### Bundled fonts
 
-`assets/NotoSansCJKjp-subset.otf` is a subset of **Noto Sans CJK JP**, embedded into every build
-(`include_bytes!` in `src/app.rs`) so CJK torrent titles render instead of □□□□. That font is
-Adobe/Google font software under the **SIL Open Font License 1.1** — © 2014-2021 Adobe, and
-"Noto" is a trademark of Google Inc. A subset is a *modified* version under the OFL, so its
-copyright notice and licence ship alongside the font itself at
-[`assets/NotoSansCJKjp-subset.LICENSE.txt`](assets/NotoSansCJKjp-subset.LICENSE.txt), which also
-notes the Reserved Font Name rule that applies to modified versions.
+Torrent titles are often Japanese, Chinese or Korean, so two font subsets are
+embedded in every build (`include_bytes!` in `src/app.rs`) and used as per-character
+fallbacks after egui's Latin font:
+
+| File | Covers | Size |
+|------|--------|------|
+| `assets/NotoSansCJKjp-subset.otf` | Han (CJK Unified Ideographs), hiragana, katakana, CJK/fullwidth punctuation | 4.9 MB |
+| `assets/NotoSansKR-subset.otf` | Hangul syllables and jamo | 1.1 MB |
+
+They are single-face `.otf` files because egui's `ab_glyph` cannot select a face out of
+a system `.ttc` collection — the app therefore needs no CJK fonts installed. Together
+they are 6.0 MB of the binary, down from 9.2 MB for the previous JP-only subset, which
+also left Korean titles as □□□□ (the JP face contains no Hangul).
+
+Both are subsets of **Noto Sans CJK 2.004** (Adobe/Google, derivative of Source Han
+Sans) under the **SIL Open Font License 1.1** — © 2014-2021 Adobe; "Noto" is a
+trademark of Google Inc. A subset is a *modified* version, and the copyright notice,
+the licence, the modification evidence (the upstream faces declare **no** Reserved
+Font Name) and the exact `pyftsubset` commands ship at
+[`assets/NotoSansCJKjp-subset.LICENSE.txt`](assets/NotoSansCJKjp-subset.LICENSE.txt).
+A unit test asserts the promised scripts resolve to real glyphs, and the same notice is
+viewable in **About → Bundled font licence** (the release artifacts are a bare binary and
+an AppImage, so the text ships inside both).

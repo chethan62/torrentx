@@ -142,6 +142,16 @@ Keywords=torrent;jackett;search;
             (appdir / "torrentx.png").touch()
             print("  ⚠ No icon converter found — using blank icon")
 
+    # The embedded CJK fonts are OFL: the notice has to travel with them. Inside
+    # the AppImage this is the stand-alone text file the licence asks for (the
+    # app also shows it in About for the bare-binary download).
+    lic_dir = appdir / "usr" / "share" / "licenses" / "torrentx"
+    lic_dir.mkdir(parents=True, exist_ok=True)
+    lic_src = PROJECT / "assets" / "NotoSansCJKjp-subset.LICENSE.txt"
+    if lic_src.exists():
+        shutil.copy2(lic_src, lic_dir / "NotoSansCJK-OFL.txt")
+        print(f"✓ Font licence copied to usr/share/licenses/torrentx")
+
     apprun = appdir / "AppRun"
     apprun.write_text(f"#!/bin/sh\nexec \"$(dirname \"$0\")/usr/bin/{BINARY}\" \"$@\"\n")
     apprun.chmod(apprun.stat().st_mode | stat.S_IEXEC)

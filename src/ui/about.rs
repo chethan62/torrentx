@@ -184,12 +184,35 @@ impl App {
                     "Created by chethan62",
                     "Powered by Jackett — the open-source indexer proxy",
                     "Built with egui/eframe, reqwest, quick-xml, tray-icon, notify-rust",
-                    "CJK font: Noto Sans CJK · Icons: Lucide + Phosphor",
+                    "CJK fonts: Noto Sans CJK JP + KR (SIL OFL) · Icons: Lucide SVG",
                     "License: MIT — free to use, modify, and share",
                 ] {
                     lbl(ui, &format!("  ·  {line}"), self.pal.sub, fs - 1.0);
                     ui.add_space(1.0);
                 }
+
+                // The OFL notice has to be viewable where the fonts are shipped,
+                // and the release artifacts are a bare binary and an AppImage, so
+                // "stand-alone text file" means in here as well as in the repo.
+                ui.add_space(12.0);
+                egui::CollapsingHeader::new(
+                    RichText::new("Bundled font licence (SIL OFL 1.1)")
+                        .font(FontId::proportional(fs - 1.0))
+                        .color(self.pal.sub),
+                )
+                .id_salt("font_license")
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(180.0)
+                        .id_salt("font_license_scroll")
+                        .show(ui, |ui| {
+                            ui.label(
+                                RichText::new(crate::app::FONT_LICENSE)
+                                    .font(FontId::monospace(fs - 3.5))
+                                    .color(self.pal.dim),
+                            );
+                        });
+                });
 
                 // Links
                 ui.add_space(10.0);

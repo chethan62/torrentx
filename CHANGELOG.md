@@ -7,6 +7,17 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **Korean titles rendered as □□□□.** The embedded font was Noto Sans CJK **JP**,
+  which has Han and kana but no Hangul, while the README promised "CJK torrent titles".
+  A Hangul subset (11,172 syllables + jamo, 1.1 MB) is now embedded next to it and
+  registered as a second per-character fallback, and a unit test asserts every promised
+  script resolves to a real glyph (a wrong face fails the test instead of a screenshot).
+- **The font notice raised a licence doubt it could not settle.** It instructed the
+  reader to rename the subset "if Google's notice for this face reserves 'Noto'". The
+  face declares no Reserved Font Name (its copyright string is only
+  "© 2014-2021 Adobe"), and the upstream Noto Sans CJK licence is the plain OFL with no
+  reserved name either — so OFL condition 3 does not apply and the family name stays.
+  The notice now records that evidence and the exact pyftsubset commands.
 - **RSS dates rendered as "Tue, 07 Ma".** Jackett's torznab `pubDate` is RFC 2822
   (`Tue, 07 May 2024 10:20:30 +0000`), but `time_ago` only parsed RFC 3339, so every
   RSS row (and the item detail panel) fell back to chopping the first 10 bytes of the
@@ -28,6 +39,11 @@ versions follow [SemVer](https://semver.org/).
   range requests. The player is chosen in **Settings → Play with**; a second Play
   replaces the first stream and quitting the app stops it. Missing `webtorrent-cli` is
   reported as an actionable toast, not a silent failure.
+
+### Changed
+- **Embedded CJK font data shrank by 3.2 MB** (9.23 MB → 6.03 MB: JP 4.90 MB +
+  KR 1.13 MB). The subsets drop vertical-layout tables and hinting, which egui never
+  uses, so the shipped bytes track what the app renders.
 
 ## [18.4.1] — 2026-09-15
 

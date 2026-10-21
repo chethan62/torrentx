@@ -1,20 +1,47 @@
 Copyright 2014-2021 Adobe (http://www.adobe.com/). Noto is a trademark of Google Inc.
 
-This file is the licence notice for the font shipped at
-assets/NotoSansCJKjp-subset.otf — a subset of Noto Sans CJK JP, which is
-derivative of Source Han Sans (Adobe) and distributed as Noto (Google).
-It is licensed under the SIL Open Font License, Version 1.1, which follows.
+This notice covers the two font files embedded in TorrentX (`include_bytes!`
+in src/app.rs), which are what the OFL condition 2 obligation attaches to:
 
-A subset is a MODIFIED version under the OFL, so the following apply:
-  * the copyright notice above and this licence must accompany the font,
-    including when it is embedded in a compiled binary (this crate embeds
-    it with include_bytes!);
-  * if the upstream face declares a Reserved Font Name, a modified version
-    must not use that name. This subset still reports the family name
-    "Noto Sans CJK JP" in its name table, so if Google's notice for this
-    face reserves "Noto", rename the subset's family before redistributing
-    it further.
-  * it may not be sold on its own.
+  assets/NotoSansCJKjp-subset.otf
+      Han (CJK Unified Ideographs U+4E00-9FFF), hiragana, katakana,
+      CJK punctuation (U+3000-303F), fullwidth forms (U+FF00-FFEF)
+  assets/NotoSansKR-subset.otf
+      Hangul syllables (U+AC00-D7A3), conjoining jamo (U+1100-11FF,
+      U+A960-A97F), compatibility jamo (U+3130-318F), extended jamo
+
+Both are subsets of Noto Sans CJK 2.004 (Adobe/Google; derivative of Adobe
+Source Han Sans), licensed under the SIL Open Font License 1.1 below.
+
+MODIFIED-VERSION STATUS (OFL condition 3)
+A subset is a Modified Version, and condition 3 forbids a Modified Version
+from using a Reserved Font Name. These faces declare none: their copyright
+string is exactly "© 2014-2021 Adobe (http://www.adobe.com/).", and the
+upstream licence shipped with Noto Sans CJK (notofonts/noto-cjk,
+Sans/LICENSE) is the plain OFL text with no reserved name filled in.
+Condition 3 therefore does not restrict this subset, and the family names
+"Noto Sans CJK JP" / "Noto Sans CJK KR" are kept unchanged. "Noto" is a
+Google trademark used here descriptively, not a licence restriction.
+
+HOW THE SUBSETS WERE MADE (reproducible)
+  pyftsubset NotoSansCJKjp-Regular.otf \
+    --unicodes="U+4E00-9FFF,U+3000-303F,U+3040-30FF,U+31F0-31FF,U+FF00-FFEF,U+2010-205F" \
+    --layout-features='' --no-hinting --drop-tables+=BASE,VORG,vhea,vmtx
+  pyftsubset NotoSansCJKkr-Regular.otf \
+    --unicodes="U+AC00-D7A3,U+1100-11FF,U+3130-318F,U+A960-A97F,U+D7B0-D7FF" \
+    --layout-features='' --no-hinting --drop-tables+=BASE,VORG,vhea,vmtx
+
+Vertical-layout tables (BASE/VORG/vhea/vmtx) are dropped because egui renders
+horizontally only; hinting is dropped for the same reason. Glyph coverage is
+asserted in `src/app.rs` (`font_tests`) so a regenerated subset cannot ship
+with a script silently missing.
+
+REMAINING OBLIGATIONS
+  * the copyright notice and this licence must accompany the fonts wherever
+    they are redistributed, including inside a compiled binary;
+  * the fonts may not be sold on their own;
+  * neither Adobe's nor Google's names may be used to promote a Modified
+    Version, except to acknowledge the original authorship.
 
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
 

@@ -19,27 +19,43 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Load the embedded Noto Sans CJK JP subset so Japanese/Korean/Chinese
-/// torrent titles render instead of showing □□□□. The font is embedded in
-/// the binary (include_bytes!) — egui can't load system .ttc collections
-/// (ab_glyph can't select a face index), so we embed a single-face .otf
-/// subset (CJK ideographs + kana + punctuation). Runs once.
+/// Load the embedded CJK subsets so Japanese/Chinese (Han + kana) and Korean
+/// (Hangul) torrent titles render instead of □□□□.
+///
+/// Two single-face subsets, not one merged file: the JP face keeps Japanese
+/// glyph forms for Han, and the KR face supplies Hangul, which the JP face does
+/// not contain at all (Noto ships one face per region). Both are embedded
+/// (`include_bytes!`) because egui's ab_glyph cannot pick a face out of a system
+/// `.ttc` collection. egui falls back per character in family order, so a
+/// mixed-script title draws from both. Runs once.
+/// The OFL notice for the embedded fonts. Compiled in as well as shipped in the
+/// repo/AppImage: the licence must accompany the fonts wherever they go, and the
+/// release artifacts are a bare binary and an AppImage. The About tab shows it
+/// (OFL condition 2 — the notice must be viewable by the user).
+pub(crate) const FONT_LICENSE: &str = include_str!("../assets/NotoSansCJKjp-subset.LICENSE.txt");
+
 pub(crate) fn load_cjk_fonts(ctx: &egui::Context) {
     use std::sync::OnceLock;
     static LOADED: OnceLock<bool> = OnceLock::new();
     if LOADED.get().is_some() {
         return;
     }
-    let data: &'static [u8] = include_bytes!("../assets/NotoSansCJKjp-subset.otf");
+    let jp: &'static [u8] = include_bytes!("../assets/NotoSansCJKjp-subset.otf");
+    let kr: &'static [u8] = include_bytes!("../assets/NotoSansKR-subset.otf");
     let mut fonts = egui::FontDefinitions::default();
     fonts
         .font_data
-        .insert("cjk".to_owned(), egui::FontData::from_static(data).into());
+        .insert("cjk".to_owned(), egui::FontData::from_static(jp).into());
+    fonts
+        .font_data
+        .insert("hangul".to_owned(), egui::FontData::from_static(kr).into());
     // NOTE: Phosphor.ttf removed — all icons are Lucide SVG (no font glyphs).
     for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
         if let Some(list) = fonts.families.get_mut(&family) {
-            if !list.contains(&"cjk".to_owned()) {
-                list.push("cjk".to_owned());
+            for name in ["cjk", "hangul"] {
+                if !list.iter().any(|f| f == name) {
+                    list.push(name.to_owned());
+                }
             }
         }
     }
@@ -867,5 +883,43 @@ impl App {
         // click layers and swallows clicks on text. Disable it so row clicks
         // land everywhere (we never need in-table text selection).
         ctx.all_styles_mut(|s| s.interaction.selectable_labels = false);
+    }
+}
+
+#[cfg(test)]
+mod font_tests {
+    const JP: &[u8] = include_bytes!("../assets/NotoSansCJKjp-subset.otf");
+    const KR: &[u8] = include_bytes!("../assets/NotoSansKR-subset.otf");
+
+    fn font(bytes: &[u8], what: &str) -> ab_glyph::FontVec {
+        ab_glyph::FontVec::try_from_vec(bytes.to_vec())
+            .unwrap_or_else(|e| panic!("{what} must parse as a single-face font: {e}"))
+    }
+
+    /// The README promises CJK titles render; ab_glyph silently draws .notdef
+    /// (tofu) for a missing glyph. So assert coverage per script: a regenerated
+    /// subset that drops kana, Han or Hangul fails here instead of shipping.
+    #[test]
+    fn bundled_fonts_cover_the_promised_scripts() {
+        use ab_glyph::Font;
+        let jp = font(JP, "JP subset");
+        let kr = font(KR, "KR subset");
+        for c in "日本語のアニメ".chars() {
+            assert_ne!(jp.glyph_id(c).0, 0, "JP subset lacks {c:?}");
+        }
+        for c in "中文电影".chars() {
+            assert_ne!(jp.glyph_id(c).0, 0, "JP subset lacks Han {c:?}");
+        }
+        for c in "한글드라마".chars() {
+            assert_ne!(kr.glyph_id(c).0, 0, "KR subset lacks {c:?}");
+        }
+        // Fullwidth punctuation and CJK punctuation appear in real titles.
+        for c in "：！？（）".chars() {
+            assert_ne!(jp.glyph_id(c).0, 0, "JP subset lacks punctuation {c:?}");
+        }
+        // Disjoint faces: Hangul must come from KR, Han from JP. If they ever
+        // overlap, a broken glyph in one face could silently mask the other.
+        assert_eq!(jp.glyph_id('한').0, 0, "Hangul must come from the KR face");
+        assert_eq!(kr.glyph_id('日').0, 0, "Han must come from the JP face");
     }
 }

@@ -4163,6 +4163,7 @@ dependencies = [
 name = "torrentx"
 version = "18.4.1"
 dependencies = [
+ "ab_glyph",
  "chrono",
  "dirs-next",
  "eframe",

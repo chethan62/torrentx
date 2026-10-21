@@ -23,6 +23,10 @@ uuid = { version = "1", features = ["v4"] }
 tray-icon = { version = "0.25", default-features = false, features = ["ksni"] }
 notify-rust = "4.11"
 
+[dev-dependencies]
+# Glyph-coverage guard for the embedded CJK subsets (already in the tree via egui).
+ab_glyph = "0.2"
+
 [profile.release]
 opt-level = 3
 lto = true
