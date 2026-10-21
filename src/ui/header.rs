@@ -359,6 +359,21 @@ impl App {
                         .on_hover_text(
                             "RSS auto-refresh interval (seconds). 0 disables auto-refresh.",
                         );
+                    ui.add_space(8.0);
+                    lbl(ui, "PLAY WITH", self.pal.dim, 10.0);
+                    egui::ComboBox::from_id_salt("player_cb")
+                        .selected_text(self.cfg.player.clone())
+                        .width(64.0)
+                        .show_ui(ui, |ui| {
+                            for p in crate::player::PLAYERS {
+                                if ui
+                                    .selectable_value(&mut self.cfg.player, p.to_string(), p)
+                                    .changed()
+                                {
+                                    let _ = save_cfg(&self.cfg);
+                                }
+                            }
+                        });
                 });
                 ui.add_space(5.0);
 

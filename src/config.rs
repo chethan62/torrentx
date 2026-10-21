@@ -40,6 +40,10 @@ pub(crate) struct Config {
     /// Check GitHub for a newer release at startup (opt-out for privacy).
     #[serde(default = "default_true")]
     pub(crate) check_updates: bool,
+    /// Player driven by direct play ("mpv" | "vlc"). Matched against
+    /// `player::PLAYERS`; never interpolated into a command line.
+    #[serde(default = "default_player")]
+    pub(crate) player: String,
     /// Tab shown at startup ("Search" | "Favorites" | "Rss" | "About").
     #[serde(default)]
     pub(crate) last_tab: Option<String>,
@@ -77,6 +81,7 @@ impl Default for Config {
             accent: None,
             col_order: default_col_order(),
             check_updates: true,
+            player: default_player(),
             last_tab: None,
             win_size: None,
             install_id: String::new(),
@@ -228,6 +233,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_player() -> String {
+    "mpv".into()
+}
+
 pub(crate) fn save_cfg(c: &Config) -> Result<(), String> {
     let p = cfg_path();
     let j = serde_json::to_string_pretty(c).map_err(|e| format!("serialize config: {e}"))?;
@@ -322,6 +331,7 @@ mod tests {
         let old: Config =
             serde_json::from_str(r#"{"jackett_url":"http://x","api_key":"k","history":[],"favorites":[],"theme":"TokyoNight","timeout_secs":45,"dedupe":false,"page_size":50,"row_height":44.0,"font_size":14.0,"show_cat_bar":true,"col_tracker":true,"col_size":true,"col_leech":true,"col_ratio":true,"col_health":true,"col_date":true}"#).unwrap();
         assert!(old.check_updates); // serde default
+        assert_eq!(old.player, "mpv"); // serde default
         assert_eq!(old.win_size, None);
         assert_eq!(old.last_tab, None);
     }

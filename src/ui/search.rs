@@ -359,6 +359,18 @@ impl App {
                         }
                     }
                 }
+                if !typing && ui.input(|i| i.key_pressed(egui::Key::P)) {
+                    if let Some(i) = self.ui.selected {
+                        if let Some(r) = page_s.get(i) {
+                            if let Some(m) = &r.magnet_uri {
+                                match crate::player::start_play(m, &self.cfg.player) {
+                                    Ok(()) => self.toast("Starting stream…", self.pal.accent),
+                                    Err(e) => self.toast(&e, self.pal.red),
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Pagination
                 self.draw_pagination(ui, max_p, pg, fs);

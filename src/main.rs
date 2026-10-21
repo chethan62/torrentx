@@ -4,6 +4,7 @@
 mod app;
 mod config;
 mod jackett;
+mod player;
 mod rss;
 mod themes;
 mod ui;
@@ -132,6 +133,7 @@ pub(crate) enum SvgIcon {
     Magnet,
     Copy,
     Download,
+    Play,
     Star,
     Info,
     Web,
@@ -156,6 +158,7 @@ impl SvgIcon {
             SvgIcon::Magnet => "bytes://tx/magnet.svg",
             SvgIcon::Copy => "bytes://tx/copy.svg",
             SvgIcon::Download => "bytes://tx/download.svg",
+            SvgIcon::Play => "bytes://tx/play.svg",
             SvgIcon::Star => "bytes://tx/star.svg",
             SvgIcon::Info => "bytes://tx/info.svg",
             SvgIcon::Web => "bytes://tx/web.svg",
@@ -179,6 +182,7 @@ impl SvgIcon {
             SvgIcon::Magnet => include_str!("../assets/icons/magnet.svg"),
             SvgIcon::Copy => include_str!("../assets/icons/copy.svg"),
             SvgIcon::Download => include_str!("../assets/icons/download.svg"),
+            SvgIcon::Play => include_str!("../assets/icons/play.svg"),
             SvgIcon::Star => include_str!("../assets/icons/star.svg"),
             SvgIcon::Info => include_str!("../assets/icons/info.svg"),
             SvgIcon::Web => include_str!("../assets/icons/web.svg"),
@@ -1123,6 +1127,8 @@ fn main() -> eframe::Result<()> {
     };
     // Stop the Jackett we started, if any (a no-op when the user runs their own).
     jackett::stop_local();
+    // Stop the stream we started, if any (the player sees EOF and closes).
+    player::stop_play();
     result
 }
 

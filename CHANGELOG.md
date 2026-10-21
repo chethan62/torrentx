@@ -21,6 +21,14 @@ versions follow [SemVer](https://semver.org/).
   one row. RSS now uses the same content-marker `dedupe_key` (guid when present) and
   keeps the best-seeded copy in feed order.
 
+### Added
+- **Direct play.** A **Play** button in the detail panel (and `P`) streams a result's
+  largest file to mpv or vlc through `webtorrent-cli`, without waiting for the whole
+  torrent — seeking works because webtorrent serves the file over localhost HTTP with
+  range requests. The player is chosen in **Settings → Play with**; a second Play
+  replaces the first stream and quitting the app stops it. Missing `webtorrent-cli` is
+  reported as an actionable toast, not a silent failure.
+
 ## [18.4.1] — 2026-09-15
 
 ### Fixed

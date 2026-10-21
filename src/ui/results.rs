@@ -753,6 +753,13 @@ impl App {
 
                 if let Some(mag) = r.magnet_uri.clone() {
                     let mc = mag.clone();
+                    if wide_icon_btn(ui, SvgIcon::Play, "Play", self.pal.accent) {
+                        match crate::player::start_play(&mag, &self.cfg.player) {
+                            Ok(()) => self.toast("Starting stream…", self.pal.accent),
+                            Err(e) => self.toast(&e, self.pal.red),
+                        }
+                    }
+                    ui.add_space(4.0);
                     if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", self.pal.accent) {
                         let _ = safe_open(mag);
                         self.toast("Opening magnet…", self.pal.accent);

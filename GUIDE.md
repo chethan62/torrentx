@@ -11,6 +11,7 @@ Everything you need to run and use TorrentX effectively.
 - [Batch actions](#batch-actions)
 - [Favorites](#favorites)
 - [RSS feeds](#rss-feeds)
+- [Direct play](#direct-play)
 - [Settings reference](#settings-reference)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Config file reference](#config-file-reference)
@@ -104,7 +105,22 @@ The RSS tab watches Torznab feeds served by Jackett:
 1. Add a feed: name it, optionally pin an indexer, query, and category
 2. Enable **auto-refresh** for background polling (interval set globally in
    Settings, default 10 min, 0 disables)
-3. Items are deduplicated by feed `<guid>` (falls back to normalized title)
+3. Items are deduplicated by feed `<guid>` (falls back to the same content-marker
+   key the search results use)
+
+## Direct play
+
+In the detail panel, **Play** streams a result straight to a video player — no
+waiting for the download to finish, and seeking works.
+
+1. Install the streaming helper once: `npm install -g webtorrent-cli`
+2. Open a result's detail panel and press **Play** (or select a row and press **P**)
+3. TorrentX streams the torrent's **largest file** to the player chosen in
+   **Settings → Play with** (mpv or vlc)
+
+Only one stream runs at a time; pressing Play again replaces it, and quitting
+TorrentX stops the stream. The player also ends the stream when you close it.
+If `webtorrent` is not on `PATH`, Play says so instead of failing silently.
 
 ## Settings reference
 
@@ -122,6 +138,7 @@ The RSS tab watches Torznab feeds served by Jackett:
 | Cat bar | on/off | category chips above results |
 | Columns | per-column toggles | Tracker…Date; reorder via drag in Settings order list |
 | Accent | color | overrides the theme's accent |
+| Play with | mpv / vlc | player for direct play |
 
 Changes apply immediately; press **Save** to persist connection changes.
 
@@ -134,6 +151,7 @@ Changes apply immediately; press **Save** to persist connection changes.
 | D | Toggle detail panel |
 | F | Favorite selected row |
 | M | Open magnet for selected row |
+| P | Stream selected row (direct play) |
 | Esc | Close detail panel / clear query |
 | Ctrl+F | Focus search bar |
 | Ctrl+A | Select all visible results |
@@ -183,6 +201,11 @@ Some indexers are slow. Raise **Timeout** in Settings (up to 120 s).
 **Black / blank window** (VMs, some NVIDIA+Wayland setups)
 TorrentX automatically retries with Mesa software GL if GPU init fails. You
 can force it beforehand: `WGPU_BACKEND=opengl LIBGL_ALWAYS_SOFTWARE=1 torrentx`.
+
+**Play does nothing / "needs webtorrent-cli"**
+Install it once: `npm install -g webtorrent-cli` (check with `webtorrent --version`).
+A desktop-launched app may not see `~/.local/bin`; run it from a terminal, or
+install with a prefix already on `PATH`.
 
 **Wrong indexer list**
 The list is fetched at startup and whenever URL/key changes; if Jackett was
