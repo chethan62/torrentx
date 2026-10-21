@@ -37,6 +37,29 @@ pub(crate) fn play_args(magnet: &str, player: &str) -> Option<Vec<String>> {
 /// The stream we started, so a second Play (or app exit) can stop it.
 static PLAYER: Mutex<Option<Child>> = Mutex::new(None);
 
+/// Where the streamer's own output goes. Without it, "nothing plays" leaves no
+/// trail: webtorrent prints the peer count it is stuck at, which is the only
+/// way to tell a dead swarm from a blocked network.
+pub(crate) fn log_path() -> std::path::PathBuf {
+    dirs_next::cache_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("torrentx")
+        .join("webtorrent.log")
+}
+
+/// stdout + stderr both appended to `log_path()`; null when the file cannot be
+/// created (a missing log must never stop playback).
+fn log_stdio() -> (Stdio, Stdio) {
+    let path = log_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    match std::fs::File::create(&path).and_then(|f| f.try_clone().map(|c| (f, c))) {
+        Ok((a, b)) => (Stdio::from(a), Stdio::from(b)),
+        Err(_) => (Stdio::null(), Stdio::null()),
+    }
+}
+
 /// Start streaming `magnet` to `player`. Err is a message suitable for a toast.
 pub(crate) fn start_play(magnet: &str, player: &str) -> Result<(), String> {
     let args = play_args(magnet, player)
@@ -44,11 +67,12 @@ pub(crate) fn start_play(magnet: &str, player: &str) -> Result<(), String> {
     // One stream at a time: replacing the previous one avoids two players and
     // two torrents competing for bandwidth. webtorrent exits with its player.
     stop_play();
+    let (out, err) = log_stdio();
     let child = Command::new("webtorrent")
         .args(&args)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(out)
+        .stderr(err)
         .spawn()
         .map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => {
@@ -74,7 +98,7 @@ pub(crate) fn stop_play() {
 
 #[cfg(test)]
 mod tests {
-    use super::{play_args, player_flag, start_play, stop_play, PLAYERS};
+    use super::{log_path, play_args, player_flag, start_play, stop_play, PLAYERS};
 
     fn magnet() -> String {
         format!("magnet:?xt=urn:btih:{}", "a".repeat(40))
@@ -137,7 +161,7 @@ mod tests {
         std::fs::write(
             &stub,
             format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\necho $$ > '{}'\nsleep 30\n",
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\necho $$ > '{}'\necho stub-stream-line\nsleep 30\n",
                 args_file.display(),
                 pid_file.display()
             ),
@@ -164,6 +188,19 @@ mod tests {
                 .lines()
                 .collect::<Vec<_>>(),
             vec![m.as_str(), "--mpv", "--not-on-top"]
+        );
+
+        // The streamer's own output must land in the log: that peer count is the
+        // only evidence a user has when no player window appears.
+        assert!(
+            wait_for(
+                || std::fs::read_to_string(log_path())
+                    .map(|l| l.contains("stub-stream-line"))
+                    .unwrap_or(false),
+                5
+            ),
+            "webtorrent output must be redirected to {}",
+            log_path().display()
         );
 
         let pid: u32 = std::fs::read_to_string(&pid_file)

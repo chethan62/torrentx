@@ -26,7 +26,8 @@
 - **Favorites** — save torrents with timestamps, search filter, persistent storage
 - **Detail panel** — seeder/leecher ratio bar, magnet copy/open, .torrent download
 - **Direct play** — stream a result to mpv/vlc without downloading the whole torrent
-  (needs [webtorrent-cli](https://github.com/webtorrent/webtorrent-cli): `npm install -g webtorrent-cli`)
+  (needs [webtorrent-cli](https://github.com/webtorrent/webtorrent-cli): `npm install -g webtorrent-cli`;
+  its output, including the peer count, goes to `~/.cache/torrentx/webtorrent.log`)
 - **Batch actions** — select mode, select-all, copy N magnets at once
 - **Keyboard shortcuts** — ↑↓ Enter D F M P Ctrl+F Ctrl+R Esc
 - **CSV export** — export filtered results

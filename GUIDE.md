@@ -207,6 +207,13 @@ Install it once: `npm install -g webtorrent-cli` (check with `webtorrent --versi
 A desktop-launched app may not see `~/.local/bin`; run it from a terminal, or
 install with a prefix already on `PATH`.
 
+**Play opens no window / nothing plays**
+Direct play needs peers. `~/.cache/torrentx/webtorrent.log` holds the streamer's
+own output — a line like `Peers: 0/0` means the torrent's trackers and DHT are
+unreachable, which is what many ISPs and corporate networks do (BitTorrent uses
+UDP and non-standard ports). The same command in a terminal shows the same:
+`webtorrent '<magnet>' --mpv`.
+
 **Wrong indexer list**
 The list is fetched at startup and whenever URL/key changes; if Jackett was
 still booting, TorrentX retries automatically within a minute.
