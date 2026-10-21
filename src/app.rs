@@ -6,8 +6,8 @@
 
 use crate::config::{save_cfg, Config, Favorite};
 use crate::jackett::{
-    cat_col, dedupe_best_seeded, fmt_size, is_magnet, normalize, now_str, pub_date_key, pub_year,
-    set_err, start_search, time_ago, Hlth, SearchState, SortCol, SortDir, TorrentResult,
+    cat_col, dedupe_best_seeded, fmt_size, is_magnet, now_str, pub_date_key, pub_year, set_err,
+    start_search, time_ago, Hlth, SearchState, SortCol, SortDir, TorrentResult,
 };
 use crate::rss::{start_rss_fetch, FeedStatus, RssFeedConfig, RssItem};
 use crate::themes::{tint, Pal, Theme, VisualTokens};
@@ -509,15 +509,9 @@ impl App {
             }
             match result {
                 Ok(items) => {
-                    // Dedupe by normalized title (same logic as main search):
-                    // sort by seeders desc so the best copy wins, then keep first.
-                    let mut items = items;
-                    items.sort_by_key(|a| std::cmp::Reverse(a.seeders.unwrap_or(0)));
-                    let mut seen = std::collections::HashSet::new();
-                    items.retain(|it| {
-                        seen.insert(it.guid.clone().unwrap_or_else(|| normalize(&it.title)))
-                    });
-                    self.rss.rss_feeds[idx].items = items;
+                    // Dedupe per release: guid when the feed provides one, else
+                    // the same content-marker key as the search results.
+                    self.rss.rss_feeds[idx].items = crate::rss::dedupe_items(items);
                     self.rss.rss_feeds[idx].status = FeedStatus::Ok;
                     self.rss.rss_feeds[idx].error = None;
                 }

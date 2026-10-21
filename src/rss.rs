@@ -1,5 +1,5 @@
 // ─── RSS types ──────────────────────────────────────────────────────────────
-use crate::jackett::urlenc;
+use crate::jackett::{dedupe_key, urlenc};
 use serde::{Deserialize, Serialize};
 use std::thread;
 use std::time::Duration;
@@ -201,6 +201,11 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                 // infallible str-based `xml10_content()` (EOL normalization only).
                 text_acc.push_str(&e.xml10_content());
             }
+            Ok(Event::CData(ref e)) if in_item => {
+                // CDATA is its own event, not Text. Trackers that wrap titles in
+                // `<![CDATA[…]]>` had every item dropped as "no title".
+                text_acc.push_str(&e.clone().into_inner());
+            }
             Ok(Event::GeneralRef(ref e)) if in_item => {
                 // `&name;` / `&#nnn;` arrive as their own event. Resolve via
                 // the escape-html feature (full HTML5 set, so &ldquo; etc.
@@ -276,6 +281,28 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
         buf.clear();
     }
     Ok(items)
+}
+
+/// Keep one copy of each release — the best-seeded one — in feed order.
+///
+/// Identity is the feed's `<guid>` when it has one, else the same
+/// content-marker key the search results use. Keying on `normalize` alone (the
+/// first four words) merged different episodes and different films that share
+/// an opening, so the RSS list lost rows the search list kept.
+pub(crate) fn dedupe_items(items: Vec<RssItem>) -> Vec<RssItem> {
+    let mut best: std::collections::HashMap<String, usize> = Default::default();
+    for (i, it) in items.iter().enumerate() {
+        let key = it.guid.clone().unwrap_or_else(|| dedupe_key(&it.title));
+        match best.get(&key) {
+            Some(&j) if items[j].seeders.unwrap_or(0) >= it.seeders.unwrap_or(0) => {}
+            _ => {
+                best.insert(key, i);
+            }
+        }
+    }
+    let mut keep: Vec<usize> = best.into_values().collect();
+    keep.sort_unstable();
+    keep.into_iter().map(|i| items[i].clone()).collect()
 }
 
 pub(crate) fn tag_name(raw: &str) -> String {
@@ -375,6 +402,69 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].title, "Fallback Title");
         assert_eq!(items[0].category.as_deref(), Some("TV"));
+    }
+
+    #[test]
+    fn parses_cdata_title_and_link() {
+        // Trackers commonly wrap the title in CDATA. quick-xml emits that as its
+        // own `Event::CData`, not `Event::Text`, so a parser that only reads Text
+        // dropped the whole item ("ignores items without title").
+        let xml = r#"<rss><channel><item>
+            <title><![CDATA[Dune 2024 1080p & More]]></title>
+            <guid>x1</guid>
+        </item></channel></rss>"#;
+        let items = parse_torznab_xml(xml).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Dune 2024 1080p & More");
+    }
+
+    #[test]
+    fn dedupe_keeps_episodes_apart_and_best_seeded_copy() {
+        use super::{dedupe_items, RssItem};
+        let it = |t: &str, s: u32, g: Option<&str>| RssItem {
+            title: t.into(),
+            seeders: Some(s),
+            guid: g.map(String::from),
+            ..RssItem::default()
+        };
+        // No guid: two encodings of the same episode collapse to the better
+        // seeded copy, while the neighbouring episode stays a separate row.
+        let out = dedupe_items(vec![
+            it("Show S02E07 1080p WEBRip", 5, None),
+            it("Show S02E08 1080p WEBRip", 9, None),
+            it("Show S02E07 2160p BluRay", 50, None),
+        ]);
+        assert_eq!(
+            out.len(),
+            2,
+            "{:?}",
+            out.iter().map(|i| &i.title).collect::<Vec<_>>()
+        );
+        assert!(out.iter().any(|i| i.title == "Show S02E08 1080p WEBRip"));
+        assert!(out.iter().any(|i| i.title == "Show S02E07 2160p BluRay"));
+        // Two different films whose first four words match: the old
+        // `normalize` key merged them; content markers keep them apart.
+        let out = dedupe_items(vec![
+            it(
+                "One Piece Episode of East Blue (2017) 1080p BRRip x264",
+                12,
+                None,
+            ),
+            it("One Piece Episode of Sabo (2015) 1080p BRRip x264", 4, None),
+        ]);
+        assert_eq!(
+            out.len(),
+            2,
+            "{:?}",
+            out.iter().map(|i| &i.title).collect::<Vec<_>>()
+        );
+        // Same guid → one copy, the better seeded one.
+        let out = dedupe_items(vec![
+            it("Same release", 1, Some("g1")),
+            it("Same release", 7, Some("g1")),
+        ]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].seeders, Some(7));
     }
 
     #[test]

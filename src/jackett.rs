@@ -194,6 +194,9 @@ pub(crate) fn fmt_size(b: u64) -> String {
 
 pub(crate) fn time_ago(s: &str) -> String {
     if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s)
+        // Jackett's torznab pubDate is RFC 2822 ("Tue, 07 May 2024 10:20:30
+        // +0000"); without this the RSS list printed the chopped "Tue, 07 Ma".
+        .or_else(|_| chrono::DateTime::parse_from_rfc2822(s))
         .or_else(|_| chrono::DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%z"))
     {
         let secs = chrono::Utc::now()
@@ -980,8 +983,8 @@ mod tests {
         asset_prefix, category_id, dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port,
         hlth_lbl, is_magnet, managed_config, managed_root, normalize, parse_indexers_xml,
         parse_latest_tag, port_open, pub_date_key, pub_year, read_server_config, start_local,
-        stop_local, truncate_magnet, urlenc, user_config, validate_jackett_url, Hlth, Tab,
-        TorrentResult,
+        stop_local, time_ago, truncate_magnet, urlenc, user_config, validate_jackett_url, Hlth,
+        Tab, TorrentResult,
     };
     use std::thread;
     use std::time::Duration;
@@ -1214,6 +1217,16 @@ mod tests {
         assert_eq!(asset_prefix("x86_64"), Some("LinuxAMDx64"));
         assert_eq!(asset_prefix("aarch64"), Some("LinuxARM64"));
         assert_eq!(asset_prefix("riscv64"), None); // refuse rather than fetch a wrong build
+    }
+
+    /// Jackett's torznab `pubDate` is RFC 2822 ("Tue, 07 May 2024 10:20:30 +0000").
+    /// `time_ago` only knew RFC 3339, so it fell through to `.get(..10)` and the
+    /// RSS list showed the chopped string "Tue, 07 Ma".
+    #[test]
+    fn time_ago_parses_rfc2822() {
+        assert_eq!(time_ago("Tue, 07 May 2024 10:20:30 +0000"), "2024-05-07");
+        // RFC 3339 must keep working.
+        assert_eq!(time_ago("2024-05-07T10:20:30+00:00"), "2024-05-07");
     }
 
     /// Regression from live Jackett data. `normalize()` alone keys on the first four

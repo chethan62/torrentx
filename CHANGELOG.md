@@ -4,6 +4,23 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **RSS dates rendered as "Tue, 07 Ma".** Jackett's torznab `pubDate` is RFC 2822
+  (`Tue, 07 May 2024 10:20:30 +0000`), but `time_ago` only parsed RFC 3339, so every
+  RSS row (and the item detail panel) fell back to chopping the first 10 bytes of the
+  raw string. RFC 2822 is now parsed.
+- **RSS items wrapped in CDATA disappeared.** quick-xml reports `<![CDATA[…]]>` as
+  `Event::CData`, not `Event::Text`; the feed parser ignored it, so such items parsed
+  with an empty title and were dropped as invalid. CDATA content is now accumulated
+  like text.
+- **RSS deduplication merged different episodes.** The feed list still keyed on
+  `normalize(title)` (first four words), the exact heuristic fixed for search results
+  in 18.4.1 — so episodes 1177/1178 or two films sharing an opening collapsed into
+  one row. RSS now uses the same content-marker `dedupe_key` (guid when present) and
+  keeps the best-seeded copy in feed order.
+
 ## [18.4.1] — 2026-09-15
 
 ### Fixed
