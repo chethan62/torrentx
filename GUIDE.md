@@ -15,6 +15,7 @@ Everything you need to run and use TorrentX effectively.
 - [Settings reference](#settings-reference)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Config file reference](#config-file-reference)
+- [UI standards](#ui-standards)
 - [CLI flags](#cli-flags)
 - [Troubleshooting](#troubleshooting)
 - [Privacy](#privacy)
@@ -183,6 +184,29 @@ your API key). All fields are managed by the UI; the notable ones:
 | `check_updates` | startup release check |
 | `last_tab`, `win_size` | session restore |
 | `install_id` | anonymous UUID for bug reports (never sent anywhere) |
+
+## UI standards
+
+The look is a system, not a set of one-off numbers. `src/ui/tokens.rs` is the
+single source of truth:
+
+| Scale | Tokens |
+|-------|--------|
+| Spacing | `SP1` 2 · `SP2` 4 · `SP3` 8 · `SP4` 12 · `SP5` 16 · `SP6` 24 · `SP7` 32 (4 px grid) |
+| Radii | `R_SM` 4 · `R_MD` 8 · `R_LG` 12 |
+| Icons | `ICON_XS` 10 · `ICON_SM` 12 · `ICON_MD` 14 · `ICON_LG` 16 |
+| Table | `CELL_PAD_X` 10 px cell inset |
+| Motion | `MOTION_MS` 120 ms hover/selection transition |
+
+Rules:
+
+- Spacing comes from `SP1..SP7`, radii from `R_SM/R_MD/R_LG`, icon sizes from
+  `ICON_*` — never a literal.
+- New colours go in `src/themes.rs`, never inline in a screen.
+- All three text tiers (`text`, `sub`, `dim`) must reach 4.5:1 contrast on every
+  one of the 19 themes; `Pal::from` clamps `sub`/`dim` toward `text` to enforce
+  it, and `cargo test contrast_tests` proves it.
+- `./scripts/ui-standards.sh` must print `ui-standards: ok` (CI runs it).
 
 ## CLI flags
 
