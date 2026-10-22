@@ -3,8 +3,13 @@
 //! and helper widgets re-exported here so submodules can `use super::*;`.
 
 mod about;
+mod detail;
 mod favorites;
+mod filters;
 mod header;
+mod history;
+mod idle;
+mod paging;
 mod results;
 mod rss;
 mod search;
