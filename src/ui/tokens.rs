@@ -48,7 +48,10 @@ mod tests {
 
     #[test]
     fn icon_sizes_are_ordered_and_smaller_than_their_row() {
-        assert!(ICON_XS < ICON_SM && ICON_SM < ICON_MD && ICON_MD < ICON_LG);
-        assert!(ICON_LG <= 16.0, "icons larger than 16px crowd a 28px row");
+        // Const-evaluated: a bad token edit fails the build, not just the run.
+        const {
+            assert!(ICON_XS < ICON_SM && ICON_SM < ICON_MD && ICON_MD < ICON_LG);
+            assert!(ICON_LG <= 16.0, "icons larger than 16px crowd a 28px row");
+        }
     }
 }
