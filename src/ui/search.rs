@@ -14,12 +14,12 @@ impl App {
     ) {
         let fs = self.cfg.font_size;
         let busy = *state == SearchState::Searching;
-        ui.add_space(10.0);
+        ui.add_space(SP4);
         let mut bar_rect = egui::Rect::NOTHING;
 
         // Search input
         ui.horizontal_wrapped(|ui| {
-            ui.add_space(12.0);
+            ui.add_space(SP4);
             // Field shrinks with the window; floor at 120 so the combos +
             // Search button can wrap onto a second row instead of clipping.
             let field_w = (ui.available_width() - 320.0).clamp(120.0, 700.0);
@@ -48,7 +48,7 @@ impl App {
                 }
             }
 
-            ui.add_space(6.0);
+            ui.add_space(SP3);
             egui::ComboBox::from_id_salt("cat_cb")
                 .selected_text(RichText::new(&self.search.cat).font(FontId::proportional(fs)))
                 .width(115.0)
@@ -63,7 +63,7 @@ impl App {
                 });
 
             // Indexer picker (from Jackett's configured indexers)
-            ui.add_space(6.0);
+            ui.add_space(SP3);
             egui::ComboBox::from_id_salt("idx_cb")
                 .selected_text(RichText::new(&self.net.indexer).font(FontId::proportional(fs)))
                 .width(130.0)
@@ -84,7 +84,7 @@ impl App {
                 .response
                 .on_hover_text("Search one indexer instead of all");
 
-            ui.add_space(6.0);
+            ui.add_space(SP3);
             if ui
                 .add_enabled(
                     !busy,
@@ -131,12 +131,12 @@ impl App {
         // History dropdown
         self.draw_history_dropdown(ctx, bar_rect, fs);
 
-        ui.add_space(8.0);
+        ui.add_space(SP3);
 
         // Filter bar
         self.draw_filter_bar(ui, fs, view);
 
-        ui.add_space(8.0);
+        ui.add_space(SP3);
 
         // State-dependent content
         // Fade in the whole state block (match is the last thing drawn in
@@ -170,12 +170,12 @@ impl App {
                         self.draw_results_table(ui, page_s, base);
                     }
                     None => {
-                        ui.add_space(70.0);
+                        ui.add_space(SP7 * 2.0);
                         ui.vertical_centered(|ui| {
                             ui.spinner();
-                            ui.add_space(12.0);
+                            ui.add_space(SP4);
                             lbl(ui, "Scanning Jackett indexers…", self.pal.sub, 16.0);
-                            ui.add_space(4.0);
+                            ui.add_space(SP2);
                             lbl(
                                 ui,
                                 "Results appear as each tracker answers",
@@ -187,7 +187,7 @@ impl App {
                 }
             }
             SearchState::Error(err) => {
-                ui.add_space(10.0);
+                ui.add_space(SP4);
                 egui::Frame::NONE
                     .fill(tint(self.pal.red, 10))
                     .stroke(Stroke::new(1.0_f32, tint(self.pal.red, 70)))
@@ -198,7 +198,7 @@ impl App {
                         for line in err.lines() {
                             lbl(ui, line, self.pal.red, fs);
                         }
-                        ui.add_space(8.0);
+                        ui.add_space(SP3);
                         if outline_btn(ui, "Open Settings", self.pal.accent) {
                             self.set_settings_open(true);
                         }
@@ -229,7 +229,7 @@ impl App {
                 }
 
                 if total == 0 {
-                    ui.add_space(40.0);
+                    ui.add_space(SP7);
                     ui.vertical_centered(|ui| {
                         lbl(ui, "No results match your filters", self.pal.sub, 17.0);
                         if view.raw_total > 0 {
@@ -254,7 +254,7 @@ impl App {
 
                 // Stats bar
                 ui.horizontal_wrapped(|ui| {
-                    ui.add_space(12.0);
+                    ui.add_space(SP4);
                     let active: usize =
                         sorted.iter().filter(|r| r.seeders.unwrap_or(0) > 0).count();
                     let seeds: u32 = sorted.iter().map(|r| r.seeders.unwrap_or(0)).sum();
@@ -271,7 +271,7 @@ impl App {
                         fs - 1.0,
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(12.0);
+                        ui.add_space(SP4);
                         if outline_btn(ui, "Export CSV", self.pal.sub) {
                             self.export_csv(sorted);
                         }
@@ -282,9 +282,9 @@ impl App {
                 if self.cfg.show_cat_bar {
                     let chips = App::cat_chips(sorted);
                     if !chips.is_empty() {
-                        ui.add_space(4.0);
+                        ui.add_space(SP2);
                         ui.horizontal_wrapped(|ui| {
-                            ui.add_space(12.0);
+                            ui.add_space(SP4);
                             for (cat, count, col) in &chips {
                                 let sel = self.search.f_text == *cat;
                                 egui::Frame::NONE
@@ -323,12 +323,12 @@ impl App {
                                             self.search.page = 0;
                                         }
                                     });
-                                ui.add_space(3.0);
+                                ui.add_space(SP1);
                             }
                         });
                     }
                 }
-                ui.add_space(4.0);
+                ui.add_space(SP2);
 
                 // Keyboard navigation (only when no text input is focused)
                 let typing = ui.ctx().egui_wants_keyboard_input();
@@ -439,7 +439,7 @@ impl App {
                         self.ui.detail_open = false; // page content changed; drop stale detail
                         self.ui.detail_row = None;
                     }
-                    ui.add_space(6.0);
+                    ui.add_space(SP3);
                     for p in 0..max_p {
                         let near = p == 0 || p == max_p - 1 || p.abs_diff(pg) <= 2;
                         if !near {
@@ -464,7 +464,7 @@ impl App {
                             self.ui.detail_row = None;
                         }
                     }
-                    ui.add_space(6.0);
+                    ui.add_space(SP3);
                     if icon_text_btn(
                         ui,
                         SvgIcon::ChevronRight,
@@ -597,7 +597,7 @@ impl App {
                                     },
                                 );
                             });
-                            ui.add_space(4.0);
+                            ui.add_space(SP2);
                             // Show the whole stored history (20 entries), not the
                             // first 10 — the rest was unreachable. Capped in height
                             // so a full history cannot overflow the window.
@@ -688,7 +688,7 @@ impl App {
                     // responses report .changed() — no per-frame string clones.
                     let mut filter_changed = false;
                     lbl(ui, "Filter", self.pal.dim, fs);
-                    ui.add_space(3.0);
+                    ui.add_space(SP1);
                     filter_changed |= ui
                         .add(
                             egui::TextEdit::singleline(&mut self.search.f_text)
@@ -697,7 +697,7 @@ impl App {
                                 .font(FontId::proportional(fs)),
                         )
                         .changed();
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Seeds ≥", self.pal.dim, fs);
                     filter_changed |= ui
                         .add(
@@ -707,7 +707,7 @@ impl App {
                                 .font(FontId::proportional(fs)),
                         )
                         .changed();
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Max GB", self.pal.dim, fs);
                     filter_changed |= ui
                         .add(
@@ -717,7 +717,7 @@ impl App {
                                 .font(FontId::proportional(fs)),
                         )
                         .changed();
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Year ≥", self.pal.dim, fs);
                     filter_changed |= ui
                         .add(
@@ -727,7 +727,7 @@ impl App {
                                 .font(FontId::proportional(fs)),
                         )
                         .changed();
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Tracker", self.pal.dim, fs);
                     filter_changed |= ui
                         .add(
@@ -751,7 +751,7 @@ impl App {
                         || !self.search.f_trk.is_empty()
                         || self.search.f_hlth != Hlth::All;
                     if dirty {
-                        ui.add_space(8.0);
+                        ui.add_space(SP3);
                         if outline_icon_btn(ui, SvgIcon::Close, "Reset", self.pal.red) {
                             self.search.f_text.clear();
                             self.search.f_seed.clear();
@@ -765,7 +765,7 @@ impl App {
                         }
                     }
                 });
-                ui.add_space(5.0);
+                ui.add_space(SP2);
                 // Row 2 — select mode + health + sort
                 ui.horizontal_wrapped(|ui| {
                     // Batch select toggle (vector checkbox, no glyphs)
@@ -785,7 +785,7 @@ impl App {
                                 self.copy_selected_magnets(ui, &v.sorted);
                             }
                         }
-                        ui.add_space(4.0);
+                        ui.add_space(SP2);
                         // Select all visible / clear (no glyphs)
                         let all_checked = !self.ui.sel_set.is_empty();
                         if v_checkbox(ui, all_checked, "All", self.pal.accent)
@@ -818,11 +818,11 @@ impl App {
                         {
                             self.ui.sel_set.clear();
                         }
-                        ui.add_space(4.0);
+                        ui.add_space(SP2);
                     }
-                    ui.add_space(6.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Health", self.pal.dim, fs);
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                     for hf in [
                         Hlth::All,
                         Hlth::Hot,
@@ -854,7 +854,7 @@ impl App {
                             }
                             self.search.page = 0;
                         }
-                        ui.add_space(2.0);
+                        ui.add_space(SP1);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let desc = self.search.s_dir == SortDir::Desc;
@@ -884,9 +884,9 @@ impl App {
                             self.search.s_dir = if desc { SortDir::Asc } else { SortDir::Desc };
                             self.search.page = 0;
                         }
-                        ui.add_space(6.0);
+                        ui.add_space(SP3);
                         lbl(ui, "Sort:", self.pal.dim, fs);
-                        ui.add_space(4.0);
+                        ui.add_space(SP2);
                         for (l, col) in [
                             ("Date", SortCol::Date),
                             ("Size", SortCol::Size),
@@ -933,7 +933,7 @@ impl App {
                                 }
                                 self.search.page = 0;
                             }
-                            ui.add_space(2.0);
+                            ui.add_space(SP1);
                         }
                     });
                 });
