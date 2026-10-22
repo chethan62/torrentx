@@ -4,6 +4,37 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.3] — 2026-10-22
+
+### Added
+- **Design tokens module** (`src/ui/tokens.rs`) — one source of truth for spacing,
+  radii, icon sizes and the selected-row accent, replacing literals scattered
+  across the widgets.
+- **`scripts/ui-standards.sh`** — a CI gate that fails the build when a widget
+  hardcodes a spacing, radius or icon-size value instead of using a token.
+- **Filled star for saved results** — a saved row is now visibly distinct at a
+  glance instead of sharing the outline icon with unsaved ones.
+- **Dedicated sort arrows** — `SortAsc`/`SortDesc` replace the recycled
+  ArrowUp/ArrowDown glyphs, so a sort indicator no longer reads as navigation.
+- **Accent focus ring** — keyboard focus is drawn as a ring in the accent colour.
+- **Selected-row accent bar** — the active row carries a bar on its leading edge.
+
+### Changed
+- **Spacing, radii and icon sizes unified** — a 4 px grid, 3 radii and 4 icon
+  sizes; cell insets follow the grid instead of per-widget padding.
+- **Header tabs are one clickable pill** (icon included) rather than an icon and
+  a separate label hit target.
+- **Row hover is instant and pointer-driven** — it follows the pointer instead of
+  fading in behind it.
+- **Icons repinned to Lucide 1.61** and the `.torrent`/Play path from 18.6.2 is
+  unchanged.
+
+### Fixed
+- **WCAG AA contrast in all 19 themes.** Dim/secondary text measured 1.9–3.4:1
+  against its background (One Dark's `sub` was 3.98:1) — all below the 4.5:1 AA
+  floor for body text. `src/themes.rs` now clamps every theme's muted tones to AA
+  at load time, so a theme added later cannot regress below it.
+
 ## [18.6.2] — 2026-10-22
 
 ### Changed
