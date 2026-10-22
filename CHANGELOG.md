@@ -4,6 +4,15 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.5.1] — 2026-10-22
+
+### Fixed
+- **A silent Play gave no way to diagnose it.** The streamer's output went to
+  `/dev/null`, so when no player window appeared the user saw nothing — and the one
+  line that explains it (webtorrent's `Peers: 0/0`) was discarded. Output now goes to
+  `~/.cache/torrentx/webtorrent.log`, GUIDE's troubleshooting covers "nothing plays",
+  and the spawn test asserts the redirect (reverting to `Stdio::null()` fails it).
+
 ## [18.5.0] — 2026-10-22
 
 ### Fixed

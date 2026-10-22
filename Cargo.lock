@@ -4161,7 +4161,7 @@ dependencies = [
 
 [[package]]
 name = "torrentx"
-version = "18.5.0"
+version = "18.5.1"
 dependencies = [
  "ab_glyph",
  "chrono",
