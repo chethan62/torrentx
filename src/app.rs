@@ -102,7 +102,44 @@ pub(crate) struct Toast {
 pub(crate) struct ResultsView {
     /// Number of raw (unfiltered) results.
     pub(crate) raw_total: usize,
-    pub(crate) sorted: Vec<TorrentResult>,
+    /// Filtered + sorted rows, shared with `ViewCache` so an unchanged frame
+    /// hands out the same allocation instead of rebuilding it.
+    pub(crate) sorted: Arc<Vec<TorrentResult>>,
+}
+
+/// Memoises one filtered+sorted view. The key covers the filters, the sort, the
+/// page size and the identity of the result set, so a cache hit is only possible
+/// when the visible rows would be identical.
+#[derive(Default)]
+pub(crate) struct ViewCache {
+    key: Option<u64>,
+    /// The result set the cached rows were built from. Held (not just its
+    /// address) so the allocation cannot be freed and reused — a recycled
+    /// pointer would make a different result set look like a cache hit.
+    input: Option<Arc<Vec<TorrentResult>>>,
+    rows: Arc<Vec<TorrentResult>>,
+}
+
+impl ViewCache {
+    /// Cached rows for this input + key, running `build` only on a miss.
+    pub(crate) fn get(
+        &mut self,
+        key: u64,
+        input: &Arc<Vec<TorrentResult>>,
+        build: impl FnOnce() -> Vec<TorrentResult>,
+    ) -> Arc<Vec<TorrentResult>> {
+        let hit = self.key == Some(key)
+            && self
+                .input
+                .as_ref()
+                .is_some_and(|prev| Arc::ptr_eq(prev, input));
+        if !hit {
+            self.rows = Arc::new(build());
+            self.key = Some(key);
+            self.input = Some(Arc::clone(input));
+        }
+        Arc::clone(&self.rows)
+    }
 }
 
 /// The main application state: config + theme, then four focused sub-structs
@@ -113,6 +150,7 @@ pub(crate) struct App {
     pub(crate) pal: Pal,
     pub(crate) tokens: VisualTokens,
     pub(crate) search: SearchUi,
+    pub(crate) view_cache: ViewCache,
     pub(crate) net: NetState,
     pub(crate) ui: UiState,
     pub(crate) rss: RssUi,
@@ -407,6 +445,99 @@ mod view_tests {
         assert_eq!(rows[0].title, "beta 2020");
     }
 
+    /// Not an assertion — a measurement, run with `--nocapture`:
+    /// `cargo test --bin torrentx bench_view -- --nocapture --ignored`
+    #[test]
+    #[ignore]
+    fn bench_view() {
+        for n in [178usize, 1000, 5000] {
+            let rows: Vec<_> = (0..n)
+                .map(|i| {
+                    row(
+                        &format!("Sintel 2010 cut {i:04} 1080p BluRay x264 DTS-HD MA 5.1"),
+                        ["The Pirate Bay", "1337x", "YTS"][i % 3],
+                        (i % 900) as u32,
+                        (i % 30) as u32,
+                        gb(1 + (i % 8) as u64),
+                        "2026-09-14T00:00:00Z",
+                        "Movies/HD",
+                    )
+                })
+                .collect();
+            let q = FilterQuery::none();
+            let iters = 50;
+            let t = std::time::Instant::now();
+            let mut total = 0usize;
+            for _ in 0..iters {
+                let mut out: Vec<_> = rows
+                    .iter()
+                    .filter(|r| matches_filters(r, &q))
+                    .cloned()
+                    .collect();
+                sort_rows(&mut out, &SortCol::Seeds, &SortDir::Desc);
+                total += out.len();
+            }
+            let per = t.elapsed().as_secs_f64() * 1000.0 / iters as f64;
+            println!(
+                "{n:>5} rows: {per:.3} ms per view ({} rows kept)",
+                total / iters
+            );
+        }
+    }
+
+    #[test]
+    fn view_cache_rebuilds_only_when_the_key_changes() {
+        let mut cache = ViewCache::default();
+        let mut builds = 0;
+        let set1 = Arc::new(vec![row(
+            "a",
+            "t",
+            1,
+            0,
+            gb(1),
+            "2026-01-01T00:00:00Z",
+            "Movies",
+        )]);
+        let set2 = Arc::new(vec![row(
+            "b",
+            "t",
+            2,
+            0,
+            gb(1),
+            "2026-01-01T00:00:00Z",
+            "Movies",
+        )]);
+
+        let a = cache.get(7, &set1, || {
+            builds += 1;
+            vec![row("a", "t", 1, 0, gb(1), "2026-01-01T00:00:00Z", "Movies")]
+        });
+        let b = cache.get(7, &set1, || {
+            builds += 1;
+            vec![row("x", "t", 9, 0, gb(1), "2026-01-01T00:00:00Z", "Movies")]
+        });
+        assert_eq!(builds, 1, "same key + same result set must not rebuild");
+        assert!(Arc::ptr_eq(&a, &b), "hit returns the same allocation");
+        assert_eq!(b[0].title, "a");
+
+        // Same key, different result set: a new search whose row count happens
+        // to match must still rebuild (this is the stale-view bug).
+        let c = cache.get(7, &set2, || {
+            builds += 1;
+            vec![row("b", "t", 2, 0, gb(1), "2026-01-01T00:00:00Z", "Movies")]
+        });
+        assert_eq!(builds, 2, "a different result set rebuilds");
+        assert_eq!(c[0].title, "b");
+        assert!(!Arc::ptr_eq(&b, &c));
+
+        let d = cache.get(8, &set2, || {
+            builds += 1;
+            vec![row("c", "t", 3, 0, gb(1), "2026-01-01T00:00:00Z", "Movies")]
+        });
+        assert_eq!(builds, 3, "a new key rebuilds");
+        assert_eq!(d[0].title, "c");
+    }
+
     #[test]
     fn paging_bounds_cover_all_and_empty_cases() {
         assert_eq!(page_count(0, 25), 1, "empty result set is one page");
@@ -670,6 +801,7 @@ impl Default for App {
             pal,
             tokens,
             search: SearchUi::default(),
+            view_cache: ViewCache::default(),
             net: NetState::default(),
             ui,
             rss,
@@ -1047,21 +1179,21 @@ impl App {
     pub(crate) fn compute_view(&mut self) -> ResultsView {
         let raw = self.all_results();
         let raw_total = raw.len();
-        let sorted = self.filtered(&raw);
-        ResultsView { raw_total, sorted }
-    }
-
-    /// Filter + sort the results. Clones only the rows that pass the filters
-    /// (the shared `Arc` input is never copied wholesale).
-    pub(crate) fn filtered(&self, raw: &[TorrentResult]) -> Vec<TorrentResult> {
+        // Filters + sort + page size + result count, mixed with the identity of
+        // the result set itself: same count but different rows must not hit.
+        let key = self.view_signature();
         let q = FilterQuery::from_search(&self.search);
-        let mut out: Vec<_> = raw
-            .iter()
-            .filter(|r| matches_filters(r, &q))
-            .cloned()
-            .collect();
-        sort_rows(&mut out, &self.search.s_col, &self.search.s_dir);
-        out
+        let (col, dir) = (self.search.s_col.clone(), self.search.s_dir.clone());
+        let sorted = self.view_cache.get(key, &raw, || {
+            let mut out: Vec<_> = raw
+                .iter()
+                .filter(|r| matches_filters(r, &q))
+                .cloned()
+                .collect();
+            sort_rows(&mut out, &col, &dir);
+            out
+        });
+        ResultsView { raw_total, sorted }
     }
 
     pub(crate) fn max_pages(&self, n: usize) -> usize {
