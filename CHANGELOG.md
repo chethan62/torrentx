@@ -4,7 +4,7 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [18.6.1] — 2026-10-22
 
 ### Fixed
 - **Tracker column no longer truncates** — 84 px -> 104 px, so names like
