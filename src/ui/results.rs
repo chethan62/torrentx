@@ -333,6 +333,16 @@ impl App {
                                     if cell_resp.hovered() {
                                         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                                     }
+                                    // Same right-click menu as the title cell — this
+                                    // cell already owns the full cell rect, so no
+                                    // extra hit-test layer is needed.
+                                    attach_row_menu(
+                                        &cell_resp,
+                                        i,
+                                        r,
+                                        self.is_fav(&r.title),
+                                        &mut actions,
+                                    );
                                     draw_cell_content(ui, c, r, seed, leech, fsz, &pal);
                                 }
                             }

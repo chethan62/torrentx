@@ -67,6 +67,8 @@ specific indexer from the dropdown next to the search bar.
 - Type a query, press **Enter** or click **Search**
 - Results stream back from every enabled indexer; the status bar shows the
   count and elapsed time
+- **Right-click a result** — on any column except Actions — for its menu: play,
+  choose episode, open details, favourite, copy magnet/name, download .torrent
 - **Category chips** above the results filter by category (Movies, TV, …);
   click again to clear
 - Re-run the last search anytime with **Ctrl+R**
@@ -230,10 +232,14 @@ Deliberate, not bugs — each line says what to do instead.
 - **CSV exports the whole filtered view**, every page, ticks or no ticks
   ("Export CSV" next to the result count). Ticking rows only feeds *Copy
   magnets*; there is no "export selection only".
+- **Jackett only** — the app calls Jackett's `/api/v2.0/indexers/…` endpoints for
+  the indexer list and searches, so Prowlarr (or a bare Torznab URL) will not
+  connect. Point it at a Jackett instance.
+- **One request per indexer, no paging** — a search asks each indexer once and
+  Jackett returns what it has (often ≤100 per indexer, newest first). The page
+  buttons slice that set; they do not fetch more from the tracker.
 - **One stream at a time** — starting a second play stops the first
   (`start_play` calls `stop_play`), so two players never fight for bandwidth.
-- **Right-click menu is on the title column** — the other columns belong to the
-  table's own cell hit areas, so the menu opens over the result name.
 - **Column order is fixed** — Settings toggles which columns are shown, not
   their order.
 - **No download manager** — "Download .torrent" and "Open magnet in browser"

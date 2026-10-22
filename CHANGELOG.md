@@ -4,6 +4,23 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **Right-click menu works on every column.** The tracking cell was the only
+  cell with a full-rect hit layer; the other data cells had one too but never
+  handed their response to the menu, so right-clicking Seeds, Size, Health or
+  Date did nothing. Actions keeps its own buttons.
+- **A panicking worker thread no longer kills the app** — the state mutexes in
+  `jackett.rs` and the Settings spinner are locked through `lock_or_recover()`,
+  which takes the data out of a poisoned lock instead of panicking again on the
+  next search.
+
+### Changed
+- GUIDE: named two more limits — Jackett-only endpoints (Prowlarr will not
+  connect) and one request per indexer per search (the page buttons slice the
+  returned set, they do not fetch more).
+
 ## [18.6.5] — 2026-10-22
 
 ### Changed
