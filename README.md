@@ -52,8 +52,8 @@ Grab the latest build from the [releases page](https://github.com/chethan62/torr
 
 | Platform | File | Size |
 |----------|------|------|
-| Linux (AppImage) | `TorrentX-<version>-x86_64.AppImage` | ~16 MB |
-| Linux (binary) | `torrentx` | ~32 MB (stripped, LTO) |
+| Linux (AppImage) | `TorrentX-<version>-x86_64.AppImage` | ~17 MB |
+| Linux (binary) | `torrentx` | ~36 MB (stripped, thin LTO) |
 
 ## Build from source
 
@@ -78,7 +78,8 @@ RSS, settings reference, config file, troubleshooting, and privacy notes.
 - **GUI:** egui 0.36 + eframe (GPU-accelerated via wgpu, software-GL fallback)
 - **HTTP:** reqwest (blocking)
 - **Config:** `~/.config/torrentx/config.json`
-- **Binary size:** ~32 MB stripped + LTO; ~16 MB packed as AppImage (measured)
+- **Binary size:** ~36 MB stripped + thin LTO; ~17 MB packed as AppImage (measured)
+- **Build speed:** thin LTO keeps release rebuilds parallel — see [docs/build-performance.md](docs/build-performance.md) for the measurements
 
 ### Bundled icons
 
