@@ -449,16 +449,18 @@ mod tests {
 
         let m = magnet();
         assert!(start_play(&m, None, "mpv", None).is_ok());
+        // Wait for the *contents*, not for the file to exist: the shell creates
+        // the redirect target before it writes, so an existence check passes on
+        // an empty file and the test flakes on a slow (CI) machine.
+        let recorded = || std::fs::read_to_string(&args_file).unwrap_or_default();
         assert!(
-            wait_for(|| args_file.exists(), 5),
-            "stub never ran; PATH={}",
+            wait_for(|| recorded().lines().count() >= 3, 5),
+            "stub never recorded argv (got {:?}); PATH={}",
+            recorded(),
             std::env::var("PATH").unwrap_or_default()
         );
         assert_eq!(
-            std::fs::read_to_string(&args_file)
-                .unwrap()
-                .lines()
-                .collect::<Vec<_>>(),
+            recorded().lines().collect::<Vec<_>>(),
             vec![m.as_str(), "--mpv", "--not-on-top"]
         );
 
