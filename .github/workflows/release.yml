@@ -34,7 +34,12 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-release-cargo-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock') }}
+          # Keyed on the lockfile only: a version bump (every release) changes no
+          # dependency, and hashing Cargo.toml turned each tag into a full cold
+          # rebuild. restore-keys keeps a manifest-only change warm as well.
+          key: ${{ runner.os }}-release-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-release-cargo-
 
       - name: Build binary + AppImage
         env:
