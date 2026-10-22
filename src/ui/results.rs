@@ -127,7 +127,7 @@ impl App {
                 };
                 header.col(|ui| {
                     // Header padding — labels shouldn't touch the cell edge
-                    ui.add_space(SP2);
+                    ui.add_space(CELL_PAD_X);
                     if *c == TableCol::Health {
                         ui.label(
                             RichText::new("Health")
@@ -155,7 +155,7 @@ impl App {
                 // The icon buttons in this column are right-aligned; centre the
                 // header over them instead of leaving it stranded on the left.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add_space(SP4);
+                    ui.add_space(CELL_PAD_X);
                     ui.label(
                         RichText::new("Actions")
                             .font(FontId::proportional(fsz))
@@ -206,9 +206,33 @@ impl App {
                 };
 
                 body.row(rh, |mut row| {
-                    for c in &cols {
+                    let last = cols.len(); // Actions is the trailing cell
+                    for (ci, c) in cols.iter().enumerate() {
                         row.col(|ui| {
-                            ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
+                            // Row band: inset at the row's OUTER edges so the
+                            // hover/selection fill lines up with the padded text
+                            // instead of running to the window edge.
+                            let mut fill = ui.max_rect();
+                            if ci == 0 {
+                                fill.min.x += CELL_PAD_X;
+                            }
+                            if ci == last {
+                                fill.max.x -= CELL_PAD_X;
+                            }
+                            ui.painter().rect_filled(fill, 0.0, bg);
+                            if ci == 0 && is_sel {
+                                // 2px accent bar in the gutter marking the row.
+                                let cell = ui.max_rect();
+                                ui.painter().rect_filled(
+                                    egui::Rect::from_min_size(
+                                        egui::pos2(cell.left() + SP2, cell.top() + SP1),
+                                        egui::vec2(2.0, cell.height() - SP2),
+                                    ),
+                                    1.0,
+                                    pal.accent,
+                                );
+                            }
+                            ui.add_space(CELL_PAD_X);
                             match c {
                                 TableCol::Name => {
                                     // Full-cell click layer — clicking ANYWHERE
@@ -246,7 +270,6 @@ impl App {
                                     }
                                     // Draw the content (non-interactive label)
                                     ui.horizontal(|ui| {
-                                        ui.add_space(SP3);
                                         if self.ui.sel_mode {
                                             let checked = self.ui.sel_set.contains(&gi);
                                             if v_checkbox(ui, checked, "", self.pal.accent)
@@ -313,11 +336,13 @@ impl App {
                     }
                     // Actions — fixed (always-visible) icon buttons, right-aligned.
                     row.col(|ui| {
-                        ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
+                        let mut fill = ui.max_rect();
+                        fill.max.x -= CELL_PAD_X;
+                        ui.painter().rect_filled(fill, 0.0, bg);
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // Breathing room so icons never touch the cell edge
-                            ui.add_space(SP3);
-                            ui.spacing_mut().item_spacing.x = 6.0;
+                            ui.add_space(CELL_PAD_X);
+                            ui.spacing_mut().item_spacing.x = SP3;
                             let has_mag = r.magnet_uri.as_deref().map(is_magnet).unwrap_or(false);
                             let has_link = r.link.is_some();
                             // All actions always visible (no hover-reveal).

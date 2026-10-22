@@ -11,8 +11,7 @@ pub(crate) fn draw_cell_content(
     fsz: f32,
     pal: &Pal,
 ) {
-    // Not flush against the cell's left edge — consistent leading padding.
-    ui.add_space(SP2);
+    // Leading padding is the caller's cell inset (see CELL_PAD_X in results.rs).
     match c {
         TableCol::Tracker => {
             ui.add(
