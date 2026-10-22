@@ -150,7 +150,8 @@ Keywords=torrent;jackett;search;
     lic_dir = appdir / "usr" / "share" / "licenses" / "torrentx"
     lic_dir.mkdir(parents=True, exist_ok=True)
     for src, dest in (
-        (PROJECT / "LICENSE", "MIT.txt"),
+        (PROJECT / "LICENSE-MIT", "MIT.txt"),
+        (PROJECT / "LICENSE-APACHE", "Apache-2.0.txt"),
         (PROJECT / "assets" / "NotoSansCJKjp-subset.LICENSE.txt", "NotoSansCJK-OFL.txt"),
         (PROJECT / "assets" / "Lucide.ISC.LICENSE.txt", "Lucide-ISC.txt"),
     ):

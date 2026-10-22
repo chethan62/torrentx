@@ -34,6 +34,31 @@ use std::time::{Duration, Instant};
 /// (OFL condition 2 — the notice must be viewable by the user).
 pub(crate) const FONT_LICENSE: &str = include_str!("../assets/NotoSansCJKjp-subset.LICENSE.txt");
 
+/// The ISC notice for the bundled Lucide icons. ISC requires the notice in all
+/// copies, and the release artefacts are a bare binary and an AppImage, so it is
+/// compiled in as well as shipped at usr/share/licenses/torrentx/Lucide-ISC.txt.
+pub(crate) const ICON_LICENSE: &str = include_str!("../assets/Lucide.ISC.LICENSE.txt");
+
+#[cfg(test)]
+mod licence_tests {
+    use super::{FONT_LICENSE, ICON_LICENSE};
+
+    /// Both notices are `include_str!`ed, so a rename or an emptied file would
+    /// otherwise only surface as a blank section in About.
+    #[test]
+    fn bundled_notices_are_embedded_with_their_terms() {
+        assert!(ICON_LICENSE.contains("ISC License"), "icon notice missing");
+        assert!(
+            ICON_LICENSE.contains("lucide-static 1.61.0"),
+            "icon notice lost its provenance line"
+        );
+        assert!(
+            FONT_LICENSE.contains("SIL Open Font License"),
+            "font notice missing"
+        );
+    }
+}
+
 pub(crate) fn load_cjk_fonts(ctx: &egui::Context) {
     use std::sync::OnceLock;
     static LOADED: OnceLock<bool> = OnceLock::new();

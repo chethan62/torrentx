@@ -89,16 +89,17 @@ them; `assets/icons/README.md` has the details.
 
 ## License
 
-MIT © [chethan62](https://github.com/chethan62)
+Dual-licensed under **MIT OR Apache-2.0** © [chethan62](https://github.com/chethan62) —
+use whichever suits you; Apache-2.0 adds an explicit patent grant.
 
 Every licence the binary carries ships with it: the AppImage and tarball include
-`usr/share/licenses/torrentx/{MIT.txt,NotoSansCJK-OFL.txt,Lucide-ISC.txt}`, and
+`usr/share/licenses/torrentx/{MIT.txt,Apache-2.0.txt,NotoSansCJK-OFL.txt,Lucide-ISC.txt}`, and
 `cargo deny` gates the dependency tree against the allow-list in
 [`deny.toml`](/chethan62/torrentx/blob/main/deny.toml) in CI.
 
 | Part | Licence | Notice |
 | --- | --- | --- |
-| TorrentX source and binary | MIT | `LICENSE` |
+| TorrentX source and binary | MIT OR Apache-2.0 | `LICENSE-MIT`, `LICENSE-APACHE` |
 | `assets/NotoSansCJK*-subset.otf` (modified Noto CJK subsets) | OFL-1.1 | `assets/NotoSansCJKjp-subset.LICENSE.txt` |
 | `assets/icons/*.svg` (Lucide 1.61.0) | ISC | `assets/Lucide.ISC.LICENSE.txt` |
 

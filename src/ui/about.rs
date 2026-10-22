@@ -185,7 +185,7 @@ impl App {
                     "Powered by Jackett — the open-source indexer proxy",
                     "Built with egui/eframe, reqwest, quick-xml, tray-icon, notify-rust",
                     "CJK fonts: Noto Sans CJK JP + KR (SIL OFL) · Icons: Lucide SVG",
-                    "License: MIT — free to use, modify, and share",
+                    "License: MIT OR Apache-2.0 — free to use, modify, and share",
                 ] {
                     lbl(ui, &format!("  ·  {line}"), self.pal.sub, fs - 1.0);
                     ui.add_space(SP1);
@@ -208,6 +208,26 @@ impl App {
                         .show(ui, |ui| {
                             ui.label(
                                 RichText::new(crate::app::FONT_LICENSE)
+                                    .font(FontId::monospace(fs - 3.5))
+                                    .color(self.pal.dim),
+                            );
+                        });
+                });
+
+                ui.add_space(SP2);
+                egui::CollapsingHeader::new(
+                    RichText::new("Bundled icon licence (ISC, Lucide)")
+                        .font(FontId::proportional(fs - 1.0))
+                        .color(self.pal.sub),
+                )
+                .id_salt("icon_license")
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(180.0)
+                        .id_salt("icon_license_scroll")
+                        .show(ui, |ui| {
+                            ui.label(
+                                RichText::new(crate::app::ICON_LICENSE)
                                     .font(FontId::monospace(fs - 3.5))
                                     .color(self.pal.dim),
                             );
