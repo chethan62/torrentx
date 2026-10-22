@@ -8,7 +8,13 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 fail=0
 for f in *.svg; do
     n=${f%.svg}
-    up=$n; [ "$n" = web ] && up=external-link   # app name -> lucide name
+    case $n in
+    *-filled) echo "skip  $n (derived locally from its base icon)"; continue ;;  # no lucide equivalent
+    esac
+    up=$n
+    # app name -> lucide name
+    [ "$n" = web ] && up=external-link
+    [ "$n" = arrow-down-narrow-wide ] && up=arrow-down-wide-narrow
     if ! curl -fsSL --max-time 20 "https://unpkg.com/lucide-static@$ver/icons/$up.svg" -o "$tmp/$n"; then
         echo "FAIL  $n (lucide: $up)"; fail=1; continue
     fi

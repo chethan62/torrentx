@@ -453,8 +453,14 @@ impl App {
         self.ui.sel_set.clear();
     }
 
+    /// Whether a torrent with this title is already saved. The results table
+    /// shows a filled star and a "Remove" tooltip when it is.
+    pub(crate) fn is_fav(&self, title: &str) -> bool {
+        self.cfg.favorites.iter().any(|f| f.title == title)
+    }
+
     pub(crate) fn add_fav(&mut self, r: &TorrentResult) {
-        if self.cfg.favorites.iter().any(|f| f.title == r.title) {
+        if self.is_fav(&r.title) {
             self.toast("Already in Favorites", self.pal.yellow);
             return;
         }
@@ -652,7 +658,7 @@ impl App {
     }
 
     pub(crate) fn add_fav_from_rss(&mut self, item: &RssItem) {
-        if self.cfg.favorites.iter().any(|f| f.title == item.title) {
+        if self.is_fav(&item.title) {
             self.toast("Already in Favorites", self.pal.yellow);
             return;
         }

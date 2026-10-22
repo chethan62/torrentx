@@ -860,9 +860,9 @@ impl App {
                         let desc = self.search.s_dir == SortDir::Desc;
                         let d_lbl = if desc { "DESC" } else { "ASC" };
                         let arrow = if desc {
-                            SvgIcon::ArrowDown
+                            SvgIcon::SortDesc
                         } else {
-                            SvgIcon::ArrowUp
+                            SvgIcon::SortAsc
                         };
                         let clicked = ui
                             .horizontal(|ui| {
@@ -911,9 +911,9 @@ impl App {
                                         .clicked();
                                     if on {
                                         let arrow = if self.search.s_dir == SortDir::Desc {
-                                            SvgIcon::ArrowDown
+                                            SvgIcon::SortDesc
                                         } else {
-                                            SvgIcon::ArrowUp
+                                            SvgIcon::SortAsc
                                         };
                                         svg_icon(ui, arrow, ICON_XS, self.pal.accent);
                                     }

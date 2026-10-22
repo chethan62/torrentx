@@ -49,9 +49,9 @@ impl App {
             );
             if on {
                 let icon = if s_dir == SortDir::Desc {
-                    SvgIcon::ArrowDown
+                    SvgIcon::SortDesc
                 } else {
-                    SvgIcon::ArrowUp
+                    SvgIcon::SortAsc
                 };
                 svg_icon(ui, icon, ICON_XS, pal.accent);
             }
@@ -364,7 +364,21 @@ impl App {
                             {
                                 actions.push((i, "dl"));
                             }
-                            if svg_btn(ui, SvgIcon::Star, "Add to Favorites (F)", pal.yellow) {
+                            let saved = self.is_fav(&r.title);
+                            if svg_btn(
+                                ui,
+                                if saved {
+                                    SvgIcon::StarFilled
+                                } else {
+                                    SvgIcon::Star
+                                },
+                                if saved {
+                                    "Remove from Favorites (F)"
+                                } else {
+                                    "Add to Favorites (F)"
+                                },
+                                pal.yellow,
+                            ) {
                                 actions.push((i, "fav"));
                             }
                             if svg_btn(
@@ -441,7 +455,15 @@ impl App {
                         }
                     }
                     "fav" => {
-                        self.add_fav(&r);
+                        // The button's tooltip promises a toggle: a filled star
+                        // means the row is saved, so clicking it removes.
+                        if self.is_fav(&r.title) {
+                            self.cfg.favorites.retain(|f| f.title != r.title);
+                            let _ = save_cfg(&self.cfg);
+                            self.toast("Removed from Favorites", self.pal.sub);
+                        } else {
+                            self.add_fav(&r);
+                        }
                     }
                     "info" => {
                         // Idempotent open: clicking Info always opens the detail
