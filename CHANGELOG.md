@@ -4,6 +4,30 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.4] — 2026-10-22
+
+### Added
+- **Settings are a floating dialog** — Preferences opens over the workspace and
+  no longer reflows it, so the search results stay where you left them.
+- **Labelled search pickers** — the category and indexer combos carry visible
+  `Category` / `Indexer` labels instead of relying on their contents.
+
+### Changed
+- **The table header is the only sort control** — the filter band's duplicate
+  "Sort: …" strip is gone; click a header to sort, click again to flip ASC/DESC.
+- **Batch selection moved to the right end of the filter row** — Select with
+  Copy/All/Clear sits by the results, Health chips keep the left edge.
+- **The search row stays on one line**, with the button pinned to the window
+  edge, and idle-state recent-search pills are centred.
+
+### Fixed
+- **9 RUSTSEC advisories cleared** by lockfile-only dependency bumps: `rustls`
+  0.23.46, `rustls-webpki` 0.103.16, `quinn-proto` 0.11.18, `webpki-root-certs`
+  1.0.10, and `chacha20` 0.10.2 (0.10.1 was yanked). `cargo audit` now reports
+  0 vulnerabilities. Four unmaintained-crate warnings remain (`ttf-parser` via
+  `egui`; `zbus_names`/`zvariant`/`zvariant_derive` via `accesskit`) — no patched
+  release exists, so clearing them needs an upstream major bump.
+
 ## [18.6.3] — 2026-10-22
 
 ### Added
