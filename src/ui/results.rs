@@ -127,7 +127,7 @@ impl App {
                 };
                 header.col(|ui| {
                     // Header padding — labels shouldn't touch the cell edge
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                     if *c == TableCol::Health {
                         ui.label(
                             RichText::new("Health")
@@ -155,7 +155,7 @@ impl App {
                 // The icon buttons in this column are right-aligned; centre the
                 // header over them instead of leaving it stranded on the left.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add_space(10.0);
+                    ui.add_space(SP4);
                     ui.label(
                         RichText::new("Actions")
                             .font(FontId::proportional(fsz))
@@ -246,7 +246,7 @@ impl App {
                                     }
                                     // Draw the content (non-interactive label)
                                     ui.horizontal(|ui| {
-                                        ui.add_space(6.0);
+                                        ui.add_space(SP3);
                                         if self.ui.sel_mode {
                                             let checked = self.ui.sel_set.contains(&gi);
                                             if v_checkbox(ui, checked, "", self.pal.accent)
@@ -258,7 +258,7 @@ impl App {
                                                     self.ui.sel_set.insert(gi);
                                                 }
                                             }
-                                            ui.add_space(4.0);
+                                            ui.add_space(SP2);
                                         }
                                         ui.add(
                                             egui::Label::new(
@@ -316,7 +316,7 @@ impl App {
                         ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // Breathing room so icons never touch the cell edge
-                            ui.add_space(8.0);
+                            ui.add_space(SP3);
                             ui.spacing_mut().item_spacing.x = 6.0;
                             let has_mag = r.magnet_uri.as_deref().map(is_magnet).unwrap_or(false);
                             let has_link = r.link.is_some();
@@ -459,7 +459,7 @@ impl App {
 
     pub(crate) fn draw_idle(&mut self, ui: &mut egui::Ui) {
         let fs = self.cfg.font_size;
-        ui.add_space(50.0);
+        ui.add_space(SP6 + SP7);
         ui.vertical_centered(|ui| {
             ui.label(
                 RichText::new("TorrentX")
@@ -467,25 +467,25 @@ impl App {
                     .strong()
                     .color(tint(self.pal.accent, 230)),
             );
-            ui.add_space(6.0);
+            ui.add_space(SP3);
             lbl(
                 ui,
                 "Search all your Jackett indexers in one shot",
                 self.pal.sub,
                 fs + 1.0,
             );
-            ui.add_space(3.0);
+            ui.add_space(SP1);
             lbl(
                 ui,
                 "Movies  ·  TV  ·  Music  ·  Games  ·  Software  ·  Anime  ·  Books",
                 self.pal.dim,
                 fs - 1.0,
             );
-            ui.add_space(32.0);
+            ui.add_space(SP7);
 
             if !self.cfg.history.is_empty() {
                 lbl(ui, "Recent searches", self.pal.dim, fs - 1.0);
-                ui.add_space(10.0);
+                ui.add_space(SP4);
                 let hist: Vec<String> = self.cfg.history.iter().take(12).cloned().collect();
                 let mut clicked: Option<String> = None;
                 ui.horizontal_wrapped(|ui| {
@@ -515,7 +515,7 @@ impl App {
                 }
             } else {
                 lbl(ui, "Try searching:", self.pal.dim, fs - 1.0);
-                ui.add_space(10.0);
+                ui.add_space(SP4);
                 let suggestions = ["Linux Mint", "Ubuntu 24.04", "Blender", "GIMP", "Inkscape"];
                 let mut clicked: Option<&str> = None;
                 ui.horizontal_wrapped(|ui| {
@@ -544,7 +544,7 @@ impl App {
                     self.do_search();
                 }
 
-                ui.add_space(32.0);
+                ui.add_space(SP7);
                 egui::Frame::NONE
                     .fill(tint(self.pal.accent, 12))
                     .corner_radius(10.0)
@@ -558,7 +558,7 @@ impl App {
                                 .color(self.pal.accent)
                                 .strong(),
                         );
-                        ui.add_space(6.0);
+                        ui.add_space(SP3);
                         lbl(
                             ui,
                             "1. Make sure Jackett is running  (localhost:9117)",
@@ -576,7 +576,7 @@ impl App {
                             );
                         });
                         lbl(ui, "3. Search for anything!", self.pal.sub, fs - 1.0);
-                        ui.add_space(10.0);
+                        ui.add_space(SP4);
                         if outline_btn(ui, "Open Settings", self.pal.accent) {
                             self.set_settings_open(true);
                         }
@@ -589,12 +589,12 @@ impl App {
 
     pub(crate) fn draw_detail(&mut self, ui: &mut egui::Ui, r: &TorrentResult) {
         let fs = self.cfg.font_size;
-        ui.add_space(10.0);
+        ui.add_space(SP4);
         ui.horizontal(|ui| {
-            ui.add_space(10.0);
+            ui.add_space(SP4);
             lbl(ui, "Details", self.pal.text, fs + 2.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(8.0);
+                ui.add_space(SP3);
                 if ui
                     .add(
                         egui::Button::new(svg_image(SvgIcon::Close, 14.0, self.pal.sub))
@@ -610,7 +610,7 @@ impl App {
             });
         });
         ui.separator();
-        ui.add_space(8.0);
+        ui.add_space(SP3);
 
         egui::ScrollArea::vertical()
             .id_salt("det_scr")
@@ -624,7 +624,7 @@ impl App {
                     )
                     .wrap(),
                 );
-                ui.add_space(8.0);
+                ui.add_space(SP3);
 
                 let cat = r.category_desc.as_deref().unwrap_or("Unknown");
                 egui::Frame::NONE
@@ -638,7 +638,7 @@ impl App {
                                 .color(cat_col(cat)),
                         );
                     });
-                ui.add_space(12.0);
+                ui.add_space(SP4);
 
                 // Use grid for aligned details
                 egui::Grid::new("detail_grid")
@@ -692,7 +692,7 @@ impl App {
                         "∞".into()
                     };
                     let pct = (seed as f32 / tot).clamp(0.0, 1.0);
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     ui.horizontal(|ui| {
                         ui.label(
                             RichText::new(format!("Ratio: {}  ", ratio_value))
@@ -708,7 +708,7 @@ impl App {
                         filled.max.x = rect.min.x + rect.width() * pct;
                         ui.painter().rect_filled(filled, 4.0, seed_col(seed));
                     });
-                    ui.add_space(2.0);
+                    ui.add_space(SP1);
                     lbl(
                         ui,
                         &format!("{:.0}% seeded", pct * 100.0),
@@ -719,7 +719,7 @@ impl App {
 
                 // Show magnet link (truncated) if present
                 if let Some(mag) = &r.magnet_uri {
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     ui.horizontal(|ui| {
                         ui.label(
                             RichText::new("Magnet:")
@@ -751,9 +751,9 @@ impl App {
                     });
                 }
 
-                ui.add_space(16.0);
+                ui.add_space(SP5);
                 lbl(ui, "Actions", self.pal.dim, fs - 1.0);
-                ui.add_space(6.0);
+                ui.add_space(SP3);
 
                 if let Some(mag) = r.magnet_uri.clone() {
                     let mc = mag.clone();
@@ -780,9 +780,9 @@ impl App {
                     {
                         crate::player::stop_play();
                         self.toast("Stream stopped", self.pal.sub);
-                        ui.add_space(4.0);
+                        ui.add_space(SP2);
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                     // Multi-file torrents (season packs) stream their largest file
                     // unless a file is chosen; the chooser handles long lists with
                     // a filter.
@@ -821,30 +821,30 @@ impl App {
                             }
                         }
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                     if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", self.pal.accent) {
                         let _ = safe_open(mag);
                         self.toast("Opening magnet…", self.pal.accent);
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                     if wide_icon_btn(ui, SvgIcon::Copy, "Copy Magnet Link", self.pal.sub) {
                         ui.ctx().copy_text(mc);
                         self.toast("Copied", self.pal.green);
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                 }
                 if let Some(link) = r.link.clone() {
                     if wide_icon_btn(ui, SvgIcon::Download, "Download .torrent", self.pal.green) {
                         let _ = safe_open(link);
                         self.toast("Downloading…", self.pal.green);
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                 }
                 if let Some(det) = r.details.clone() {
                     if wide_icon_btn(ui, SvgIcon::Web, "Open in Browser", self.pal.sub) {
                         let _ = safe_open(det);
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                 }
                 let r2 = r.clone();
                 if wide_icon_btn(ui, SvgIcon::Star, "Add to Favorites", self.pal.yellow) {
@@ -869,7 +869,7 @@ impl App {
                                 .hint_text("filter files…")
                                 .desired_width(f32::INFINITY),
                         );
-                        ui.add_space(4.0);
+                        ui.add_space(SP2);
                         let needle = p.filter.to_lowercase();
                         egui::ScrollArea::vertical()
                             .max_height(340.0)
