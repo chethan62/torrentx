@@ -155,19 +155,9 @@ impl App {
                     // Results arrive one indexer at a time: show and page them
                     // immediately instead of hiding the table behind a spinner.
                     Some(v) => {
-                        ui.add_space(6.0);
-                        ui.horizontal_wrapped(|ui| {
-                            ui.add_space(12.0);
-                            ui.spinner();
-                            ui.add_space(6.0);
-                            lbl(
-                                ui,
-                                &format!("Scanning… {} results so far", v.sorted.len()),
-                                self.pal.sub,
-                                fs,
-                            );
-                        });
-                        ui.add_space(4.0);
+                        // No banner row: the status bar already names the query and
+                        // the live count, and skipping it avoids a layout jump when
+                        // the last indexer lands.
                         let max_p = self.max_pages(v.sorted.len());
                         let pg = self.search.page.min(max_p.saturating_sub(1));
                         let page_s = self.page_slice(&v.sorted);
@@ -841,12 +831,18 @@ impl App {
                         Hlth::Dead,
                     ] {
                         let on = self.search.f_hlth == hf;
+                        let chip_col = match hf {
+                            Hlth::All => self.pal.sub,
+                            Hlth::Hot | Hlth::Good => self.pal.green,
+                            Hlth::Slow | Hlth::Dying => self.pal.yellow,
+                            Hlth::Dead => self.pal.red,
+                        };
                         if ui
                             .add(egui::Button::selectable(
                                 on,
                                 RichText::new(hf.label())
                                     .font(FontId::proportional(fs - 1.0))
-                                    .color(if on { self.pal.accent } else { self.pal.sub }),
+                                    .color(if on { self.pal.accent } else { chip_col }),
                             ))
                             .clicked()
                         {

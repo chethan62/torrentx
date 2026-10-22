@@ -152,13 +152,17 @@ impl App {
                 });
             }
             header.col(|ui| {
-                ui.add_space(4.0);
-                ui.label(
-                    RichText::new("Actions")
-                        .font(FontId::proportional(fsz))
-                        .color(pal.sub)
-                        .strong(),
-                );
+                // The icon buttons in this column are right-aligned; centre the
+                // header over them instead of leaving it stranded on the left.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(10.0);
+                    ui.label(
+                        RichText::new("Actions")
+                            .font(FontId::proportional(fsz))
+                            .color(pal.sub)
+                            .strong(),
+                    );
+                });
             });
         })
         .body(|mut body| {

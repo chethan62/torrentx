@@ -6,14 +6,25 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Tracker column no longer truncates** — 84 px -> 104 px, so names like
+  "The Pirate Bay" fit instead of rendering as "The Pirat…".
+- **"Actions" header right-aligned** over its icon buttons (it was stranded on
+  the left edge of a right-aligned column).
+- **Health filter chips are colour-coded** (Hot/Good green, Slow/Dying yellow,
+  Dead red) instead of uniformly grey.
+
 ### Changed
 - **Search results arrive as each indexer answers.** A search used to be one
   aggregate Jackett request that waited for the slowest tracker before showing
   anything. It now fans out one request per configured indexer and appends each
   answer as it lands, so the first page is usable while the rest is still
-  scanning ("Scanning… N results so far"). One chosen indexer is still a single
-  request; a tracker that fails does not hide the others (the error only shows if
-  every one failed).
+  scanning. One chosen indexer is still a single request; a tracker that fails
+  does not hide the others (the error only shows if every one failed).
+- **One status line while scanning** — the status bar now reads
+  `Searching "q" — 127 so far  2.4s`; the extra banner row above the table is
+  gone, so the layout no longer jumps when the last indexer lands.
+- **Icon stroke weight unified** at 2.0 across all 21 SVGs (8 were 2.4).
 
 ## [18.6.0] — 2026-10-22
 

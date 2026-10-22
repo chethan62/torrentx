@@ -784,9 +784,13 @@ impl eframe::App for App {
                             // tofus on fonts without Braille; vector icon is
                             // consistent with the Check/Close status icons.
                             svg_icon(ui, SvgIcon::Refresh, 12.0, self.pal.accent);
+                            let n = self.total_count();
                             lbl(
                                 ui,
-                                &format!("Searching \"{}\"{}", self.search.last_query, el),
+                                &format!(
+                                    "Searching \"{}\" — {} so far{}",
+                                    self.search.last_query, n, el
+                                ),
                                 self.pal.accent,
                                 12.0,
                             );

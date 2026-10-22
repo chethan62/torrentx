@@ -121,7 +121,7 @@ impl TableCol {
     pub(crate) fn width(&self) -> f32 {
         match self {
             TableCol::Name => 295.0,
-            TableCol::Tracker => 84.0,
+            TableCol::Tracker => 104.0,
             TableCol::Size => 72.0,
             TableCol::Seeds => 62.0,
             TableCol::Leech => 62.0,
