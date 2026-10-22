@@ -549,7 +549,7 @@ impl App {
                     .fill(tint(self.pal.accent, 12))
                     .corner_radius(10.0)
                     .stroke(Stroke::new(1.0_f32, tint(self.pal.accent, 50)))
-                    .inner_margin(egui::Margin::symmetric(24, 16))
+                    .inner_margin(margin(SP6, SP5))
                     .show(ui, |ui| {
                         ui.set_max_width(480.0);
                         ui.label(
@@ -630,7 +630,7 @@ impl App {
                 egui::Frame::NONE
                     .fill(tint(cat_col(cat), 25))
                     .corner_radius(PANEL_RADIUS)
-                    .inner_margin(egui::Margin::symmetric(8, 3))
+                    .inner_margin(margin(SP3, SP1))
                     .show(ui, |ui| {
                         ui.label(
                             RichText::new(cat)

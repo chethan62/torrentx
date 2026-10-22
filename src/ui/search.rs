@@ -192,7 +192,7 @@ impl App {
                     .fill(tint(self.pal.red, 10))
                     .stroke(Stroke::new(1.0_f32, tint(self.pal.red, 70)))
                     .corner_radius(PANEL_RADIUS)
-                    .inner_margin(egui::Margin::symmetric(20, 14))
+                    .inner_margin(margin(SP6, SP5))
                     .outer_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 0))
                     .show(ui, |ui| {
                         for line in err.lines() {
@@ -294,7 +294,7 @@ impl App {
                                         if sel { 1.5_f32 } else { 1.0_f32 },
                                         tint(*col, if sel { 200 } else { 80 }),
                                     ))
-                                    .inner_margin(egui::Margin::symmetric(7, 2))
+                                    .inner_margin(margin(SP3, SP1))
                                     .show(ui, |ui| {
                                         // Whole-chip click (not just the text).
                                         let chip_resp = ui.interact(
@@ -572,7 +572,7 @@ impl App {
                             spread: 0,
                             color: rgba(0, 0, 0, 70),
                         })
-                        .inner_margin(egui::Margin::symmetric(10, 8))
+                        .inner_margin(margin(SP4, SP3))
                         .show(ui, |ui| {
                             ui.set_width(w);
                             ui.horizontal_wrapped(|ui| {

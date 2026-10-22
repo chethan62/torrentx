@@ -102,7 +102,7 @@ impl App {
                                 if active { 2.0_f32 } else { 1.0_f32 },
                                 tint(col, if active { 220 } else { 90 }),
                             ))
-                            .inner_margin(egui::Margin::symmetric(9, 4))
+                            .inner_margin(margin(SP3, SP2))
                             .show(ui, |ui| {
                                 ui.label(
                                     RichText::new(t.name())
@@ -279,7 +279,7 @@ impl App {
                         .fill(tint(self.pal.surface, fade_a))
                         .stroke(Stroke::new(1.5_f32, tint(toast.col, fade_a)))
                         .corner_radius(PANEL_RADIUS)
-                        .inner_margin(egui::Margin::symmetric(14, 9))
+                        .inner_margin(margin(SP5, SP3))
                         .shadow(egui::epaint::Shadow {
                             offset: [0, 2],
                             blur: 8,

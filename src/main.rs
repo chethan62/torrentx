@@ -18,7 +18,7 @@ use themes::{tint, Pal};
 use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 use std::time::{Duration, Instant};
 
-use crate::ui::SP2;
+use crate::ui::{margin, SP1, SP2, SP3, SP4, SP5};
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -355,7 +355,7 @@ pub(crate) fn status_icon_pill(ui: &mut egui::Ui, icon: SvgIcon, label: &str, co
     egui::Frame::NONE
         .fill(tint(col, 20))
         .corner_radius(6.0)
-        .inner_margin(egui::Margin::symmetric(6, 2))
+        .inner_margin(margin(SP3, SP1))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
@@ -787,7 +787,7 @@ impl eframe::App for App {
                 egui::Frame::NONE
                     .fill(self.pal.hdr)
                     .stroke(Stroke::new(1.0_f32, self.pal.border))
-                    .inner_margin(egui::Margin::symmetric(12, 4)),
+                    .inner_margin(margin(SP4, SP2)),
             )
             .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
@@ -882,7 +882,7 @@ impl eframe::App for App {
                     egui::Frame::NONE
                         .fill(self.pal.hdr)
                         .stroke(Stroke::new(1.0_f32, self.pal.border))
-                        .inner_margin(egui::Margin::symmetric(14, 8)),
+                        .inner_margin(margin(SP5, SP3)),
                 )
                 .show(ui, |ui| {
                     self.draw_settings_panel(ui);

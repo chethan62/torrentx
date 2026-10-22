@@ -36,7 +36,7 @@ impl App {
                         egui::Frame::NONE
                             .fill(tint(self.pal.accent, 28))
                             .corner_radius(10.0)
-                            .inner_margin(egui::Margin::symmetric(5, 1))
+                            .inner_margin(margin(SP2, SP1))
                             .show(ui, |ui| {
                                 ui.label(
                                     RichText::new(env!("CARGO_PKG_VERSION"))

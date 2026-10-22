@@ -107,7 +107,7 @@ impl App {
                     .fill(tint(pal.accent, 12))
                     .corner_radius(10.0)
                     .stroke(Stroke::new(1.0_f32, tint(pal.accent, 50)))
-                    .inner_margin(egui::Margin::symmetric(24, 16))
+                    .inner_margin(margin(SP6, SP5))
                     .show(ui, |ui| {
                         ui.set_max_width(420.0);
                         lbl(ui, "How Torznab RSS works", pal.accent, fs);
@@ -154,7 +154,7 @@ impl App {
                     egui::Frame::NONE
                         .fill(pal.surface)
                         .stroke(Stroke::new(1.0_f32, pal.border))
-                        .inner_margin(egui::Margin::symmetric(2, 0))
+                        .inner_margin(margin(SP1, 0.0))
                         .show(ui, |ui| {
                             self.draw_rss_sidebar(ui);
                         });
@@ -181,7 +181,7 @@ impl App {
         egui::Frame::NONE
             .fill(pal.hdr)
             .stroke(Stroke::new(1.0_f32, pal.border))
-            .inner_margin(egui::Margin::symmetric(10, 8))
+            .inner_margin(margin(SP4, SP3))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     lbl(ui, "RSS Feeds", pal.accent, fs);
@@ -327,7 +327,7 @@ impl App {
                                         egui::Frame::NONE
                                             .fill(tint(pal.accent, 25))
                                             .corner_radius(PANEL_RADIUS)
-                                            .inner_margin(egui::Margin::symmetric(5, 1))
+                                            .inner_margin(margin(SP2, SP1))
                                             .show(ui, |ui| {
                                                 ui.label(
                                                     RichText::new(n.to_string())
@@ -392,7 +392,7 @@ impl App {
 
         ui.add_space(SP3);
         egui::Frame::NONE
-            .inner_margin(egui::Margin::symmetric(10, 6))
+            .inner_margin(margin(SP4, SP3))
             .show(ui, |ui| {
                 if wide_btn(ui, "+ Add Feed", pal.accent) {
                     self.rss.rss_add_mode = true;
@@ -419,7 +419,7 @@ impl App {
         egui::Frame::NONE
             .fill(pal.surface)
             .stroke(Stroke::new(1.0_f32, pal.border))
-            .inner_margin(egui::Margin::symmetric(14, 8))
+            .inner_margin(margin(SP5, SP3))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     lbl(ui, &name, pal.accent, fs + 1.0);
