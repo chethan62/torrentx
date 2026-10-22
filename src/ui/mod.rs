@@ -8,6 +8,7 @@ mod header;
 mod results;
 mod rss;
 mod search;
+mod tokens;
 mod widgets;
 
 pub(crate) use crate::config::{save_cfg, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_ROOMY};
@@ -24,6 +25,7 @@ pub(crate) use crate::{
 };
 pub(crate) use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 pub(crate) use egui_extras::{Column, TableBuilder};
+pub(crate) use tokens::*;
 
 // ─── UI tuning constants ───────────────────────────────────────────────────
 /// Filter-bar input widths (px), in row order.
