@@ -945,6 +945,12 @@ impl App {
         vis.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, p.sub);
         vis.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, p.border);
         vis.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, p.border);
+        // Focus/hover states: a focused text field draws its frame with
+        // `selection.stroke`, so this is the one accent focus ring everywhere;
+        // hover stays a plain border so it does not compete with focus.
+        vis.selection.stroke = Stroke::new(1.0_f32, p.accent);
+        vis.widgets.active.bg_stroke = Stroke::new(1.0_f32, p.accent);
+        vis.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, p.border);
         let rn = egui::CornerRadius::same(crate::ui::R_MD as u8);
         vis.widgets.noninteractive.corner_radius = rn;
         vis.widgets.inactive.corner_radius = rn;

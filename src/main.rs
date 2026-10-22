@@ -18,7 +18,9 @@ use themes::{tint, Pal};
 use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 use std::time::{Duration, Instant};
 
-use crate::ui::{margin, ICON_LG, ICON_MD, ICON_SM, ICON_XS, R_MD, R_SM, SP1, SP2, SP3, SP4, SP5};
+use crate::ui::{
+    margin, ICON_LG, ICON_MD, ICON_SM, ICON_XS, MOTION_MS, R_MD, R_SM, SP1, SP2, SP3, SP4, SP5,
+};
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -667,14 +669,16 @@ impl eframe::App for App {
             }
         }
 
-        // Row hover animation (smooth transition between rows)
+        // Row hover animation — one 120 ms transition (MOTION_MS), stepped by
+        // elapsed time so it takes the same wall-clock time at any frame rate.
+        let step = dt.min(0.05) * 1000.0 / MOTION_MS as f32;
         if self.ui.hovered != self.ui.prev_hovered {
             self.ui.prev_hovered = self.ui.hovered;
             self.ui.row_hover_anim = 0.0;
         } else if self.ui.hovered.is_some() {
-            self.ui.row_hover_anim = (self.ui.row_hover_anim + dt / 0.1).min(1.0);
+            self.ui.row_hover_anim = (self.ui.row_hover_anim + step).min(1.0);
         } else {
-            self.ui.row_hover_anim = (self.ui.row_hover_anim - dt / 0.1).max(0.0);
+            self.ui.row_hover_anim = (self.ui.row_hover_anim - step).max(0.0);
         }
 
         // Search state transition animation
