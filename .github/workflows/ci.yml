@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets a run be (re)started from the API after a missed or dropped event.
+  workflow_dispatch:
 
 # Least privilege: this workflow only reads the repo.
 permissions:
