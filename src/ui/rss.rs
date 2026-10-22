@@ -88,21 +88,21 @@ impl App {
         let fs = self.cfg.font_size;
 
         if self.rss.rss_feeds.is_empty() && !self.rss.rss_add_mode {
-            ui.add_space(60.0);
+            ui.add_space(SP7 * 2.0);
             ui.vertical_centered(|ui| {
                 // SVG icon (no font glyph) — the 📡 emoji tofus; Rss icon is
                 // the Lucide vector, tinted to the accent, large for the hero.
                 ui.add(svg_image(SvgIcon::Rss, 42.0, pal.accent));
-                ui.add_space(12.0);
+                ui.add_space(SP4);
                 lbl(ui, "No RSS Feeds yet", pal.sub, 18.0);
-                ui.add_space(6.0);
+                ui.add_space(SP3);
                 lbl(
                     ui,
                     "Add Jackett Torznab feeds to auto-refresh torrents",
                     pal.dim,
                     fs,
                 );
-                ui.add_space(20.0);
+                ui.add_space(SP6);
                 egui::Frame::NONE
                     .fill(tint(pal.accent, 12))
                     .corner_radius(10.0)
@@ -111,7 +111,7 @@ impl App {
                     .show(ui, |ui| {
                         ui.set_max_width(420.0);
                         lbl(ui, "How Torznab RSS works", pal.accent, fs);
-                        ui.add_space(6.0);
+                        ui.add_space(SP3);
                         lbl(
                             ui,
                             "Each indexer in Jackett exposes a Torznab API.",
@@ -130,7 +130,7 @@ impl App {
                             pal.sub,
                             fs - 1.0,
                         );
-                        ui.add_space(12.0);
+                        ui.add_space(SP4);
                         if outline_btn(ui, "+ Add Feed", pal.accent) {
                             self.rss.rss_add_mode = true;
                         }
@@ -161,7 +161,7 @@ impl App {
                 },
             );
 
-            ui.add_space(6.0);
+            ui.add_space(SP3);
             ui.vertical(|ui| {
                 ui.set_width(ui.available_width());
                 if self.rss.rss_add_mode {
@@ -210,7 +210,7 @@ impl App {
                         }
                     });
                 });
-                ui.add_space(4.0);
+                ui.add_space(SP2);
                 ui.add(
                     egui::TextEdit::singleline(&mut self.rss.rss_filter)
                         .desired_width(ui.available_width())
@@ -300,7 +300,7 @@ impl App {
                                 FeedStatus::Idle => (pal.dim, SvgIcon::CircleDot),
                             };
                             svg_icon(ui, icon, 10.0, dc);
-                            ui.add_space(4.0);
+                            ui.add_space(SP2);
                             let nc = if en { pal.text } else { pal.dim };
                             ui.add(
                                 egui::Label::new(
@@ -340,7 +340,7 @@ impl App {
                             );
                         });
                         if is_sel {
-                            ui.add_space(4.0);
+                            ui.add_space(SP2);
                             ui.horizontal(|ui| {
                                 if svg_btn(ui, SvgIcon::Refresh, "Refresh", pal.accent) {
                                     refr = Some(i);
@@ -390,7 +390,7 @@ impl App {
                 }
             });
 
-        ui.add_space(8.0);
+        ui.add_space(SP3);
         egui::Frame::NONE
             .inner_margin(egui::Margin::symmetric(10, 6))
             .show(ui, |ui| {
@@ -423,7 +423,7 @@ impl App {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     lbl(ui, &name, pal.accent, fs + 1.0);
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     let (dc, icon, label) = match status {
                         FeedStatus::Ok => (pal.green, SvgIcon::Circle, "OK"),
                         FeedStatus::Loading => (pal.accent, SvgIcon::Refresh, "Loading"),
@@ -443,32 +443,32 @@ impl App {
                         {
                             self.refresh_feed(sel);
                         }
-                        ui.add_space(6.0);
+                        ui.add_space(SP3);
                         if outline_btn(ui, "Edit Feed", pal.sub) {
                             self.rss.rss_edit_idx = Some(sel);
                         }
                     });
                 });
                 if let Some(e) = &err {
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                     lbl(ui, &format!("Error: {e}"), pal.red, fs - 1.0);
                 }
             });
 
         if status == FeedStatus::Loading && items.is_empty() {
-            ui.add_space(40.0);
+            ui.add_space(SP7);
             ui.vertical_centered(|ui| {
                 ui.spinner();
-                ui.add_space(10.0);
+                ui.add_space(SP4);
                 lbl(ui, "Fetching Torznab feed…", pal.sub, fs);
             });
             return;
         }
         if items.is_empty() {
-            ui.add_space(40.0);
+            ui.add_space(SP7);
             ui.vertical_centered(|ui| {
                 lbl(ui, "No items yet", pal.dim, fs + 2.0);
-                ui.add_space(8.0);
+                ui.add_space(SP3);
                 lbl(
                     ui,
                     "Click Refresh to fetch the latest torrents",
@@ -489,7 +489,7 @@ impl App {
 
         use egui_extras::{Column, TableBuilder};
         let mut actions: Vec<(usize, &'static str)> = vec![];
-        ui.add_space(2.0);
+        ui.add_space(SP1);
         // Scroll area allows BOTH axes (unlike TableBuilder which hardcodes
         // hscroll off) — so at narrow widths the columns scroll horizontally
         // instead of clipping off the right edge.
@@ -513,7 +513,7 @@ impl App {
                     .header(28.0, |mut hdr| {
                         for label in ["Title", "Tracker", "Size", "Seeds", "Date", "Actions"] {
                             hdr.col(|ui| {
-                                ui.add_space(4.0);
+                                ui.add_space(SP2);
                                 ui.label(
                                     RichText::new(label)
                                         .font(FontId::proportional(fs - 1.0))
@@ -548,7 +548,7 @@ impl App {
                                     if cell_resp.hovered() {
                                         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                                     }
-                                    ui.add_space(6.0);
+                                    ui.add_space(SP3);
                                     ui.add(
                                         egui::Label::new(
                                             RichText::new(&item.title)
@@ -569,7 +569,7 @@ impl App {
                                     if cell_resp.clicked() {
                                         actions.push((i, "detail"));
                                     }
-                                    ui.add_space(4.0);
+                                    ui.add_space(SP2);
                                     ui.add(
                                         egui::Label::new(
                                             RichText::new(item.tracker.as_deref().unwrap_or("—"))
@@ -589,7 +589,7 @@ impl App {
                                     if cell_resp.clicked() {
                                         actions.push((i, "detail"));
                                     }
-                                    ui.add_space(4.0);
+                                    ui.add_space(SP2);
                                     ui.label(
                                         RichText::new(
                                             item.size.map(fmt_size).unwrap_or_else(|| "—".into()),
@@ -608,7 +608,7 @@ impl App {
                                     if cell_resp.clicked() {
                                         actions.push((i, "detail"));
                                     }
-                                    ui.add_space(4.0);
+                                    ui.add_space(SP2);
                                     let s = item.seeders.unwrap_or(0);
                                     ui.label(
                                         RichText::new(s.to_string())
@@ -627,7 +627,7 @@ impl App {
                                     if cell_resp.clicked() {
                                         actions.push((i, "detail"));
                                     }
-                                    ui.add_space(4.0);
+                                    ui.add_space(SP2);
                                     let d = item
                                         .pub_date
                                         .as_deref()
@@ -643,7 +643,7 @@ impl App {
                                     ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                                     ui.horizontal(|ui| {
                                         // Breathing room so icons never touch the cell edge
-                                        ui.add_space(6.0);
+                                        ui.add_space(SP3);
                                         ui.spacing_mut().item_spacing.x = 6.0;
                                         if item.magnet.as_deref().map(is_magnet).unwrap_or(false) {
                                             if svg_btn(
@@ -739,7 +739,7 @@ impl App {
     pub(crate) fn draw_rss_item_detail(&mut self, ui: &mut egui::Ui, item: &RssItem) {
         let pal = self.pal.clone();
         let fs = self.cfg.font_size;
-        ui.add_space(10.0);
+        ui.add_space(SP4);
         egui::Frame::NONE
             .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 0))
             .show(ui, |ui| {
@@ -760,7 +760,7 @@ impl App {
                     });
                 });
                 ui.separator();
-                ui.add_space(8.0);
+                ui.add_space(SP3);
                 ui.add(
                     egui::Label::new(
                         RichText::new(&item.title)
@@ -770,7 +770,7 @@ impl App {
                     )
                     .wrap(),
                 );
-                ui.add_space(12.0);
+                ui.add_space(SP4);
                 egui::Grid::new("rss_item_grid")
                     .num_columns(2)
                     .spacing([8.0, 5.0])
@@ -794,21 +794,21 @@ impl App {
                             grid_row(ui, "Category", c, pal.text, &pal, fs);
                         }
                     });
-                ui.add_space(12.0);
+                ui.add_space(SP4);
                 if item.magnet.is_some() {
                     if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", pal.accent) {
                         if let Some(m) = &item.magnet {
                             let _ = safe_open(m);
                         }
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                     if wide_icon_btn(ui, SvgIcon::Copy, "Copy Magnet", pal.sub) {
                         if let Some(m) = &item.magnet {
                             ui.ctx().copy_text(m.clone());
                             self.toast("Copied", pal.green);
                         }
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                 }
                 if item.link.is_some() {
                     if wide_icon_btn(ui, SvgIcon::Download, "Download .torrent", pal.green) {
@@ -816,7 +816,7 @@ impl App {
                             let _ = safe_open(l);
                         }
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                 }
                 if wide_icon_btn(ui, SvgIcon::Star, "Save to Favorites", pal.yellow) {
                     let it = item.clone();
@@ -843,18 +843,18 @@ impl App {
         } else {
             "Add New RSS Feed"
         };
-        ui.add_space(20.0);
+        ui.add_space(SP6);
         ui.vertical_centered(|ui| {
             ui.set_max_width(500.0);
             lbl(ui, title, pal.accent, fs + 3.0);
-            ui.add_space(4.0);
+            ui.add_space(SP2);
             lbl(
                 ui,
                 "Connects to a Jackett Torznab indexer endpoint",
                 pal.dim,
                 fs - 1.0,
             );
-            ui.add_space(20.0);
+            ui.add_space(SP6);
 
             labeled_input(
                 ui,
@@ -865,7 +865,7 @@ impl App {
                 fs,
                 pal.dim,
             );
-            ui.add_space(6.0);
+            ui.add_space(SP3);
             labeled_input(
                 ui,
                 "Indexer:",
@@ -875,7 +875,7 @@ impl App {
                 fs,
                 pal.dim,
             );
-            ui.add_space(6.0);
+            ui.add_space(SP3);
             labeled_input(
                 ui,
                 "Query:",
@@ -885,7 +885,7 @@ impl App {
                 fs,
                 pal.dim,
             );
-            ui.add_space(6.0);
+            ui.add_space(SP3);
             labeled_input(
                 ui,
                 "Category:",
@@ -895,23 +895,23 @@ impl App {
                 fs,
                 pal.dim,
             );
-            ui.add_space(10.0);
+            ui.add_space(SP4);
 
             ui.horizontal(|ui| {
                 ui.checkbox(&mut self.rss.rss_new_cfg.enabled, "");
                 lbl(ui, "Enabled", pal.text, fs);
-                ui.add_space(20.0);
+                ui.add_space(SP6);
                 ui.checkbox(&mut self.rss.rss_new_cfg.auto_refresh, "");
                 lbl(ui, "Auto-refresh", pal.text, fs);
             });
-            ui.add_space(16.0);
+            ui.add_space(SP5);
 
             ui.horizontal(|ui| {
                 if outline_btn(ui, "Cancel", pal.red) {
                     self.rss.rss_add_mode = false;
                     self.rss.rss_edit_idx = None;
                 }
-                ui.add_space(12.0);
+                ui.add_space(SP4);
                 if wide_btn(ui, "Save", pal.accent) {
                     if is_edit {
                         if let Some(idx) = edit_idx {
