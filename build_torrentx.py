@@ -142,15 +142,23 @@ Keywords=torrent;jackett;search;
             (appdir / "torrentx.png").touch()
             print("  ⚠ No icon converter found — using blank icon")
 
-    # The embedded CJK fonts are OFL: the notice has to travel with them. Inside
-    # the AppImage this is the stand-alone text file the licence asks for (the
-    # app also shows it in About for the bare-binary download).
+    # Every licence the binary carries has to travel with it: the app itself
+    # (MIT), the embedded Noto CJK subsets (OFL-1.1, a modified version) and the
+    # bundled Lucide icons (ISC, embedded via include_str!). Inside the AppImage
+    # these are the stand-alone copies the licences ask for; the app also shows
+    # the font notice in About for the bare-binary download.
     lic_dir = appdir / "usr" / "share" / "licenses" / "torrentx"
     lic_dir.mkdir(parents=True, exist_ok=True)
-    lic_src = PROJECT / "assets" / "NotoSansCJKjp-subset.LICENSE.txt"
-    if lic_src.exists():
-        shutil.copy2(lic_src, lic_dir / "NotoSansCJK-OFL.txt")
-        print(f"✓ Font licence copied to usr/share/licenses/torrentx")
+    for src, dest in (
+        (PROJECT / "LICENSE", "MIT.txt"),
+        (PROJECT / "assets" / "NotoSansCJKjp-subset.LICENSE.txt", "NotoSansCJK-OFL.txt"),
+        (PROJECT / "assets" / "Lucide.ISC.LICENSE.txt", "Lucide-ISC.txt"),
+    ):
+        if src.exists():
+            shutil.copy2(src, lic_dir / dest)
+            print(f"✓ {dest} copied to usr/share/licenses/torrentx")
+        else:
+            print(f"  ⚠ missing licence source: {src}")
 
     apprun = appdir / "AppRun"
     apprun.write_text(f"#!/bin/sh\nexec \"$(dirname \"$0\")/usr/bin/{BINARY}\" \"$@\"\n")
