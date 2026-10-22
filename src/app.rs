@@ -205,10 +205,6 @@ pub(crate) struct UiState {
     /// When it changes, row-indexed selection state is dropped (see
     /// `view_signature` / `clear_row_selection`).
     pub(crate) view_sig: Option<u64>,
-    /// Animation progress for row hover (0.0 = not hovering, 1.0 = fully hovered)
-    pub(crate) row_hover_anim: f32,
-    /// Previously hovered row index for animation
-    pub(crate) prev_hovered: Option<usize>,
     /// Animation progress for search state transitions
     pub(crate) search_state_anim: f32,
     /// Previous search state for transition animation
@@ -268,8 +264,6 @@ impl Default for UiState {
             t_start: None,
             t_done: None,
             notified: false,
-            row_hover_anim: 0.0,
-            prev_hovered: None,
             search_state_anim: 1.0, // Start fully visible
             prev_search_state: SearchState::Idle,
             table_anim: 1.0, // Start fully visible

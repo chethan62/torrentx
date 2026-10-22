@@ -15,6 +15,6 @@ check() {
 check 'add_space\([0-9]' 'literal add_space (use SP1..SP7)'
 check 'corner_radius\([0-9]|CornerRadius::same\([0-9]' 'literal radius (use R_SM/R_MD/R_LG)'
 check 'svg_icon\([^)]*, (8|9|10|11|12|13|14|15|16)\.0' 'literal icon size (use ICON_*)'
-check 'Margin::symmetric\([0-9]+, [0-9]+\)' 'literal margin (use SP* pairs)'
+check 'Margin::(symmetric|same)\([^)]*[0-9]' 'literal margin (use margin(SP*, SP*))'
 [ "$status" -eq 0 ] && echo "ui-standards: ok"
 exit "$status"

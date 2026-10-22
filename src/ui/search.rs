@@ -193,7 +193,7 @@ impl App {
                     .stroke(Stroke::new(1.0_f32, tint(self.pal.red, 70)))
                     .corner_radius(PANEL_RADIUS)
                     .inner_margin(margin(SP6, SP5))
-                    .outer_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 0))
+                    .outer_margin(margin(PANEL_MARGIN_X as f32, 0.0))
                     .show(ui, |ui| {
                         for line in err.lines() {
                             lbl(ui, line, self.pal.red, fs);
@@ -429,7 +429,7 @@ impl App {
                 egui::Frame::NONE
                     .fill(self.pal.bg)
                     .stroke(Stroke::new(1.0_f32, self.pal.border))
-                    .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 5)),
+                    .inner_margin(margin(PANEL_MARGIN_X as f32, SP2)),
             )
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
@@ -527,7 +527,7 @@ impl App {
                 egui::Frame::NONE
                     .fill(self.pal.surface)
                     .stroke(Stroke::new(1.0_f32, self.pal.border))
-                    .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 8)),
+                    .inner_margin(margin(PANEL_MARGIN_X as f32, SP3)),
             )
             .show(ui, |ui| {
                 // Fade + slide in the panel content (from the right edge).
@@ -678,8 +678,8 @@ impl App {
             .fill(self.pal.surface)
             .corner_radius(PANEL_RADIUS)
             .stroke(Stroke::new(1.0_f32, self.pal.border))
-            .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 7))
-            .outer_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 0))
+            .inner_margin(margin(PANEL_MARGIN_X as f32, SP3))
+            .outer_margin(margin(PANEL_MARGIN_X as f32, 0.0))
             .show(ui, |ui| {
                 // Row 1
                 ui.horizontal_wrapped(|ui| {

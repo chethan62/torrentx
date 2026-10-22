@@ -73,7 +73,7 @@ impl App {
                 egui::Frame::NONE
                     .fill(self.pal.surface)
                     .stroke(Stroke::new(1.0_f32, self.pal.border))
-                    .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 8)),
+                    .inner_margin(margin(PANEL_MARGIN_X as f32, SP3)),
             )
             .show(ui, |ui| {
                 let eased = (self.tokens.easing)(anim);
@@ -740,7 +740,7 @@ impl App {
         let fs = self.cfg.font_size;
         ui.add_space(SP4);
         egui::Frame::NONE
-            .inner_margin(egui::Margin::symmetric(PANEL_MARGIN_X, 0))
+            .inner_margin(margin(PANEL_MARGIN_X as f32, 0.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     lbl(ui, "Item details", pal.accent, fs + 1.0);

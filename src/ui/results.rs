@@ -31,7 +31,6 @@ impl App {
         let det_open = self.ui.detail_open;
         // Use visual tokens for animation easing
         let tokens = self.tokens;
-        let hover_progress = self.ui.row_hover_anim;
         // Table content fade (page turns, filter/sort changes) — ease-out
         let table_fade = (tokens.easing)(self.ui.table_anim);
 
@@ -166,15 +165,13 @@ impl App {
             });
         })
         .body(|mut body| {
+            self.ui.hovered = None;
             for (i, r) in page_s.iter().enumerate() {
                 let gi = base + i; // global index into the filtered results
                 let is_sel = sel == Some(i);
-                let is_hov = self.ui.hovered == Some(i);
                 let seed = r.seeders.unwrap_or(0);
                 let leech = r.peers.unwrap_or(0);
 
-                // Animated hover background - smoothly transition between states
-                let hover_t = if is_hov { hover_progress } else { 0.0 };
                 let base_bg = if is_sel {
                     pal.row_sel
                 } else if i % 2 == 0 {
@@ -182,28 +179,11 @@ impl App {
                 } else {
                     pal.row_even
                 };
-                // Lerp between base_bg and hover color (symmetric ease for enter+exit).
-                // Blend in STRAIGHT (non-premultiplied) alpha: the hover color is a
-                // low-alpha accent tint, so we composite it over the base row color
-                // rather than lerping raw RGB (which produced a dark muddy highlight
-                // on light themes).
-                let bg = if hover_t > 0.0 {
-                    let t = (tokens.easing_hover)(hover_t);
-                    // Effective alpha of the hover tint at this point in the fade.
-                    let hov_a = pal.row_hov.a() as f32 * t;
-                    let hov_r = pal.row_hov.r() as f32;
-                    let hov_g = pal.row_hov.g() as f32;
-                    let hov_b = pal.row_hov.b() as f32;
-                    // Straight-alpha "over" composite: dst = src*a + base*(1-a)
-                    Color32::from_rgba_unmultiplied(
-                        (hov_r * hov_a / 255.0 + base_bg.r() as f32 * (1.0 - hov_a / 255.0)) as u8,
-                        (hov_g * hov_a / 255.0 + base_bg.g() as f32 * (1.0 - hov_a / 255.0)) as u8,
-                        (hov_b * hov_a / 255.0 + base_bg.b() as f32 * (1.0 - hov_a / 255.0)) as u8,
-                        255,
-                    )
-                } else {
-                    base_bg
-                };
+                // Hover is derived from the pointer at paint time (not from the
+                // previous frame's cell hit-tests), so the highlight is on the row
+                // under the cursor in the same frame and cannot stick after the
+                // pointer leaves.
+                let mut bg = base_bg;
 
                 body.row(rh, |mut row| {
                     let last = cols.len(); // Actions is the trailing cell
@@ -213,6 +193,28 @@ impl App {
                             // hover/selection fill lines up with the padded text
                             // instead of running to the window edge.
                             let mut fill = ui.max_rect();
+                            if ci == 0 {
+                                let band = fill;
+                                let hovered = ui.ctx().pointer_latest_pos().is_some_and(|p| {
+                                    p.y >= band.top() && p.y < band.top() + rh
+                                });
+                                if hovered {
+                                    self.ui.hovered = Some(i);
+                                    let a = pal.row_hov.a() as f32 / 255.0;
+                                    bg = Color32::from_rgba_unmultiplied(
+                                        (pal.row_hov.r() as f32 * a
+                                            + base_bg.r() as f32 * (1.0 - a))
+                                            as u8,
+                                        (pal.row_hov.g() as f32 * a
+                                            + base_bg.g() as f32 * (1.0 - a))
+                                            as u8,
+                                        (pal.row_hov.b() as f32 * a
+                                            + base_bg.b() as f32 * (1.0 - a))
+                                            as u8,
+                                        255,
+                                    );
+                                }
+                            }
                             if ci == 0 {
                                 fill.min.x += CELL_PAD_X;
                             }
@@ -265,7 +267,6 @@ impl App {
                                         }
                                     }
                                     if cell_resp.hovered() {
-                                        self.ui.hovered = Some(i);
                                         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                                     }
                                     // Draw the content (non-interactive label)
@@ -326,7 +327,6 @@ impl App {
                                         actions.push((i, "select"));
                                     }
                                     if cell_resp.hovered() {
-                                        self.ui.hovered = Some(i);
                                         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                                     }
                                     draw_cell_content(ui, c, r, seed, leech, fsz, &pal);
@@ -394,11 +394,8 @@ impl App {
                                 actions.push((i, "info"));
                             }
                             let cell_id = egui::Id::new(("rowhov", gi));
-                            let hover_resp =
+                            let _hover_resp =
                                 ui.interact(ui.max_rect(), cell_id, egui::Sense::hover());
-                            if hover_resp.hovered() {
-                                self.ui.hovered = Some(i);
-                            }
                         });
                     });
                 });

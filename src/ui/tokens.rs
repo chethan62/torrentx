@@ -24,8 +24,9 @@ pub(crate) const ICON_LG: f32 = 16.0; // header, empty state
 
 /// Table cell inset — text must not touch the cell edge.
 pub(crate) const CELL_PAD_X: f32 = 10.0;
-/// Row hover/selection transition.
-pub(crate) const MOTION_MS: u64 = 120;
+/// State transitions (search finished, detail panel): one wall-clock
+/// duration so every animation feels the same at any frame rate.
+pub(crate) const MOTION_MS: u64 = 200;
 
 /// `Margin::symmetric` from the space scale (egui margins are i8).
 pub(crate) fn margin(x: f32, y: f32) -> eframe::egui::Margin {

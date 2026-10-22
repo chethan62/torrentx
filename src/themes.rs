@@ -8,8 +8,6 @@ use serde::{Deserialize, Serialize};
 pub(crate) struct VisualTokens {
     /// Easing for entrances (fade/slide in) — ease-out, fast start, settle.
     pub(crate) easing: fn(f32) -> f32,
-    /// Easing for bidirectional state (hover in/out) — symmetric smoothstep.
-    pub(crate) easing_hover: fn(f32) -> f32,
 }
 
 impl Default for VisualTokens {
@@ -18,8 +16,6 @@ impl Default for VisualTokens {
             // ease-out cubic: fast start, gentle settle (interface-design: entrances
             // must never ease-in — the first frame the user is watching feels slow)
             easing: |t| 1.0 - (1.0 - t).powi(3),
-            // symmetric smoothstep for hover (reads equally on enter + exit)
-            easing_hover: |t| t * t * (3.0 - 2.0 * t),
         }
     }
 }

@@ -669,24 +669,13 @@ impl eframe::App for App {
             }
         }
 
-        // Row hover animation — one 120 ms transition (MOTION_MS), stepped by
-        // elapsed time so it takes the same wall-clock time at any frame rate.
-        let step = dt.min(0.05) * 1000.0 / MOTION_MS as f32;
-        if self.ui.hovered != self.ui.prev_hovered {
-            self.ui.prev_hovered = self.ui.hovered;
-            self.ui.row_hover_anim = 0.0;
-        } else if self.ui.hovered.is_some() {
-            self.ui.row_hover_anim = (self.ui.row_hover_anim + step).min(1.0);
-        } else {
-            self.ui.row_hover_anim = (self.ui.row_hover_anim - step).max(0.0);
-        }
-
         // Search state transition animation
         if self.ui.prev_search_state != state {
             self.ui.prev_search_state = state.clone();
             self.ui.search_state_anim = 0.0;
         } else {
-            self.ui.search_state_anim = (self.ui.search_state_anim + dt / 0.2).min(1.0);
+            self.ui.search_state_anim =
+                (self.ui.search_state_anim + dt * 1000.0 / MOTION_MS as f32).min(1.0);
         }
 
         // Table content animation — reset when the page changes (page turns,
@@ -707,7 +696,7 @@ impl eframe::App for App {
             0.0
         };
         let speed = if self.ui.detail_open {
-            1.0 / 0.2
+            1000.0 / MOTION_MS as f32
         } else {
             1.0 / 0.15
         };
