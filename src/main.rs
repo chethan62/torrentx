@@ -635,6 +635,9 @@ impl eframe::App for App {
             if let Some(t) = self.ui.t_start.take() {
                 self.ui.t_done = Some(t.elapsed().as_secs_f64());
             }
+            // One dedupe pass when the search settles, so the badge, the status
+            // line and the table all report the same number.
+            self.finalize_results();
         }
 
         // Toast decay + animation progress

@@ -710,6 +710,29 @@ impl App {
             .map(|g| g.clone())
             .unwrap_or_default()
     }
+    /// Collapse cross-tracker duplicates **into the stored results** once a
+    /// search finishes. Doing it per-frame in `compute_view` left every counter
+    /// (header badge, status line) reporting the pre-dedupe number while the
+    /// table showed fewer rows — the user saw "8 results" over a 7-row table.
+    pub(crate) fn finalize_results(&self) {
+        if !self.cfg.dedupe {
+            return;
+        }
+        let Ok(mut g) = self.search.results.lock() else {
+            return;
+        };
+        let deduped = dedupe_best_seeded((**g).clone());
+        if deduped.len() == g.len() {
+            return;
+        }
+        *g = std::sync::Arc::new(deduped);
+        let n = g.len();
+        drop(g);
+        if let Ok(mut c) = self.search.count.lock() {
+            *c = n;
+        }
+    }
+
     pub(crate) fn total_count(&self) -> usize {
         self.search.count.lock().map(|g| *g).unwrap_or(0)
     }
@@ -775,11 +798,6 @@ impl App {
             })
             .cloned()
             .collect();
-
-        // Dedupe AFTER filtering, keeping the best-seeded copy of each title.
-        if self.cfg.dedupe {
-            out = dedupe_best_seeded(out);
-        }
 
         out.sort_by(|a, b| {
             let c = match self.search.s_col {
