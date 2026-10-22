@@ -57,3 +57,14 @@ jobs:
 
       - name: Format check
         run: cargo fmt --all --check
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      # deny.toml is the policy: permissive licence allow-list, no wildcards or
+      # git sources, and advisories blocking (4 unmaintained IDs are ignored
+      # there with a reason, because no patched release exists).
+      - name: Licences + advisories (cargo-deny)
+        run: cargo deny --all-features check licenses advisories bans sources
