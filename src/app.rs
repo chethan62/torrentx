@@ -939,7 +939,7 @@ impl App {
         vis.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, p.sub);
         vis.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, p.border);
         vis.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, p.border);
-        let rn = egui::CornerRadius::same(6);
+        let rn = egui::CornerRadius::same(crate::ui::R_MD as u8);
         vis.widgets.noninteractive.corner_radius = rn;
         vis.widgets.inactive.corner_radius = rn;
         vis.widgets.hovered.corner_radius = rn;

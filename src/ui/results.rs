@@ -53,7 +53,7 @@ impl App {
                 } else {
                     SvgIcon::ArrowUp
                 };
-                svg_icon(ui, icon, 10.0, pal.accent);
+                svg_icon(ui, icon, ICON_XS, pal.accent);
             }
         };
 
@@ -525,7 +525,7 @@ impl App {
                                 )
                                 .fill(self.pal.surface)
                                 .stroke(Stroke::new(1.0_f32, self.pal.border))
-                                .corner_radius(14.0)
+                                .corner_radius(R_LG)
                                 .min_size(egui::vec2(0.0, 28.0)),
                             )
                             .clicked()
@@ -555,7 +555,7 @@ impl App {
                                 )
                                 .fill(self.pal.surface)
                                 .stroke(Stroke::new(1.0_f32, tint(self.pal.border, 140)))
-                                .corner_radius(14.0)
+                                .corner_radius(R_LG)
                                 .min_size(egui::vec2(0.0, 28.0)),
                             )
                             .clicked()
@@ -572,7 +572,7 @@ impl App {
                 ui.add_space(SP7);
                 egui::Frame::NONE
                     .fill(tint(self.pal.accent, 12))
-                    .corner_radius(10.0)
+                    .corner_radius(R_LG)
                     .stroke(Stroke::new(1.0_f32, tint(self.pal.accent, 50)))
                     .inner_margin(margin(SP6, SP5))
                     .show(ui, |ui| {
@@ -592,7 +592,7 @@ impl App {
                         );
                         ui.horizontal(|ui| {
                             lbl(ui, "2. Click", self.pal.sub, fs - 1.0);
-                            svg_icon(ui, SvgIcon::Settings, 12.0, self.pal.sub);
+                            svg_icon(ui, SvgIcon::Settings, ICON_SM, self.pal.sub);
                             lbl(
                                 ui,
                                 "Settings and paste your API key",
@@ -622,9 +622,9 @@ impl App {
                 ui.add_space(SP3);
                 if ui
                     .add(
-                        egui::Button::new(svg_image(SvgIcon::Close, 14.0, self.pal.sub))
+                        egui::Button::new(svg_image(SvgIcon::Close, ICON_MD, self.pal.sub))
                             .fill(Color32::TRANSPARENT)
-                            .corner_radius(4.0),
+                            .corner_radius(R_SM),
                     )
                     .on_hover_text("Close")
                     .clicked()
@@ -765,7 +765,7 @@ impl App {
                                 )
                                 .fill(tint(self.pal.sub, 10))
                                 .stroke(Stroke::new(1.0_f32, self.pal.border))
-                                .corner_radius(4.0),
+                                .corner_radius(R_SM),
                             )
                             .on_hover_text("Click to copy full magnet")
                             .clicked()

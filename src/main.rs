@@ -18,7 +18,7 @@ use themes::{tint, Pal};
 use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 use std::time::{Duration, Instant};
 
-use crate::ui::{margin, SP1, SP2, SP3, SP4, SP5};
+use crate::ui::{margin, ICON_LG, ICON_MD, ICON_SM, ICON_XS, R_MD, R_SM, SP1, SP2, SP3, SP4, SP5};
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ pub(crate) fn act_btn(ui: &mut egui::Ui, label: &str, tip: &str, color: Color32)
         egui::Button::new(RichText::new(label).size(11.5).color(color))
             .fill(tint(color, 18))
             .stroke(Stroke::new(1.0_f32, tint(color, 70)))
-            .corner_radius(5.0)
+            .corner_radius(R_SM)
             .min_size(Vec2::new(0.0, 25.0)),
     )
     .on_hover_text(tip)
@@ -87,7 +87,7 @@ pub(crate) fn act_btn(ui: &mut egui::Ui, label: &str, tip: &str, color: Color32)
 pub(crate) fn svg_btn(ui: &mut egui::Ui, icon: SvgIcon, tip: &str, color: Color32) -> bool {
     let size = egui::vec2(32.0, 28.0);
     let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-    let rounding = egui::CornerRadius::same(5);
+    let rounding = egui::CornerRadius::same(R_SM as u8);
     let painter = ui.painter_at(rect);
 
     // Press feedback: shrink the hit surface slightly while held (tactile
@@ -120,7 +120,7 @@ pub(crate) fn svg_btn(ui: &mut egui::Ui, icon: SvgIcon, tip: &str, color: Color3
     // tint multiplies (black × color = black → invisible on dark themes). So
     // rewrite currentColor→white so tint() yields the actual theme color.
     let svg_white = icon.svg().replace("currentColor", "#fff");
-    let icon_size = 16.0;
+    let icon_size = ICON_LG;
     let icon_rect = egui::Rect::from_center_size(rect.center(), egui::vec2(icon_size, icon_size));
     let img = egui::Image::from_bytes(icon.uri(), svg_white.into_bytes())
         .tint(color)
@@ -253,7 +253,7 @@ pub(crate) fn v_checkbox(
             egui::pos2(rect.left(), rect.center().y - icon_size / 2.0),
             egui::vec2(icon_size, icon_size),
         );
-        let rounding = egui::CornerRadius::same(4);
+        let rounding = egui::CornerRadius::same(R_SM as u8);
         if checked {
             p.rect_filled(box_rect, rounding, accent);
             // Check mark (two lines); contrast against the accent fill
@@ -309,14 +309,14 @@ pub(crate) fn icon_text_btn(
     ui.add_enabled(
         enabled,
         egui::Button::image_and_text(
-            svg_image(icon, 12.0, color),
+            svg_image(icon, ICON_SM, color),
             RichText::new(label)
                 .font(FontId::proportional(12.0))
                 .color(color),
         )
         .fill(tint(color, 14))
         .stroke(Stroke::new(1.0, tint(color, 70)))
-        .corner_radius(5.0)
+        .corner_radius(R_SM)
         .min_size(Vec2::new(0.0, 28.0)),
     )
     .clicked()
@@ -334,7 +334,7 @@ pub(crate) fn icon_text_tab(
 ) -> egui::Response {
     ui.add(
         egui::Button::image_and_text(
-            svg_image(icon, 14.0, color),
+            svg_image(icon, ICON_MD, color),
             RichText::new(label)
                 .font(FontId::proportional(14.0))
                 .color(color),
@@ -345,7 +345,7 @@ pub(crate) fn icon_text_tab(
             Color32::TRANSPARENT
         })
         .stroke(Stroke::new(if active { 1.0 } else { 0.0 }, accent))
-        .corner_radius(6.0)
+        .corner_radius(R_MD)
         .min_size(Vec2::new(0.0, 28.0)),
     )
 }
@@ -354,12 +354,12 @@ pub(crate) fn icon_text_tab(
 pub(crate) fn status_icon_pill(ui: &mut egui::Ui, icon: SvgIcon, label: &str, col: Color32) {
     egui::Frame::NONE
         .fill(tint(col, 20))
-        .corner_radius(6.0)
+        .corner_radius(R_MD)
         .inner_margin(margin(SP3, SP1))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                svg_icon(ui, icon, 9.0, col);
+                svg_icon(ui, icon, ICON_XS, col);
                 ui.label(
                     RichText::new(label)
                         .font(FontId::proportional(10.5))
@@ -379,7 +379,7 @@ pub(crate) fn wide_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> bool {
         )
         .fill(tint(color, 18))
         .stroke(Stroke::new(1.0_f32, tint(color, 80)))
-        .corner_radius(6.0)
+        .corner_radius(R_MD)
         .min_size(Vec2::new(w, 34.0)),
     )
     .clicked()
@@ -394,7 +394,7 @@ pub(crate) fn outline_btn(ui: &mut egui::Ui, label: &str, color: Color32) -> boo
         )
         .fill(Color32::TRANSPARENT)
         .stroke(Stroke::new(1.0_f32, tint(color, 80)))
-        .corner_radius(4.0),
+        .corner_radius(R_SM),
     )
     .clicked()
 }
@@ -412,10 +412,10 @@ pub(crate) fn wide_icon_btn(ui: &mut egui::Ui, icon: SvgIcon, label: &str, color
         } else {
             tint(color, 18)
         };
-        painter.rect_filled(rect, egui::CornerRadius::same(6), fill);
+        painter.rect_filled(rect, egui::CornerRadius::same(R_MD as u8), fill);
         painter.rect_stroke(
             rect.shrink(0.5),
-            egui::CornerRadius::same(6),
+            egui::CornerRadius::same(R_MD as u8),
             Stroke::new(1.0, tint(color, 80)),
             egui::StrokeKind::Outside,
         );
@@ -423,7 +423,7 @@ pub(crate) fn wide_icon_btn(ui: &mut egui::Ui, icon: SvgIcon, label: &str, color
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     child.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        svg_icon(ui, icon, 15.0, color);
+        svg_icon(ui, icon, ICON_MD, color);
         ui.label(
             RichText::new(label)
                 .font(FontId::proportional(13.0))
@@ -448,7 +448,7 @@ pub(crate) fn outline_icon_btn(
         let painter = ui.painter_at(rect);
         painter.rect_stroke(
             rect.shrink(0.5),
-            egui::CornerRadius::same(4),
+            egui::CornerRadius::same(R_SM as u8),
             Stroke::new(1.0, tint(color, 80)),
             egui::StrokeKind::Outside,
         );
@@ -456,7 +456,7 @@ pub(crate) fn outline_icon_btn(
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     child.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
-        svg_icon(ui, icon, 13.0, color);
+        svg_icon(ui, icon, ICON_SM, color);
         ui.label(
             RichText::new(label)
                 .font(FontId::proportional(12.0))
@@ -810,7 +810,7 @@ impl eframe::App for App {
                             // SVG Refresh icon — the Braille-dot spinner (⣾…)
                             // tofus on fonts without Braille; vector icon is
                             // consistent with the Check/Close status icons.
-                            svg_icon(ui, SvgIcon::Refresh, 12.0, self.pal.accent);
+                            svg_icon(ui, SvgIcon::Refresh, ICON_SM, self.pal.accent);
                             let n = self.total_count();
                             lbl(
                                 ui,
@@ -829,7 +829,7 @@ impl eframe::App for App {
                                 .t_done
                                 .map(|e| format!("  ({:.1}s)", e))
                                 .unwrap_or_default();
-                            svg_icon(ui, SvgIcon::Check, 12.0, self.pal.green);
+                            svg_icon(ui, SvgIcon::Check, ICON_SM, self.pal.green);
                             lbl(
                                 ui,
                                 &format!("{n} results for \"{}\"{}", self.search.last_query, e),
@@ -838,7 +838,7 @@ impl eframe::App for App {
                             );
                         }
                         SearchState::Error(e) => {
-                            svg_icon(ui, SvgIcon::Close, 12.0, self.pal.red);
+                            svg_icon(ui, SvgIcon::Close, ICON_SM, self.pal.red);
                             lbl(ui, e.lines().next().unwrap_or(e), self.pal.red, 12.0);
                         }
                     }

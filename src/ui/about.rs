@@ -97,7 +97,7 @@ impl App {
                         let active = &self.cfg.theme == t;
                         egui::Frame::NONE
                             .fill(tint(col, if active { 45 } else { 20 }))
-                            .corner_radius(6.0)
+                            .corner_radius(R_MD)
                             .stroke(Stroke::new(
                                 if active { 2.0_f32 } else { 1.0_f32 },
                                 tint(col, if active { 220 } else { 90 }),
@@ -168,7 +168,7 @@ impl App {
                             )
                             .fill(self.pal.surface)
                             .stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .corner_radius(4.0),
+                            .corner_radius(R_SM),
                         );
                         ui.add_space(SP3);
                         lbl(ui, v, self.pal.sub, fs);
@@ -240,7 +240,7 @@ impl App {
                                 )
                                 .fill(Color32::TRANSPARENT)
                                 .stroke(Stroke::new(1.0_f32, tint(self.pal.sub, 80)))
-                                .corner_radius(4.0),
+                                .corner_radius(R_SM),
                             )
                             .on_hover_text(url)
                             .clicked()

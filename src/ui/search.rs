@@ -103,7 +103,7 @@ impl App {
                     } else {
                         self.pal.accent
                     })
-                    .corner_radius(6.0)
+                    .corner_radius(R_MD)
                     .min_size(Vec2::new(0.0, 36.0)),
                 )
                 .clicked()
@@ -114,10 +114,10 @@ impl App {
             if !self.search.query.is_empty()
                 && ui
                     .add(
-                        egui::Button::new(svg_image(SvgIcon::Close, 14.0, self.pal.sub))
+                        egui::Button::new(svg_image(SvgIcon::Close, ICON_MD, self.pal.sub))
                             .fill(tint(self.pal.sub, 12))
                             .stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .corner_radius(6.0)
+                            .corner_radius(R_MD)
                             .min_size(Vec2::new(0.0, 36.0)),
                     )
                     .on_hover_text("Clear search")
@@ -289,7 +289,7 @@ impl App {
                                 let sel = self.search.f_text == *cat;
                                 egui::Frame::NONE
                                     .fill(tint(*col, if sel { 50 } else { 20 }))
-                                    .corner_radius(10.0)
+                                    .corner_radius(R_LG)
                                     .stroke(Stroke::new(
                                         if sel { 1.5_f32 } else { 1.0_f32 },
                                         tint(*col, if sel { 200 } else { 80 }),
@@ -812,7 +812,7 @@ impl App {
                                     )
                                     .fill(Color32::TRANSPARENT)
                                     .stroke(Stroke::new(1.0_f32, self.pal.border))
-                                    .corner_radius(4.0),
+                                    .corner_radius(R_SM),
                                 )
                                 .clicked()
                         {
@@ -867,7 +867,7 @@ impl App {
                         let clicked = ui
                             .horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 3.0;
-                                svg_icon(ui, arrow, 10.0, self.pal.accent);
+                                svg_icon(ui, arrow, ICON_XS, self.pal.accent);
                                 ui.add(
                                     egui::Button::new(
                                         RichText::new(d_lbl)
@@ -915,7 +915,7 @@ impl App {
                                         } else {
                                             SvgIcon::ArrowUp
                                         };
-                                        svg_icon(ui, arrow, 9.0, self.pal.accent);
+                                        svg_icon(ui, arrow, ICON_XS, self.pal.accent);
                                     }
                                     hit
                                 })

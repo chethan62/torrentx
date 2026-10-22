@@ -55,7 +55,7 @@ impl App {
             if !self.ui.fav_search.is_empty()
                 && ui
                     .add(
-                        egui::Button::new(svg_image(SvgIcon::Close, 12.0, self.pal.sub))
+                        egui::Button::new(svg_image(SvgIcon::Close, ICON_SM, self.pal.sub))
                             .fill(Color32::TRANSPARENT)
                             .frame(false),
                     )

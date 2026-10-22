@@ -35,7 +35,7 @@ impl App {
                         );
                         egui::Frame::NONE
                             .fill(tint(self.pal.accent, 28))
-                            .corner_radius(10.0)
+                            .corner_radius(R_LG)
                             .inner_margin(margin(SP2, SP1))
                             .show(ui, |ui| {
                                 ui.label(
@@ -113,11 +113,11 @@ impl App {
                             } else {
                                 (self.pal.red, "Jackett unreachable — check Settings")
                             };
-                            ui.add(svg_image(SvgIcon::Circle, 12.0, col))
+                            ui.add(svg_image(SvgIcon::Circle, ICON_SM, col))
                                 .on_hover_text(tip);
                             ui.add_space(SP3);
                         } else {
-                            ui.add(svg_image(SvgIcon::CircleDot, 12.0, self.pal.dim))
+                            ui.add(svg_image(SvgIcon::CircleDot, ICON_SM, self.pal.dim))
                                 .on_hover_text("Checking Jackett…");
                             ui.add_space(SP3);
                         }
@@ -127,7 +127,7 @@ impl App {
                         if ui
                             .horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 5.0;
-                                svg_icon(ui, SvgIcon::Settings, 14.0, set_col);
+                                svg_icon(ui, SvgIcon::Settings, ICON_MD, set_col);
                                 ui.add(
                                     egui::Button::new(
                                         RichText::new("Settings").size(13.0).color(set_col),
@@ -141,7 +141,7 @@ impl App {
                                         1.0_f32,
                                         if sa { self.pal.accent } else { self.pal.border },
                                     ))
-                                    .corner_radius(6.0)
+                                    .corner_radius(R_MD)
                                     .min_size(Vec2::new(0.0, 30.0)),
                                 )
                                 .clicked()
@@ -336,7 +336,7 @@ impl App {
                     }
                     lbl(ui, "s", self.pal.dim, 11.0);
                     ui.add_space(SP1);
-                    ui.add(svg_image(SvgIcon::Info, 12.0, self.pal.dim))
+                    ui.add(svg_image(SvgIcon::Info, ICON_SM, self.pal.dim))
                         .on_hover_text(
                             "RSS auto-refresh interval (seconds). 0 disables auto-refresh.",
                         );
@@ -459,7 +459,7 @@ impl App {
                         ui.add_space(SP2);
                         if ui
                             .add(
-                                egui::Button::new(svg_image(SvgIcon::Close, 11.0, self.pal.sub))
+                                egui::Button::new(svg_image(SvgIcon::Close, ICON_SM, self.pal.sub))
                                     .min_size(egui::vec2(18.0, 18.0))
                                     .stroke(Stroke::new(1.0_f32, self.pal.border)),
                             )
@@ -563,7 +563,7 @@ impl App {
                             )
                             .fill(tint(self.pal.green, 18))
                             .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 80)))
-                            .corner_radius(4.0),
+                            .corner_radius(R_SM),
                         )
                         .clicked()
                     {

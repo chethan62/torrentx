@@ -105,7 +105,7 @@ impl App {
                 ui.add_space(SP6);
                 egui::Frame::NONE
                     .fill(tint(pal.accent, 12))
-                    .corner_radius(10.0)
+                    .corner_radius(R_LG)
                     .stroke(Stroke::new(1.0_f32, tint(pal.accent, 50)))
                     .inner_margin(margin(SP6, SP5))
                     .show(ui, |ui| {
@@ -190,7 +190,7 @@ impl App {
                         if ui
                             .horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 4.0;
-                                svg_icon(ui, SvgIcon::Refresh, 13.0, sub);
+                                svg_icon(ui, SvgIcon::Refresh, ICON_SM, sub);
                                 ui.add(
                                     egui::Button::new(
                                         RichText::new("All")
@@ -199,7 +199,7 @@ impl App {
                                     )
                                     .fill(Color32::TRANSPARENT)
                                     .stroke(Stroke::new(1.0_f32, pal.border))
-                                    .corner_radius(4.0),
+                                    .corner_radius(R_SM),
                                 )
                                 .on_hover_text("Refresh all feeds")
                                 .clicked()
@@ -277,7 +277,7 @@ impl App {
                         egui::Sense::click(),
                     );
                     if bg != Color32::TRANSPARENT {
-                        ui.painter().rect_filled(band, 6.0, bg);
+                        ui.painter().rect_filled(band, R_MD, bg);
                     }
                     if row_resp.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
@@ -299,7 +299,7 @@ impl App {
                                 FeedStatus::Error => (pal.red, SvgIcon::Close),
                                 FeedStatus::Idle => (pal.dim, SvgIcon::CircleDot),
                             };
-                            svg_icon(ui, icon, 10.0, dc);
+                            svg_icon(ui, icon, ICON_XS, dc);
                             ui.add_space(SP2);
                             let nc = if en { pal.text } else { pal.dim };
                             ui.add(
@@ -313,12 +313,11 @@ impl App {
                             // Auto-refresh marker
                             if self.rss.rss_feeds[i].config.auto_refresh {
                                 let ac = if en { pal.accent } else { pal.dim };
-                                ui.add(svg_image(SvgIcon::Refresh, 10.0, ac)).on_hover_text(
-                                    format!(
+                                ui.add(svg_image(SvgIcon::Refresh, ICON_XS, ac))
+                                    .on_hover_text(format!(
                                         "Auto-refreshes every {} min",
                                         self.cfg.rss_refresh_secs / 60
-                                    ),
-                                );
+                                    ));
                             }
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
@@ -436,7 +435,7 @@ impl App {
                         if ui
                             .horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 4.0;
-                                svg_icon(ui, SvgIcon::Refresh, 13.0, pal.accent);
+                                svg_icon(ui, SvgIcon::Refresh, ICON_SM, pal.accent);
                                 outline_btn(ui, "Refresh", pal.accent)
                             })
                             .inner
@@ -748,9 +747,9 @@ impl App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui
                             .add(
-                                egui::Button::new(svg_image(SvgIcon::Close, 14.0, pal.sub))
+                                egui::Button::new(svg_image(SvgIcon::Close, ICON_MD, pal.sub))
                                     .fill(Color32::TRANSPARENT)
-                                    .corner_radius(4.0),
+                                    .corner_radius(R_SM),
                             )
                             .on_hover_text("Close")
                             .clicked()

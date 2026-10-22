@@ -76,7 +76,7 @@ pub(crate) fn draw_cell_content(
             };
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 3.0;
-                svg_icon(ui, dot, 8.0, seed_col(seed));
+                svg_icon(ui, dot, ICON_XS, seed_col(seed));
                 ui.label(
                     RichText::new(hlth_lbl(seed))
                         .font(FontId::proportional(fsz - 1.0))

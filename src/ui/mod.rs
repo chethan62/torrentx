@@ -45,7 +45,7 @@ pub(crate) const RSS_FORM_W: f32 = 260.0;
 /// Favorites search input width (px).
 pub(crate) const FAV_SEARCH_W: f32 = 220.0;
 /// Standard panel corner radius (px).
-pub(crate) const PANEL_RADIUS: f32 = 8.0;
+pub(crate) const PANEL_RADIUS: f32 = R_MD;
 /// Standard panel side margin (px, i8 for egui Margin).
 pub(crate) const PANEL_MARGIN_X: i8 = 12;
 
