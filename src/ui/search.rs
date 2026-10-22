@@ -777,59 +777,6 @@ impl App {
                 ui.add_space(SP2);
                 // Row 2 — select mode + health + sort
                 ui.horizontal_wrapped(|ui| {
-                    // Batch select toggle (vector checkbox, no glyphs)
-                    if v_checkbox(ui, self.ui.sel_mode, "Select", self.pal.accent).clicked() {
-                        self.ui.sel_mode = !self.ui.sel_mode;
-                        self.ui.sel_set.clear();
-                        self.ui.detail_open = false;
-                    }
-                    if self.ui.sel_mode {
-                        let n = self.ui.sel_set.len();
-                        let copy_label =
-                            format!("Copy {n} magnet{}", if n == 1 { "" } else { "s" });
-                        if n > 0
-                            && icon_text_btn(ui, SvgIcon::Copy, &copy_label, self.pal.green, true)
-                        {
-                            if let Some(v) = view {
-                                self.copy_selected_magnets(ui, &v.sorted);
-                            }
-                        }
-                        ui.add_space(SP2);
-                        // Select all visible / clear (no glyphs)
-                        let all_checked = !self.ui.sel_set.is_empty();
-                        if v_checkbox(ui, all_checked, "All", self.pal.accent)
-                            .on_hover_text("Select all results on this page")
-                            .clicked()
-                        {
-                            if let Some(v) = view {
-                                if self.cfg.page_size == 0 {
-                                    self.ui.sel_set = (0..v.sorted.len()).collect();
-                                } else {
-                                    let base = self.search.page * self.cfg.page_size;
-                                    let end = (base + self.cfg.page_size).min(v.sorted.len());
-                                    self.ui.sel_set = (base..end).collect();
-                                }
-                            }
-                        }
-                        if !self.ui.sel_set.is_empty()
-                            && ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new("  Clear")
-                                            .font(FontId::proportional(fs - 1.0))
-                                            .color(self.pal.sub),
-                                    )
-                                    .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::new(1.0_f32, self.pal.border))
-                                    .corner_radius(R_SM),
-                                )
-                                .clicked()
-                        {
-                            self.ui.sel_set.clear();
-                        }
-                        ui.add_space(SP2);
-                    }
-                    ui.add_space(SP3);
                     lbl(ui, "Health", self.pal.dim, fs);
                     ui.add_space(SP2);
                     for hf in [
@@ -865,6 +812,73 @@ impl App {
                         }
                         ui.add_space(SP1);
                     }
+                    // Batch selection is an action group, not a filter: park it at
+                    // the right edge so the row is balanced and the Health chips
+                    // stay next to the other filters.
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.horizontal(|ui| {
+                            // Batch select toggle (vector checkbox, no glyphs)
+                            if v_checkbox(ui, self.ui.sel_mode, "Select", self.pal.accent).clicked()
+                            {
+                                self.ui.sel_mode = !self.ui.sel_mode;
+                                self.ui.sel_set.clear();
+                                self.ui.detail_open = false;
+                            }
+                            if self.ui.sel_mode {
+                                let n = self.ui.sel_set.len();
+                                let copy_label =
+                                    format!("Copy {n} magnet{}", if n == 1 { "" } else { "s" });
+                                if n > 0
+                                    && icon_text_btn(
+                                        ui,
+                                        SvgIcon::Copy,
+                                        &copy_label,
+                                        self.pal.green,
+                                        true,
+                                    )
+                                {
+                                    if let Some(v) = view {
+                                        self.copy_selected_magnets(ui, &v.sorted);
+                                    }
+                                }
+                                ui.add_space(SP2);
+                                // Select all visible / clear (no glyphs)
+                                let all_checked = !self.ui.sel_set.is_empty();
+                                if v_checkbox(ui, all_checked, "All", self.pal.accent)
+                                    .on_hover_text("Select all results on this page")
+                                    .clicked()
+                                {
+                                    if let Some(v) = view {
+                                        if self.cfg.page_size == 0 {
+                                            self.ui.sel_set = (0..v.sorted.len()).collect();
+                                        } else {
+                                            let base = self.search.page * self.cfg.page_size;
+                                            let end =
+                                                (base + self.cfg.page_size).min(v.sorted.len());
+                                            self.ui.sel_set = (base..end).collect();
+                                        }
+                                    }
+                                }
+                                if !self.ui.sel_set.is_empty()
+                                    && ui
+                                        .add(
+                                            egui::Button::new(
+                                                RichText::new("  Clear")
+                                                    .font(FontId::proportional(fs - 1.0))
+                                                    .color(self.pal.sub),
+                                            )
+                                            .fill(Color32::TRANSPARENT)
+                                            .stroke(Stroke::new(1.0_f32, self.pal.border))
+                                            .corner_radius(R_SM),
+                                        )
+                                        .clicked()
+                                {
+                                    self.ui.sel_set.clear();
+                                }
+                                ui.add_space(SP2);
+                            }
+                        });
+                    });
                 });
             });
     }
