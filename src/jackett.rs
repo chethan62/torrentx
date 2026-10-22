@@ -132,7 +132,7 @@ impl TableCol {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum SearchState {
     Idle,
     Searching,
@@ -638,13 +638,125 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
     Some(out)
 }
 
+/// Which indexers a search fans out to. Picking one indexer searches only it;
+/// "All" (or a list not fetched yet) fans out over every configured indexer, so
+/// the table fills as each tracker answers instead of waiting for the slowest
+/// one. Pure and tested.
+pub(crate) fn search_targets(indexer: &str, configured: &[String]) -> Vec<String> {
+    if !indexer.is_empty() && indexer != "All" {
+        return vec![indexer.to_string()];
+    }
+    if configured.is_empty() {
+        return vec!["all".to_string()];
+    }
+    configured.to_vec()
+}
+
+/// Jackett results endpoint for one indexer.
+fn search_url(url: &str, key: &str, query: &str, cat: &str, idx: &str) -> String {
+    let mut ep = format!(
+        "{}/api/v2.0/indexers/{}/results?apikey={}&Query={}",
+        url.trim_end_matches('/'),
+        urlenc(idx),
+        urlenc(key),
+        urlenc(query)
+    );
+    if cat != "All" {
+        if let Some(id) = category_id(cat) {
+            ep.push_str(&format!("&Category[]={}", id));
+        }
+    }
+    ep
+}
+
+/// Message for a transport failure. The URL is stripped: reqwest appends
+/// " for url (…)" and the query string carries the Jackett API key.
+fn request_error(e: reqwest::Error, timeout: u64, url: &str) -> String {
+    if e.is_connect() {
+        format!(
+            "Cannot reach Jackett at {url}\nSettings → Start Jackett, or: sudo systemctl start jackett"
+        )
+    } else if e.is_timeout() {
+        format!("Timed out after {timeout}s — increase timeout in Settings")
+    } else {
+        format!("Network error: {}", e.without_url())
+    }
+}
+
+fn status_error(st: reqwest::StatusCode) -> String {
+    match st.as_u16() {
+        401 => "Invalid API key — open Settings to update it.".into(),
+        403 => "Forbidden — check Jackett permissions.".into(),
+        404 => "Jackett endpoint not found — verify URL in Settings.".into(),
+        500 => "Jackett internal error — check Jackett logs.".into(),
+        n => format!("HTTP {n} from Jackett"),
+    }
+}
+
+/// Append rows to the shared, published-once results vec.
+fn append_results(
+    results: &Arc<Mutex<Arc<Vec<TorrentResult>>>>,
+    count: &Arc<Mutex<usize>>,
+    mut add: Vec<TorrentResult>,
+) {
+    let total = if let Ok(mut r) = results.lock() {
+        let mut v = (**r).clone();
+        v.append(&mut add);
+        let n = v.len();
+        *r = Arc::new(v);
+        n
+    } else {
+        return;
+    };
+    if let Ok(mut c) = count.lock() {
+        *c = total;
+    }
+}
+
+/// One search's connection parameters, cloned per fan-out worker.
+#[derive(Clone)]
+struct SearchCtx {
+    url: String,
+    key: String,
+    query: String,
+    cat: String,
+    timeout: u64,
+}
+
+/// Fetch one indexer and append its rows. Err is a message for the UI.
+fn fetch_into(
+    ctx: &SearchCtx,
+    idx: &str,
+    results: &Arc<Mutex<Arc<Vec<TorrentResult>>>>,
+    count: &Arc<Mutex<usize>>,
+) -> Result<usize, String> {
+    let ep = search_url(&ctx.url, &ctx.key, &ctx.query, &ctx.cat, idx);
+    let resp = shared_client()
+        .get(&ep)
+        .timeout(Duration::from_secs(ctx.timeout))
+        .send()
+        .map_err(|e| request_error(e, ctx.timeout, &ctx.url))?;
+    let st = resp.status();
+    if !st.is_success() {
+        return Err(status_error(st));
+    }
+    let data = resp
+        .json::<JackettResponse>()
+        .map_err(|e| format!("Parse error: {e}"))?;
+    let n = data.results.len();
+    append_results(results, count, data.results);
+    // Wake the parked UI loop so the rows paint now, not on the next input.
+    crate::wake_ui();
+    Ok(n)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_search(
     url: String,
     key: String,
     query: String,
     cat: String,
-    indexer: String,
+    targets: Vec<String>,
     timeout: u64,
     results: Arc<Mutex<Arc<Vec<TorrentResult>>>>,
     state: Arc<Mutex<SearchState>>,
@@ -662,87 +774,66 @@ pub(crate) fn start_search(
         if let Ok(mut s) = state.lock() {
             *s = SearchState::Searching;
         }
-        let idx = if indexer.is_empty() || indexer == "All" {
-            "all"
-        } else {
-            indexer.as_str()
+
+        let ctx = SearchCtx {
+            url: url.clone(),
+            key: key.clone(),
+            query: query.clone(),
+            cat: cat.clone(),
+            timeout,
         };
-        let mut ep = format!(
-            "{}/api/v2.0/indexers/{}/results?apikey={}&Query={}",
-            url.trim_end_matches('/'),
-            urlenc(idx),
-            urlenc(&key),
-            urlenc(&query)
-        );
-        if cat != "All" {
-            if let Some(id) = category_id(&cat) {
-                ep.push_str(&format!("&Category[]={}", id));
+
+        // One indexer: the plain request, same as before.
+        if targets.len() <= 1 {
+            let idx = targets.first().map(String::as_str).unwrap_or("all");
+            match fetch_into(&ctx, idx, &results, &count) {
+                Ok(_) if live() => {
+                    if let Ok(mut s) = state.lock() {
+                        *s = SearchState::Done;
+                    }
+                }
+                Ok(_) => {}
+                Err(e) if live() => set_err(&state, e),
+                Err(_) => {}
             }
+            crate::wake_ui();
+            return;
         }
 
-        match shared_client()
-            .get(&ep)
-            .timeout(Duration::from_secs(timeout))
-            .send()
-        {
-            Ok(resp) => {
-                let st = resp.status();
-                if st.is_success() {
-                    match resp.json::<JackettResponse>() {
-                        Ok(data) => {
-                            if !live() {
-                                return;
-                            }
-                            let n = data.results.len();
-                            if let Ok(mut r) = results.lock() {
-                                *r = Arc::new(data.results);
-                            }
-                            if let Ok(mut c) = count.lock() {
-                                *c = n;
-                            }
-                            if let Ok(mut s) = state.lock() {
-                                *s = SearchState::Done;
-                            }
-                        }
-                        Err(e) => {
-                            if live() {
-                                set_err(&state, format!("Parse error: {e}"))
-                            }
-                        }
-                    }
-                } else if live() {
-                    set_err(
-                        &state,
-                        match st.as_u16() {
-                            401 => "Invalid API key — open Settings to update it.".into(),
-                            403 => "Forbidden — check Jackett permissions.".into(),
-                            404 => "Jackett endpoint not found — verify URL in Settings.".into(),
-                            500 => "Jackett internal error — check Jackett logs.".into(),
-                            n => format!("HTTP {n} from Jackett"),
-                        },
-                    );
+        // Fan out: every indexer on its own thread. Each appends its rows and
+        // wakes the UI, so page 1 appears while slower trackers are still going.
+        let mut handles = Vec::new();
+        for idx in targets {
+            let ctx = ctx.clone();
+            let results = Arc::clone(&results);
+            let count = Arc::clone(&count);
+            handles.push(thread::spawn(move || {
+                fetch_into(&ctx, &idx, &results, &count)
+            }));
+        }
+        let (mut ok_count, mut first_err) = (0usize, None::<String>);
+        for h in handles {
+            match h.join() {
+                Ok(Ok(_)) => ok_count += 1,
+                Ok(Err(e)) => {
+                    first_err.get_or_insert(e);
                 }
+                Err(_) => {}
             }
-            Err(e) => {
-                if live() {
-                    set_err(
-                        &state,
-                        if e.is_connect() {
-                            format!(
-                                "Cannot reach Jackett at {url}\nSettings → Start Jackett, or: sudo systemctl start jackett"
-                            )
-                        } else if e.is_timeout() {
-                            format!("Timed out after {timeout}s — increase timeout in Settings")
-                        } else {
-                            // Strip the URL: reqwest's Display appends
-                            // " for url (…)" and the query string carries the
-                            // Jackett API key, which must not reach the UI.
-                            format!("Network error: {}", e.without_url())
-                        },
-                    )
+        }
+        if live() {
+            if ok_count > 0 {
+                if let Ok(mut s) = state.lock() {
+                    *s = SearchState::Done;
                 }
+            } else {
+                set_err(
+                    &state,
+                    first_err.unwrap_or_else(|| "No indexer answered".to_string()),
+                );
             }
-        };
+        }
+        crate::wake_ui();
     });
 }
 
@@ -982,9 +1073,9 @@ mod tests {
     use super::{
         asset_prefix, category_id, dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port,
         hlth_lbl, is_magnet, managed_config, managed_root, normalize, parse_indexers_xml,
-        parse_latest_tag, port_open, pub_date_key, pub_year, read_server_config, start_local,
-        stop_local, time_ago, truncate_magnet, urlenc, user_config, validate_jackett_url, Hlth,
-        Tab, TorrentResult,
+        parse_latest_tag, port_open, pub_date_key, pub_year, read_server_config, search_targets,
+        start_local, stop_local, time_ago, truncate_magnet, urlenc, user_config,
+        validate_jackett_url, Hlth, Tab, TorrentResult,
     };
     use std::thread;
     use std::time::Duration;
@@ -1217,6 +1308,97 @@ mod tests {
         assert_eq!(asset_prefix("x86_64"), Some("LinuxAMDx64"));
         assert_eq!(asset_prefix("aarch64"), Some("LinuxARM64"));
         assert_eq!(asset_prefix("riscv64"), None); // refuse rather than fetch a wrong build
+    }
+
+    /// One request per indexer is what makes results appear progressively; a
+    /// single chosen indexer must stay a single request.
+    #[test]
+    fn search_targets_split_all_into_each_indexer() {
+        let configured = vec!["1337x".to_string(), "yts".to_string()];
+        assert_eq!(search_targets("All", &configured), configured);
+        assert_eq!(search_targets("", &configured), configured);
+        assert_eq!(search_targets("yts", &configured), vec!["yts"]);
+        // Nothing fetched yet: Jackett's own aggregate endpoint.
+        assert_eq!(search_targets("All", &[]), vec!["all"]);
+    }
+
+    /// The fan-out must publish each indexer's rows as they arrive: the fast
+    /// tracker's result is visible while the slow one is still in flight.
+    #[test]
+    fn fan_out_publishes_the_fast_indexer_before_the_slow_one() {
+        use super::{start_search, SearchState};
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::sync::atomic::AtomicU64;
+        use std::sync::{Arc, Mutex};
+        use std::time::{Duration, Instant};
+
+        let srv = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = srv.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for _ in 0..2 {
+                let Ok((mut s, _)) = srv.accept() else { return };
+                let mut buf = [0u8; 2048];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let slow = String::from_utf8_lossy(&buf[..n]).contains("/indexers/slow/");
+                std::thread::spawn(move || {
+                    if slow {
+                        std::thread::sleep(Duration::from_millis(400));
+                    }
+                    let body = r#"{"Results":[{"Title":"x","Seeders":5}]}"#;
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = s.write_all(resp.as_bytes());
+                });
+            }
+        });
+
+        let results: Arc<Mutex<Arc<Vec<TorrentResult>>>> =
+            Arc::new(Mutex::new(Arc::new(Vec::new())));
+        let state = Arc::new(Mutex::new(SearchState::Idle));
+        let count = Arc::new(Mutex::new(0usize));
+        let epoch = Arc::new(AtomicU64::new(1));
+        start_search(
+            format!("http://{addr}"),
+            "key".to_string(),
+            "q".to_string(),
+            "All".to_string(),
+            vec!["fast".to_string(), "slow".to_string()],
+            5,
+            Arc::clone(&results),
+            Arc::clone(&state),
+            Arc::clone(&count),
+            Arc::clone(&epoch),
+            1,
+        );
+
+        let wait = |n: usize| {
+            let t0 = Instant::now();
+            while Instant::now() - t0 < Duration::from_secs(5) {
+                if *count.lock().unwrap() >= n {
+                    return true;
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+            false
+        };
+        let t0 = Instant::now();
+        assert!(wait(1), "the fast indexer's rows must arrive first");
+        // One row, not both: the slow indexer is still in flight.
+        assert_eq!(*count.lock().unwrap(), 1);
+        assert_eq!(*state.lock().unwrap(), SearchState::Searching);
+        // A batched implementation would only publish after the 400 ms indexer.
+        assert!(
+            t0.elapsed() < Duration::from_millis(300),
+            "first row waited for the slow indexer ({} ms)",
+            t0.elapsed().as_millis()
+        );
+        assert!(wait(2), "both indexers must land");
+        assert_eq!(*state.lock().unwrap(), SearchState::Done);
+        assert_eq!(results.lock().unwrap().len(), 2);
     }
 
     /// Jackett's torznab `pubDate` is RFC 2822 ("Tue, 07 May 2024 10:20:30 +0000").

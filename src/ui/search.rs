@@ -151,14 +151,50 @@ impl App {
                 self.draw_idle(ui);
             }
             SearchState::Searching => {
-                ui.add_space(70.0);
-                ui.vertical_centered(|ui| {
-                    ui.spinner();
-                    ui.add_space(12.0);
-                    lbl(ui, "Scanning all Jackett indexers…", self.pal.sub, 16.0);
-                    ui.add_space(4.0);
-                    lbl(ui, "This usually takes 10–30 seconds", self.pal.dim, fs);
-                });
+                match view.filter(|v| !v.sorted.is_empty()) {
+                    // Results arrive one indexer at a time: show and page them
+                    // immediately instead of hiding the table behind a spinner.
+                    Some(v) => {
+                        ui.add_space(6.0);
+                        ui.horizontal_wrapped(|ui| {
+                            ui.add_space(12.0);
+                            ui.spinner();
+                            ui.add_space(6.0);
+                            lbl(
+                                ui,
+                                &format!("Scanning… {} results so far", v.sorted.len()),
+                                self.pal.sub,
+                                fs,
+                            );
+                        });
+                        ui.add_space(4.0);
+                        let max_p = self.max_pages(v.sorted.len());
+                        let pg = self.search.page.min(max_p.saturating_sub(1));
+                        let page_s = self.page_slice(&v.sorted);
+                        let base = if self.cfg.page_size == 0 {
+                            0
+                        } else {
+                            pg * self.cfg.page_size
+                        };
+                        self.draw_pagination(ui, max_p, pg, fs);
+                        self.draw_results_table(ui, page_s, base);
+                    }
+                    None => {
+                        ui.add_space(70.0);
+                        ui.vertical_centered(|ui| {
+                            ui.spinner();
+                            ui.add_space(12.0);
+                            lbl(ui, "Scanning Jackett indexers…", self.pal.sub, 16.0);
+                            ui.add_space(4.0);
+                            lbl(
+                                ui,
+                                "Results appear as each tracker answers",
+                                self.pal.dim,
+                                fs,
+                            );
+                        });
+                    }
+                }
             }
             SearchState::Error(err) => {
                 ui.add_space(10.0);

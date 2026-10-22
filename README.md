@@ -18,7 +18,8 @@
 ## Features
 
 - **19 themes** — 16 dark + 3 light, instant switching
-- **All Jackett indexers** — search 100+ trackers simultaneously, or pick one
+- **All Jackett indexers** — search 100+ trackers simultaneously, or pick one;
+  results stream in as each tracker answers instead of waiting for the slowest
 - **Multi-column results** — Name, Tracker, Size, Seeds, Leechers, Ratio, Health, Date (toggle any, reorder via Settings)
 - **Row density** — Compact / Normal / Roomy
 - **Filters** — text search, min seeds, size range, year, tracker, health status, category chips

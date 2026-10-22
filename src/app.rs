@@ -407,12 +407,14 @@ impl App {
             *c = 0;
         }
         let gen = self.search.epoch.fetch_add(1, Ordering::Relaxed) + 1;
+        // Fan out per indexer so results land as each tracker answers.
+        let targets = crate::jackett::search_targets(&self.net.indexer, &self.net.indexers);
         start_search(
             self.cfg.jackett_url.clone(),
             self.cfg.api_key.clone(),
             q,
             self.search.cat.clone(),
-            self.net.indexer.clone(),
+            targets,
             self.cfg.timeout_secs,
             Arc::clone(&self.search.results),
             Arc::clone(&self.search.state),

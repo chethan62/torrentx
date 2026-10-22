@@ -687,7 +687,11 @@ impl eframe::App for App {
 
         // Filter+sort the results once per frame; every consumer below
         // (batch handlers, search tab, detail panel) shares this view.
-        let view = if state == SearchState::Done {
+        // Partial results are shown while Searching: the fan-out fills the list
+        // indexer by indexer, so page 1 is usable before the last tracker answers.
+        let view = if matches!(state, SearchState::Done | SearchState::Searching)
+            && self.total_count() > 0
+        {
             Some(self.compute_view())
         } else {
             None

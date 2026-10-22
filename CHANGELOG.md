@@ -4,6 +4,17 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Search results arrive as each indexer answers.** A search used to be one
+  aggregate Jackett request that waited for the slowest tracker before showing
+  anything. It now fans out one request per configured indexer and appends each
+  answer as it lands, so the first page is usable while the rest is still
+  scanning ("Scanning… N results so far"). One chosen indexer is still a single
+  request; a tracker that fails does not hide the others (the error only shows if
+  every one failed).
+
 ## [18.6.0] — 2026-10-22
 
 ### Added
