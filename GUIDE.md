@@ -81,8 +81,9 @@ specific indexer from the dropdown next to the search bar.
 | Tracker | substring match on tracker name |
 | Health | HOT (>500 seeds) · GOOD (101–500) · SLOW (11–100) · DEAD (≤10) |
 
-Sort by Name, Tracker, Size, Seeds, Leechers, Ratio, or Date — click column
-headers or use the Sort picker. Toggle direction DESC/ASC next to it.
+Sort by Name, Tracker, Size, Seeds, Leechers, Ratio, or Date: click a column
+header to sort by it, click the same header again to flip DESC/ASC. The header is
+the only sort control (the filter band no longer duplicates it).
 
 ## Batch actions
 
@@ -132,6 +133,10 @@ failing silently.
 
 ## Settings reference
 
+Settings opens as a floating window over the app (close it with the X or the
+Settings button); the search bar, filters and table keep their place while it is
+open.
+
 | Setting | Values | Notes |
 |---------|--------|-------|
 | Jackett URL | URL | must start with http:// or https:// |
@@ -144,7 +149,7 @@ failing silently.
 | Dedupe | on/off | merge near-duplicate titles across trackers |
 | Updates | on/off | startup check for newer releases |
 | Cat bar | on/off | category chips above results |
-| Columns | per-column toggles | Tracker…Date; reorder via drag in Settings order list |
+| Columns | per-column toggles | Tracker…Date; the order is fixed (Tracker, Name, Size, Seeds, Leech, Ratio, Health, Date) |
 | Accent | color | overrides the theme's accent |
 | Play with | mpv / vlc | player for direct play |
 
