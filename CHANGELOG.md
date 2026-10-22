@@ -4,6 +4,42 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.5] — 2026-10-22
+
+### Changed
+- **Release builds use thin LTO.** Measured on this 8-core machine: an
+  edit-rebuild drops from 311.7 s to 262.1 s (−49.6 s, −16 %) for +1.2 MB of
+  AppImage (17.3 MB). Time to first painted frame is unchanged (85/97 ms fat vs
+  74/100 ms thin, three runs each). `lto = true` goes back if download size ever
+  becomes binding. Measurements, method and reproduce commands:
+  [`docs/build-performance.md`](docs/build-performance.md).
+- **The two 1000-line UI screens are split by concern** — `ui/results.rs`
+  1019 → 503 lines and `ui/search.rs` 885 → 483, with the welcome screen,
+  detail panel, filter band, recent-searches dropdown and pagination bar in
+  their own modules. Pure moves; no behaviour change.
+
+### Added
+- **The view logic is tested** — filtering (seed floor, max size, minimum year
+  in both ISO and RFC 2822 form, tracker, free text, health bands), sorting
+  (every column, both directions, parsed dates, ratio with zero leechers) and
+  paging (`All`, partial last page, stale page index, empty set) are now pure
+  functions with tests, and `heal_col_order` is covered too. 58 → 62 unit tests.
+
+### Fixed
+- **Dual licence shipped properly.** MIT *and* Apache-2.0 texts both travel in
+  the AppImage next to the font and icon notices; the licence section is
+  readable secondary text at 2.0× and selectable, so it can be copied.
+- **Settings is one pill with a wide enough dialog**, and the idle screen says
+  when Jackett is unreachable instead of looking empty.
+- **The result count, the badge and the table agree** — deduplication runs once
+  when results are finalised instead of per frame only.
+- **The build script never calls `sudo`** and treats the Windows bundle as
+  best-effort, so a Linux build cannot be derailed by a missing cross toolchain.
+
+### Security
+- **`deny.toml` licence allow-list wired into CI.** `cargo deny` gates both
+  advisories and licences on every push, alongside `cargo audit`.
+
 ## [18.6.4] — 2026-10-22
 
 ### Added

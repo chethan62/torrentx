@@ -45,6 +45,17 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="18.6.5" date="2026-10-22">
+      <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.5</url>
+      <description>
+        <ul>
+          <li>Faster release builds (thin LTO); the two 1000-line UI screens split by concern</li>
+          <li>Filtering, sorting and paging logic covered by unit tests</li>
+          <li>Dual MIT OR Apache-2.0 licence, both texts shipped in the bundle</li>
+          <li>Licence notices readable and copyable; Settings is one clean pill</li>
+        </ul>
+      </description>
+    </release>
     <release version="18.2.0" date="2026-08-25">
       <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.2.0</url>
       <description>
