@@ -243,6 +243,10 @@ impl App {
                                     let cell_id = egui::Id::new(("namecell", gi));
                                     let cell_resp =
                                         ui.interact(ui.max_rect(), cell_id, egui::Sense::click());
+                                    // The title cell is the row's primary hit area, so
+                                    // the right-click menu lives here.
+                                    let fav = self.is_fav(&r.title);
+                                    attach_row_menu(&cell_resp, i, r, fav, &mut actions);
                                     if cell_resp.double_clicked() {
                                         if let Some(m) = r.magnet_uri.as_deref() {
                                             if is_magnet(m) {
@@ -398,6 +402,9 @@ impl App {
                                 ui.interact(ui.max_rect(), cell_id, egui::Sense::hover());
                         });
                     });
+                    // Right-click anywhere on the row: the actions are queued for
+                    // the shared handler below, so the menu needs no state of its own.
+
                 });
             }
         });
@@ -443,6 +450,28 @@ impl App {
                         if let Some(m) = &r.magnet_uri {
                             ui.ctx().copy_text(m.clone());
                             self.toast("Magnet copied", self.pal.green);
+                        }
+                    }
+                    "name" => {
+                        ui.ctx().copy_text(r.title.clone());
+                        self.toast("Name copied", self.pal.green);
+                    }
+                    "play" => {
+                        if let Some(m) = &r.magnet_uri {
+                            match crate::player::start_play(
+                                m,
+                                r.link.as_deref(),
+                                &self.cfg.player,
+                                None,
+                            ) {
+                                Ok(()) => self.toast("Starting stream…", self.pal.accent),
+                                Err(e) => self.toast(&e, self.pal.red),
+                            }
+                        }
+                    }
+                    "pick" => {
+                        if let Some(m) = r.magnet_uri.clone() {
+                            self.pick_files(&r.title, &m, r.link.as_deref());
                         }
                     }
                     "dl" => {
@@ -500,4 +529,45 @@ impl App {
     }
 
     // ─── Idle / welcome ────────────────────────────────────────────────────
+}
+
+/// Right-click menu for one result. Pushes into the deferred action queue so the
+/// handlers (selection, copy, favourites, playback) stay in one place.
+fn attach_row_menu(
+    resp: &egui::Response,
+    i: usize,
+    r: &TorrentResult,
+    is_fav: bool,
+    actions: &mut Vec<(usize, &'static str)>,
+) {
+    resp.context_menu(|ui| {
+        let mut item = |ui: &mut egui::Ui, label: &str, act: &'static str| {
+            if ui.button(label).clicked() {
+                actions.push((i, act));
+                ui.close();
+            }
+        };
+        item(ui, "Play (largest file)", "play");
+        item(ui, "Choose episode / file…", "pick");
+        ui.separator();
+        item(ui, "Open details", "info");
+        item(
+            ui,
+            if is_fav {
+                "Remove from Favorites"
+            } else {
+                "Add to Favorites"
+            },
+            "fav",
+        );
+        ui.separator();
+        item(ui, "Copy magnet link", "copy");
+        item(ui, "Copy name", "name");
+        if r.link.is_some() {
+            item(ui, "Download .torrent", "dl");
+        }
+        if r.magnet_uri.is_some() {
+            item(ui, "Open magnet in browser", "mag");
+        }
+    });
 }
