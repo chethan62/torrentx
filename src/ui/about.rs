@@ -31,11 +31,14 @@ impl App {
 
                 ui.add_space(SP6);
                 let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
+                // No hand-written dependency versions: they drift (this row said
+                // "reqwest 0.12" while Cargo.toml had 0.13). Names only, and the
+                // app's own version above comes from CARGO_PKG_VERSION.
                 for (k, v) in [
                     ("Language", "Rust 2021 edition".to_string()),
-                    ("GUI", "egui 0.36 + egui_extras".to_string()),
+                    ("GUI", "egui + egui_extras".to_string()),
                     ("Rendering", "GPU via wgpu / OpenGL (eframe)".to_string()),
-                    ("HTTP", "reqwest 0.12 (blocking)".to_string()),
+                    ("HTTP", "reqwest (blocking)".to_string()),
                     ("Platform", platform),
                     (
                         "Build",

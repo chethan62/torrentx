@@ -504,6 +504,47 @@ impl App {
     pub(crate) fn draw_idle(&mut self, ui: &mut egui::Ui) {
         let fs = self.cfg.font_size;
         ui.add_space(SP6 + SP7);
+
+        // A dead Jackett is the one failure that makes every search useless, and
+        // the idle screen used to say nothing about it (only the header dot went
+        // red). Put the reason and the way to fix it where the user is looking.
+        if self.net.jackett_ok == Some(false) {
+            ui.vertical_centered(|ui| {
+                egui::Frame::NONE
+                    .fill(tint(self.pal.red, 20))
+                    .corner_radius(R_MD)
+                    .stroke(Stroke::new(1.0_f32, tint(self.pal.red, 90)))
+                    .inner_margin(margin(SP5, SP3))
+                    .show(ui, |ui| {
+                        ui.set_max_width(560.0);
+                        ui.label(
+                            RichText::new("Jackett is unreachable")
+                                .font(FontId::proportional(fs + 1.0))
+                                .strong()
+                                .color(self.pal.red),
+                        );
+                        ui.add_space(SP2);
+                        lbl(
+                            ui,
+                            &format!("Checked {}", self.cfg.jackett_url),
+                            self.pal.sub,
+                            fs - 1.0,
+                        );
+                        ui.add_space(SP3);
+                        if icon_text_btn(
+                            ui,
+                            SvgIcon::Settings,
+                            "Open Settings",
+                            self.pal.accent,
+                            true,
+                        ) {
+                            self.set_settings_open(true);
+                        }
+                    });
+            });
+            ui.add_space(SP5);
+        }
+
         ui.vertical_centered(|ui| {
             ui.label(
                 RichText::new("TorrentX")
