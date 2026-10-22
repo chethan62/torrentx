@@ -59,6 +59,12 @@ Thin LTO optimises across crate boundaries per codegen unit, so it dedupes less:
 | stripped binary | 30.8 MB | 35.8 MB | +16 % |
 | AppImage | 16.1 MB | 17.3 MB | +1.2 MB (+7.4 %) |
 
+Startup was checked for the same reason thin LTO exists — code layout changes can
+cost time at run time. Three runs each, stale windows killed before every launch,
+time to a painted first frame: fat 85 / 97 ms, thin 74 / 100 ms (first run in each
+set is the cold shader/pipeline cache: 1778 ms fat, 74 ms thin). **No measurable
+difference** — the spread is larger than the gap.
+
 For a desktop app whose download is a 17 MB AppImage, 1.2 MB is cheap; 49 s off
 every release rebuild is not. **Switch back to `lto = true`** if download size
 ever becomes the binding constraint (e.g. a bandwidth-capped mirror), and accept
