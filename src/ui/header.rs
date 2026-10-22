@@ -124,29 +124,18 @@ impl App {
 
                         let sa = self.ui.show_settings;
                         let set_col = if sa { self.pal.accent } else { self.pal.sub };
-                        if ui
-                            .horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = 5.0;
-                                svg_icon(ui, SvgIcon::Settings, ICON_MD, set_col);
-                                ui.add(
-                                    egui::Button::new(
-                                        RichText::new("Settings").size(13.0).color(set_col),
-                                    )
-                                    .fill(if sa {
-                                        tint(self.pal.accent, 22)
-                                    } else {
-                                        Color32::TRANSPARENT
-                                    })
-                                    .stroke(Stroke::new(
-                                        1.0_f32,
-                                        if sa { self.pal.accent } else { self.pal.border },
-                                    ))
-                                    .corner_radius(R_MD)
-                                    .min_size(Vec2::new(0.0, 30.0)),
-                                )
-                                .clicked()
-                            })
-                            .inner
+                        // Same one-widget pattern as the header tabs: the gear is
+                        // inside the button, so the pill frames icon + label together
+                        // instead of floating beside a text-only button.
+                        if icon_text_tab(
+                            ui,
+                            SvgIcon::Settings,
+                            "Settings",
+                            set_col,
+                            sa,
+                            self.pal.accent,
+                        )
+                        .clicked()
                         {
                             self.set_settings_open(!self.ui.show_settings);
                         }

@@ -882,8 +882,11 @@ impl eframe::App for App {
                 .open(&mut open)
                 .collapsible(false)
                 .resizable(true)
-                .default_width(820.0)
-                .max_height(620.0)
+                // Wide enough that each section keeps one line at the default
+                // font size; the height follows the content up to a cap.
+                .default_width(1000.0)
+                .min_width(720.0)
+                .max_height(760.0)
                 .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
                 .frame(
                     egui::Frame::NONE
