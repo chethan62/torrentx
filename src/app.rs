@@ -568,7 +568,7 @@ impl App {
     /// Load the file list for one result (background; polled by `poll_pick`).
     /// Re-clicking the same row reuses nothing: a torrent's list can change
     /// between attempts, and this is a user-initiated action.
-    pub(crate) fn pick_files(&mut self, title: &str, magnet: &str) {
+    pub(crate) fn pick_files(&mut self, title: &str, magnet: &str, link: Option<&str>) {
         self.ui.pick = Some(PickFiles {
             key: title.to_string(),
             loading: true,
@@ -576,7 +576,11 @@ impl App {
             window: true,
             ..Default::default()
         });
-        crate::player::list_files(magnet.to_string(), self.ui.pick_tx.clone());
+        crate::player::list_files(
+            magnet.to_string(),
+            link.map(str::to_string),
+            self.ui.pick_tx.clone(),
+        );
     }
 
     /// Drain a finished file listing into the picker.

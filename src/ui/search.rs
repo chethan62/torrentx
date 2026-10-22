@@ -391,6 +391,7 @@ impl App {
                             if let Some(m) = &r.magnet_uri {
                                 match crate::player::start_play(
                                     m,
+                                    r.link.as_deref(),
                                     &self.cfg.player,
                                     self.picked_file(&r.title),
                                 ) {

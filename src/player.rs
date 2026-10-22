@@ -3,6 +3,7 @@
 // pieces on demand (so seeking works) and mpv/vlc decode. All this module owns
 // is the argv, one child process, and an honest error when it is missing.
 
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
@@ -71,12 +72,19 @@ pub(crate) fn parse_file_list(out: &str) -> Vec<FileEntry> {
 /// swarm reports that instead of an empty picker.
 pub(crate) fn list_files(
     magnet: String,
+    link: Option<String>,
     tx: std::sync::mpsc::Sender<Result<Vec<FileEntry>, String>>,
 ) {
     use std::io::Read;
     std::thread::spawn(move || {
+        // The .torrent from Jackett lists files without waiting on peers.
+        let source = link
+            .as_deref()
+            .and_then(|l| torrent_file(&magnet, l))
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or(magnet);
         let mut child = match Command::new("webtorrent")
-            .args([magnet.as_str(), "--select"])
+            .args([source.as_str(), "--select"])
             // chalk colours the index/size; NO_COLOR keeps the parser simple.
             .env("NO_COLOR", "1")
             .stdin(Stdio::null())
@@ -124,15 +132,61 @@ pub(crate) fn list_files(
     });
 }
 
+/// A local copy of the result's `.torrent`, fetched from the Jackett link.
+/// Jackett serves it from its own cache, so this is a file fetch — no swarm
+/// metadata round trip — and webtorrent can name/list files immediately.
+/// None when there is no usable link; the caller falls back to the magnet.
+pub(crate) fn torrent_file(magnet: &str, link: &str) -> Option<PathBuf> {
+    use std::hash::{Hash, Hasher};
+    if !link.starts_with("http") {
+        return None;
+    }
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    magnet.hash(&mut h);
+    let path = dirs_next::cache_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("torrentx")
+        .join("torrents")
+        .join(format!("{:016x}.torrent", h.finish()));
+    // ponytail: no TTL — Jackett's file for one infohash never changes.
+    if let Ok(md) = std::fs::metadata(&path) {
+        if md.len() > 64 {
+            return Some(path);
+        }
+    }
+    // Local Jackett: keep the budget short so a hung server cannot stall Play.
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .ok()?;
+    let resp = client.get(link).send().ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let bytes = resp.bytes().ok()?;
+    // A bencoded dict starts with 'd'; anything else is an HTML error page.
+    if bytes.first() != Some(&b'd') {
+        return None;
+    }
+    std::fs::create_dir_all(path.parent()?).ok()?;
+    std::fs::write(&path, &bytes).ok()?;
+    Some(path)
+}
+
+/// magnet or a `.torrent` path — the two things webtorrent-cli streams from.
+fn is_playable(source: &str) -> bool {
+    crate::jackett::is_magnet(source) || source.ends_with(".torrent")
+}
+
 /// argv for one stream. Pure and unit-tested; no process is spawned here.
 /// `None` = not a magnet, or a player we cannot drive.
-pub(crate) fn play_args(magnet: &str, player: &str, file: Option<usize>) -> Option<Vec<String>> {
+pub(crate) fn play_args(source: &str, player: &str, file: Option<usize>) -> Option<Vec<String>> {
     let flag = player_flag(player)?;
-    if !crate::jackett::is_magnet(magnet) {
+    if !is_playable(source) {
         return None;
     }
     let mut args = vec![
-        magnet.to_string(),
+        source.to_string(),
         flag.to_string(),
         // Without this, webtorrent-cli floats the player above every window.
         "--not-on-top".to_string(),
@@ -172,8 +226,19 @@ fn log_stdio() -> (Stdio, Stdio) {
 }
 
 /// Start streaming `magnet` to `player`. Err is a message suitable for a toast.
-pub(crate) fn start_play(magnet: &str, player: &str, file: Option<usize>) -> Result<(), String> {
-    let args = play_args(magnet, player, file)
+pub(crate) fn start_play(
+    magnet: &str,
+    link: Option<&str>,
+    player: &str,
+    file: Option<usize>,
+) -> Result<(), String> {
+    // Jackett's .torrent means webtorrent has names/sizes before any peer answers,
+    // so mpv opens on the first connection instead of after the metadata round trip.
+    let source = link
+        .and_then(|l| torrent_file(magnet, l))
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| magnet.to_string());
+    let args = play_args(&source, player, file)
         .ok_or_else(|| "This result has no playable magnet".to_string())?;
     // One stream at a time: replacing the previous one avoids two players and
     // two torrents competing for bandwidth. webtorrent exits with its player.
@@ -227,7 +292,7 @@ pub(crate) fn stop_play() {
 mod tests {
     use super::{
         is_playing, log_path, parse_file_list, play_args, player_flag, start_play, stop_play,
-        PLAYERS,
+        torrent_file, PLAYERS,
     };
 
     fn magnet() -> String {
@@ -253,7 +318,9 @@ mod tests {
 
     #[test]
     fn rejects_non_magnets_and_unknown_players() {
-        assert!(play_args("https://example.com/x.torrent", "mpv", None).is_none());
+        assert!(play_args("https://example.com/x.mkv", "mpv", None).is_none());
+        // A cached .torrent path is a valid source.
+        assert!(play_args("/tmp/x.torrent", "mpv", None).is_some());
         assert!(play_args("magnet:?xt=urn:btih:tooshort", "mpv", None).is_none());
         assert!(play_args(&magnet(), "sh -c evil", None).is_none());
         assert!(play_args(&magnet(), "", None).is_none());
@@ -271,6 +338,47 @@ mod tests {
             .unwrap()
             .iter()
             .any(|a| a == "--select"));
+    }
+
+    /// Jackett's own .torrent is fetched once, cached by magnet, and an HTML
+    /// error page is refused (a bencoded dict starts with 'd').
+    #[test]
+    fn torrent_file_caches_the_jackett_copy_and_refuses_html() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let srv = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = srv.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for _ in 0..2 {
+                let Ok((mut s, _)) = srv.accept() else { return };
+                let mut buf = [0u8; 1024];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let bad = String::from_utf8_lossy(&buf[..n]).contains("/bad");
+                let body: &[u8] = if bad {
+                    b"<html>not a torrent</html>"
+                } else {
+                    b"d8:announce4:http4:infod4:name1:x6:lengthi1eee"
+                };
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = s.write_all(head.as_bytes());
+                let _ = s.write_all(body);
+            }
+        });
+
+        let m = format!("magnet:?xt=urn:btih:{}&dn=stub", "c".repeat(40));
+        let p = torrent_file(&m, &format!("http://{addr}/ok")).expect("bencoded body is cached");
+        assert_eq!(std::fs::read(&p).unwrap().first(), Some(&b'd'));
+        // Second call is served from the cache (the server only had two answers).
+        assert_eq!(torrent_file(&m, &format!("http://{addr}/ok")), Some(p));
+
+        let other = format!("magnet:?xt=urn:btih:{}&dn=other", "d".repeat(40));
+        assert!(torrent_file(&other, &format!("http://{addr}/bad")).is_none());
+        // Non-HTTP links never reach the network.
+        assert!(torrent_file(&other, "file:///tmp/x.torrent").is_none());
     }
 
     #[test]
@@ -340,7 +448,7 @@ mod tests {
         std::env::set_var("PATH", format!("{}:{old_path}", dir.display()));
 
         let m = magnet();
-        assert!(start_play(&m, "mpv", None).is_ok());
+        assert!(start_play(&m, None, "mpv", None).is_ok());
         assert!(
             wait_for(|| args_file.exists(), 5),
             "stub never ran; PATH={}",

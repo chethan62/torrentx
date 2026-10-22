@@ -4,6 +4,15 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Play starts from the result's `.torrent`, not the magnet.** Jackett already
+  caches the torrent file for results that carry a link, so webtorrent gets the
+  file names immediately instead of waiting for a metadata round trip: mpv
+  opened in 1.0 s vs 3.0 s on a real swarm, and the episode picker now lists
+  files on swarms that never hand out metadata.
+
 ## [18.6.1] — 2026-10-22
 
 ### Fixed

@@ -765,7 +765,12 @@ impl App {
                         .and_then(|p| p.sel.and_then(|i| p.files.get(i)))
                         .map(|f| f.idx);
                     if wide_icon_btn(ui, SvgIcon::Play, "Play", self.pal.accent) {
-                        match crate::player::start_play(&mag, &self.cfg.player, chosen) {
+                        match crate::player::start_play(
+                            &mag,
+                            r.link.as_deref(),
+                            &self.cfg.player,
+                            chosen,
+                        ) {
                             Ok(()) => self.toast("Starting stream…", self.pal.accent),
                             Err(e) => self.toast(&e, self.pal.red),
                         }
@@ -802,7 +807,7 @@ impl App {
                             }
                             if wide_icon_btn(ui, SvgIcon::Refresh, "Retry file list", self.pal.sub)
                             {
-                                self.pick_files(&r.title, &mag);
+                                self.pick_files(&r.title, &mag, r.link.as_deref());
                             }
                         }
                         None => {
@@ -812,7 +817,7 @@ impl App {
                                 "Choose episode/file…",
                                 self.pal.sub,
                             ) {
-                                self.pick_files(&r.title, &mag);
+                                self.pick_files(&r.title, &mag, r.link.as_deref());
                             }
                         }
                     }
