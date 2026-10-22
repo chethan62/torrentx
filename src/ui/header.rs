@@ -212,10 +212,12 @@ impl App {
         ui.horizontal_wrapped(|ui| {
             ui.add_space(MARGIN_DEFAULT);
             ui.vertical(|ui| {
-                // Row 1 — Connection
+                // Sections read as headings over their controls (an inline
+                // heading made every row start at a different x).
+                lbl(ui, "CONNECTION", self.pal.dim, 10.0);
+                ui.add_space(SP2);
                 ui.horizontal_wrapped(|ui| {
-                    lbl(ui, "CONNECTION", self.pal.dim, 10.0);
-                    ui.add_space(SP3);
+                    ui.add_space(SP1);
                     lbl(ui, "Jackett URL", self.pal.sub, 12.0);
                     ui.add(
                         egui::TextEdit::singleline(&mut self.cfg.jackett_url)
@@ -359,9 +361,10 @@ impl App {
                 ui.add_space(SP2);
 
                 // Row 2 — Display
+                lbl(ui, "DISPLAY", self.pal.dim, 10.0);
+                ui.add_space(SP2);
                 ui.horizontal_wrapped(|ui| {
-                    lbl(ui, "DISPLAY", self.pal.dim, 10.0);
-                    ui.add_space(SP3);
+                    ui.add_space(SP1);
                     lbl(ui, "Rows", self.pal.sub, 12.0);
                     for (l, h) in [
                         ("Compact", ROW_HEIGHT_COMPACT),
@@ -518,9 +521,10 @@ impl App {
                 ui.add_space(SP2);
 
                 // Row 3 — Columns (toggle which columns are shown)
+                lbl(ui, "COLUMNS", self.pal.dim, 10.0);
+                ui.add_space(SP2);
                 ui.horizontal_wrapped(|ui| {
-                    lbl(ui, "COLUMNS", self.pal.dim, 10.0);
-                    ui.add_space(SP3);
+                    ui.add_space(SP1);
                     let mut col_changed = false;
                     for (label, val) in [
                         ("Tracker", &mut self.cfg.col_tracker),

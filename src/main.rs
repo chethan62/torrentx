@@ -19,7 +19,7 @@ use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 use std::time::{Duration, Instant};
 
 use crate::ui::{
-    margin, ICON_LG, ICON_MD, ICON_SM, ICON_XS, MOTION_MS, R_MD, R_SM, SP1, SP2, SP3, SP4, SP5,
+    margin, ICON_LG, ICON_MD, ICON_SM, ICON_XS, MOTION_MS, R_LG, R_MD, R_SM, SP1, SP2, SP3, SP4,
 };
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -871,18 +871,42 @@ impl eframe::App for App {
             ctx.request_repaint_after(after);
         }
 
-        // ── Settings panel ───────────────────────────────────────────────
+        // ── Settings ─────────────────────────────────────────────────────
+        // A floating Preferences window: configuration is not part of the
+        // search flow, so it must not push the search bar and results down
+        // (the old top panel reflowed the whole workspace every time it
+        // opened). Fixed width keeps its three rows on one line each.
         if self.ui.show_settings {
-            egui::Panel::top("settings")
+            let mut open = true;
+            egui::Window::new("Settings")
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(true)
+                .default_width(820.0)
+                .max_height(620.0)
+                .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
                 .frame(
                     egui::Frame::NONE
                         .fill(self.pal.hdr)
+                        .corner_radius(R_LG)
                         .stroke(Stroke::new(1.0_f32, self.pal.border))
-                        .inner_margin(margin(SP5, SP3)),
+                        .shadow(egui::epaint::Shadow {
+                            offset: [0, 8],
+                            blur: 24,
+                            spread: 0,
+                            color: egui::Color32::from_black_alpha(90),
+                        })
+                        .inner_margin(margin(SP4, SP4)),
                 )
-                .show(ui, |ui| {
-                    self.draw_settings_panel(ui);
+                .show(&ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("settings_scroll")
+                        .max_height(540.0)
+                        .show(ui, |ui| self.draw_settings_panel(ui));
                 });
+            if !open {
+                self.set_settings_open(false);
+            }
         }
 
         // ── Detail panels — frame-level right panels ─────────────────────

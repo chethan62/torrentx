@@ -528,31 +528,41 @@ impl App {
             ui.add_space(SP7);
 
             if !self.cfg.history.is_empty() {
-                lbl(ui, "Recent searches", self.pal.dim, fs - 1.0);
-                ui.add_space(SP4);
-                let hist: Vec<String> = self.cfg.history.iter().take(12).cloned().collect();
+                // Heading and pills share one centred column; a wrapped row
+                // inside `vertical_centered` starts at the left edge, which read
+                // as a misaligned block under a centred heading.
+                let block_w = ui.available_width().min(560.0);
                 let mut clicked: Option<String> = None;
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                    for h in &hist {
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new(h.as_str())
-                                        .font(FontId::proportional(fs))
-                                        .color(self.pal.sub),
-                                )
-                                .fill(self.pal.surface)
-                                .stroke(Stroke::new(1.0_f32, self.pal.border))
-                                .corner_radius(R_LG)
-                                .min_size(egui::vec2(0.0, 28.0)),
-                            )
-                            .clicked()
-                        {
-                            clicked = Some(h.clone());
-                        }
-                    }
-                });
+                ui.allocate_ui_with_layout(
+                    egui::vec2(block_w, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        lbl(ui, "Recent searches", self.pal.dim, fs - 1.0);
+                        ui.add_space(SP4);
+                        let hist: Vec<String> = self.cfg.history.iter().take(12).cloned().collect();
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                            for h in &hist {
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            RichText::new(h.as_str())
+                                                .font(FontId::proportional(fs))
+                                                .color(self.pal.sub),
+                                        )
+                                        .fill(self.pal.surface)
+                                        .stroke(Stroke::new(1.0_f32, self.pal.border))
+                                        .corner_radius(R_LG)
+                                        .min_size(egui::vec2(0.0, 28.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    clicked = Some(h.clone());
+                                }
+                            }
+                        });
+                    },
+                );
                 if let Some(h) = clicked {
                     self.search.query = h;
                     self.do_search();

@@ -22,7 +22,12 @@ impl App {
             ui.add_space(SP4);
             // Field shrinks with the window; floor at 120 so the combos +
             // Search button can wrap onto a second row instead of clipping.
-            let field_w = (ui.available_width() - 320.0).clamp(120.0, 700.0);
+            // Combos + labels + button take ~470px; the field takes the rest so
+            // the cluster ends at the window edge instead of stranding it mid-row.
+            // Measured widths: Category label+combo ~165, Indexer label+combo
+            // ~162, Search button ~130, gaps ~24 -> 480 plus slack, so the row
+            // keeps one line and the button ends at the window edge.
+            let field_w = (ui.available_width() - 505.0).max(140.0);
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.search.query)
                     .id(egui::Id::new("q"))
@@ -49,6 +54,8 @@ impl App {
             }
 
             ui.add_space(SP3);
+            lbl(ui, "Category", self.pal.dim, 10.0);
+            ui.add_space(SP1);
             egui::ComboBox::from_id_salt("cat_cb")
                 .selected_text(RichText::new(&self.search.cat).font(FontId::proportional(fs)))
                 .width(115.0)
@@ -64,6 +71,8 @@ impl App {
 
             // Indexer picker (from Jackett's configured indexers)
             ui.add_space(SP3);
+            lbl(ui, "Indexer", self.pal.dim, 10.0);
+            ui.add_space(SP1);
             egui::ComboBox::from_id_salt("idx_cb")
                 .selected_text(RichText::new(&self.net.indexer).font(FontId::proportional(fs)))
                 .width(130.0)
