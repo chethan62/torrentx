@@ -8,7 +8,7 @@ impl App {
     pub(crate) fn draw_about(&mut self, ui: &mut egui::Ui) {
         let fs = self.cfg.font_size;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.add_space(30.0);
+            ui.add_space(SP7);
             ui.vertical_centered(|ui| {
                 ui.label(
                     RichText::new("TorrentX")
@@ -21,7 +21,7 @@ impl App {
                         .font(FontId::proportional(fs))
                         .color(self.pal.accent),
                 );
-                ui.add_space(4.0);
+                ui.add_space(SP2);
                 lbl(
                     ui,
                     "Native Rust + egui torrent search GUI powered by Jackett",
@@ -29,7 +29,7 @@ impl App {
                     fs + 1.0,
                 );
 
-                ui.add_space(24.0);
+                ui.add_space(SP6);
                 let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
                 for (k, v) in [
                     ("Language", "Rust 2021 edition".to_string()),
@@ -52,11 +52,11 @@ impl App {
                         lbl(ui, &format!("{k:<18}"), self.pal.dim, fs);
                         lbl(ui, &v, self.pal.sub, fs);
                     });
-                    ui.add_space(2.0);
+                    ui.add_space(SP1);
                 }
 
                 // Install GUID — click to copy (for bug reports)
-                ui.add_space(6.0);
+                ui.add_space(SP3);
                 ui.horizontal(|ui| {
                     ui.add_space(ui.available_width() * 0.15);
                     lbl(ui, &format!("{:<18}", "Install ID"), self.pal.dim, fs);
@@ -81,17 +81,17 @@ impl App {
                 });
 
                 // Theme swatches
-                ui.add_space(24.0);
+                ui.add_space(SP6);
                 lbl(
                     ui,
                     &format!("{} Themes", Theme::all().len()),
                     self.pal.accent,
                     fs + 1.0,
                 );
-                ui.add_space(10.0);
+                ui.add_space(SP4);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
-                    ui.add_space(40.0);
+                    ui.add_space(SP7);
                     for t in Theme::all() {
                         let col = t.accent_color();
                         let active = &self.cfg.theme == t;
@@ -114,9 +114,9 @@ impl App {
                 });
 
                 // Features
-                ui.add_space(24.0);
+                ui.add_space(SP6);
                 lbl(ui, "Features", self.pal.accent, fs + 1.0);
-                ui.add_space(8.0);
+                ui.add_space(SP3);
                 for f in [
                     "Search all Jackett indexers simultaneously",
                     "19 themes — 16 dark, 3 light — instant switching",
@@ -140,13 +140,13 @@ impl App {
                     "Keyboard nav: Arrow keys, Enter, D, F, M, Ctrl+F, Ctrl+R, Esc",
                 ] {
                     lbl(ui, &format!("  ·  {f}"), self.pal.sub, fs - 1.0);
-                    ui.add_space(1.0);
+                    ui.add_space(SP1);
                 }
 
                 // Shortcuts
-                ui.add_space(24.0);
+                ui.add_space(SP6);
                 lbl(ui, "Keyboard Shortcuts", self.pal.accent, fs + 1.0);
-                ui.add_space(10.0);
+                ui.add_space(SP4);
                 for (k, v) in [
                     ("Up / Down", "Navigate result rows"),
                     ("Enter", "Open magnet for selected row"),
@@ -170,16 +170,16 @@ impl App {
                             .stroke(Stroke::new(1.0_f32, self.pal.border))
                             .corner_radius(4.0),
                         );
-                        ui.add_space(8.0);
+                        ui.add_space(SP3);
                         lbl(ui, v, self.pal.sub, fs);
                     });
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                 }
 
                 // Credits
-                ui.add_space(24.0);
+                ui.add_space(SP6);
                 lbl(ui, "Credits", self.pal.accent, fs + 1.0);
-                ui.add_space(8.0);
+                ui.add_space(SP3);
                 for line in [
                     "Created by chethan62",
                     "Powered by Jackett — the open-source indexer proxy",
@@ -188,13 +188,13 @@ impl App {
                     "License: MIT — free to use, modify, and share",
                 ] {
                     lbl(ui, &format!("  ·  {line}"), self.pal.sub, fs - 1.0);
-                    ui.add_space(1.0);
+                    ui.add_space(SP1);
                 }
 
                 // The OFL notice has to be viewable where the fonts are shipped,
                 // and the release artifacts are a bare binary and an AppImage, so
                 // "stand-alone text file" means in here as well as in the repo.
-                ui.add_space(12.0);
+                ui.add_space(SP4);
                 egui::CollapsingHeader::new(
                     RichText::new("Bundled font licence (SIL OFL 1.1)")
                         .font(FontId::proportional(fs - 1.0))
@@ -215,10 +215,10 @@ impl App {
                 });
 
                 // Links
-                ui.add_space(10.0);
+                ui.add_space(SP4);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
-                    ui.add_space(40.0);
+                    ui.add_space(SP7);
                     for (label, url) in [
                         ("GitHub", "https://github.com/chethan62/torrentx"),
                         (
@@ -250,7 +250,7 @@ impl App {
                     }
                 });
 
-                ui.add_space(20.0);
+                ui.add_space(SP6);
                 lbl(ui, "github.com/chethan62/torrentx", self.pal.dim, fs - 1.0);
             });
         });
