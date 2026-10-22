@@ -7,9 +7,9 @@ use crate::app::App;
 impl App {
     pub(crate) fn draw_favorites(&mut self, ui: &mut egui::Ui) {
         let fs = self.cfg.font_size;
-        ui.add_space(12.0);
+        ui.add_space(SP4);
         ui.horizontal(|ui| {
-            ui.add_space(14.0);
+            ui.add_space(SP5);
             ui.label(
                 RichText::new(format!("Favorites  ({})", self.cfg.favorites.len()))
                     .font(FontId::proportional(18.0))
@@ -17,7 +17,7 @@ impl App {
                     .strong(),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(14.0);
+                ui.add_space(SP5);
                 if !self.cfg.favorites.is_empty() && outline_btn(ui, "Clear all", self.pal.red) {
                     self.cfg.favorites.clear();
                     let _ = save_cfg(&self.cfg);
@@ -26,10 +26,10 @@ impl App {
         });
 
         if self.cfg.favorites.is_empty() {
-            ui.add_space(60.0);
+            ui.add_space(SP7 * 2.0);
             ui.vertical_centered(|ui| {
                 lbl(ui, "No favorites yet", self.pal.sub, 20.0);
-                ui.add_space(6.0);
+                ui.add_space(SP3);
                 lbl(
                     ui,
                     "Click Fav on any result, or press F when a row is selected",
@@ -41,11 +41,11 @@ impl App {
         }
 
         // Search box
-        ui.add_space(8.0);
+        ui.add_space(SP3);
         ui.horizontal(|ui| {
-            ui.add_space(14.0);
+            ui.add_space(SP5);
             lbl(ui, "Search:", self.pal.dim, fs);
-            ui.add_space(4.0);
+            ui.add_space(SP2);
             ui.add(
                 egui::TextEdit::singleline(&mut self.ui.fav_search)
                     .desired_width(FAV_SEARCH_W)
@@ -64,7 +64,7 @@ impl App {
                 self.ui.fav_search.clear();
             }
         });
-        ui.add_space(8.0);
+        ui.add_space(SP3);
 
         let mut remove: Option<usize> = None;
         let mut open_mag: Option<String> = None;
