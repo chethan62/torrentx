@@ -17,6 +17,7 @@ Everything you need to run and use TorrentX effectively.
 - [Config file reference](#config-file-reference)
 - [UI standards](#ui-standards)
 - [CLI flags](#cli-flags)
+- [Known limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
 - [Privacy](#privacy)
 
@@ -221,6 +222,28 @@ torrentx [--config <path>] [-h] [-V]
 
 `--config <path>` runs a fully separate profile (own config file) — handy for
 pointing two instances at different Jackett servers.
+
+## Known limitations
+
+Deliberate, not bugs — each line says what to do instead.
+
+- **CSV exports the whole filtered view**, every page, ticks or no ticks
+  ("Export CSV" next to the result count). Ticking rows only feeds *Copy
+  magnets*; there is no "export selection only".
+- **One stream at a time** — starting a second play stops the first
+  (`start_play` calls `stop_play`), so two players never fight for bandwidth.
+- **Right-click menu is on the title column** — the other columns belong to the
+  table's own cell hit areas, so the menu opens over the result name.
+- **Column order is fixed** — Settings toggles which columns are shown, not
+  their order.
+- **No download manager** — "Download .torrent" and "Open magnet in browser"
+  hand off to your torrent client; TorrentX never queues or seeds.
+- **Direct play needs `webtorrent-cli` on `PATH`** and outbound BitTorrent. On a
+  network that blocks tracker/DHT ports the picker reports
+  "the torrent's peers are unreachable" instead of hanging.
+- **Windows**: the `.exe` compiles in CI (`cargo build --target
+  x86_64-pc-windows-gnu`) but is not published and has never been run on
+  Windows; releases ship Linux only.
 
 ## Troubleshooting
 
