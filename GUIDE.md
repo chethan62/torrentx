@@ -118,9 +118,16 @@ waiting for the download to finish, and seeking works.
 3. TorrentX streams the torrent's **largest file** to the player chosen in
    **Settings → Play with** (mpv or vlc)
 
-Only one stream runs at a time; pressing Play again replaces it, and quitting
-TorrentX stops the stream. The player also ends the stream when you close it.
-If `webtorrent` is not on `PATH`, Play says so instead of failing silently.
+**Season packs / multi-file torrents:** press **Choose episode/file…** to list the
+torrent's files (with sizes), filter the list, and pick one — **Play** then
+streams that file. **Largest file (default)** restores the default. The list is
+fetched from peers, so it needs a reachable swarm; the choice stays until you
+pick another file or another result.
+
+Only one stream runs at a time; pressing Play again replaces it, **Stop stream**
+ends it, and quitting TorrentX stops the stream. The player also ends the stream
+when you close it. If `webtorrent` is not on `PATH`, Play says so instead of
+failing silently.
 
 ## Settings reference
 

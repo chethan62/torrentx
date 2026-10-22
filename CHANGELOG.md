@@ -4,6 +4,18 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Episode picker for multi-file torrents.** Direct play streamed a pack's largest
+  file and nothing else, so a season pack gave you whichever episode happened to be
+  biggest. The detail panel now lists the torrent's files (index, name, size) in a
+  filterable chooser, and Play passes `--select <index>`. "Largest file (default)"
+  restores webtorrent's behaviour; the list needs peers (it comes from torrent
+  metadata) and reports that when the swarm is unreachable.
+- **Stop stream** in the detail panel while a stream is running; the button only
+  appears when a streamer we started is still alive.
+
 ## [18.5.1] — 2026-10-22
 
 ### Fixed

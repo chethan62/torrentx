@@ -363,7 +363,11 @@ impl App {
                     if let Some(i) = self.ui.selected {
                         if let Some(r) = page_s.get(i) {
                             if let Some(m) = &r.magnet_uri {
-                                match crate::player::start_play(m, &self.cfg.player) {
+                                match crate::player::start_play(
+                                    m,
+                                    &self.cfg.player,
+                                    self.picked_file(&r.title),
+                                ) {
                                     Ok(()) => self.toast("Starting stream…", self.pal.accent),
                                     Err(e) => self.toast(&e, self.pal.red),
                                 }

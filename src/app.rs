@@ -226,10 +226,31 @@ pub(crate) struct UiState {
     pub(crate) detail_row: Option<TorrentResult>,
     /// Last window-size config write (throttles resize persistence).
     pub(crate) win_save_at: Option<Instant>,
+    /// File list for the result whose picker is open (multi-file torrents).
+    pub(crate) pick: Option<PickFiles>,
+    pub(crate) pick_tx: std::sync::mpsc::Sender<Result<Vec<crate::player::FileEntry>, String>>,
+    pub(crate) pick_rx: std::sync::mpsc::Receiver<Result<Vec<crate::player::FileEntry>, String>>,
+}
+
+/// File list for one result, so a season pack can play the episode you picked.
+#[derive(Clone, Default)]
+pub(crate) struct PickFiles {
+    /// Result title the list belongs to.
+    pub(crate) key: String,
+    pub(crate) files: Vec<crate::player::FileEntry>,
+    /// Chosen file; `None` keeps webtorrent's default (the largest file).
+    pub(crate) sel: Option<usize>,
+    pub(crate) loading: bool,
+    pub(crate) err: Option<String>,
+    /// Case-insensitive filter for long season packs.
+    pub(crate) filter: String,
+    /// Whether the chooser window is open (the list outlives it).
+    pub(crate) window: bool,
 }
 
 impl Default for UiState {
     fn default() -> Self {
+        let (pick_tx, pick_rx) = std::sync::mpsc::channel();
         Self {
             tab: crate::jackett::Tab::Search,
             show_settings: false,
@@ -262,6 +283,9 @@ impl Default for UiState {
             // Grace period: don't persist size until 3s after launch, so the
             // pre-restore default never clobbers the saved window size.
             win_save_at: Some(Instant::now()),
+            pick: None,
+            pick_tx,
+            pick_rx,
         }
     }
 }
@@ -537,6 +561,44 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Load the file list for one result (background; polled by `poll_pick`).
+    /// Re-clicking the same row reuses nothing: a torrent's list can change
+    /// between attempts, and this is a user-initiated action.
+    pub(crate) fn pick_files(&mut self, title: &str, magnet: &str) {
+        self.ui.pick = Some(PickFiles {
+            key: title.to_string(),
+            loading: true,
+            // Open the chooser as soon as the list arrives.
+            window: true,
+            ..Default::default()
+        });
+        crate::player::list_files(magnet.to_string(), self.ui.pick_tx.clone());
+    }
+
+    /// Drain a finished file listing into the picker.
+    pub(crate) fn poll_pick(&mut self) {
+        while let Ok(res) = self.ui.pick_rx.try_recv() {
+            let Some(p) = self.ui.pick.as_mut() else {
+                continue;
+            };
+            p.loading = false;
+            match res {
+                Ok(files) => {
+                    p.files = files;
+                    p.err = None;
+                }
+                Err(e) => p.err = Some(e),
+            }
+        }
+    }
+
+    /// The file index chosen for `title`, if its list is loaded. `None` keeps
+    /// webtorrent's default (largest file).
+    pub(crate) fn picked_file(&self, title: &str) -> Option<usize> {
+        let p = self.ui.pick.as_ref().filter(|p| p.key == title)?;
+        p.sel.and_then(|i| p.files.get(i)).map(|f| f.idx)
     }
 
     /// Auto-refresh enabled feeds whose `auto_refresh` flag is set.

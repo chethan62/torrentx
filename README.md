@@ -25,7 +25,8 @@
 - **Sort** — by Name, Tracker, Size, Seeds, Leechers, Ratio, Date
 - **Favorites** — save torrents with timestamps, search filter, persistent storage
 - **Detail panel** — seeder/leecher ratio bar, magnet copy/open, .torrent download
-- **Direct play** — stream a result to mpv/vlc without downloading the whole torrent
+- **Direct play** — stream a result to mpv/vlc without downloading the whole torrent;
+  multi-file packs get an episode picker (filterable file list) and a Stop control
   (needs [webtorrent-cli](https://github.com/webtorrent/webtorrent-cli): `npm install -g webtorrent-cli`;
   its output, including the peer count, goes to `~/.cache/torrentx/webtorrent.log`)
 - **Batch actions** — select mode, select-all, copy N magnets at once

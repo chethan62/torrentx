@@ -753,10 +753,63 @@ impl App {
 
                 if let Some(mag) = r.magnet_uri.clone() {
                     let mc = mag.clone();
+                    // Snapshot the picker: the widgets below borrow `self`, so the
+                    // list (small) is cloned rather than borrowed across them.
+                    let pick = self.ui.pick.clone().filter(|p| p.key == r.title);
+                    let chosen: Option<usize> = pick
+                        .as_ref()
+                        .and_then(|p| p.sel.and_then(|i| p.files.get(i)))
+                        .map(|f| f.idx);
                     if wide_icon_btn(ui, SvgIcon::Play, "Play", self.pal.accent) {
-                        match crate::player::start_play(&mag, &self.cfg.player) {
+                        match crate::player::start_play(&mag, &self.cfg.player, chosen) {
                             Ok(()) => self.toast("Starting stream…", self.pal.accent),
                             Err(e) => self.toast(&e, self.pal.red),
+                        }
+                    }
+                    if crate::player::is_playing()
+                        && wide_icon_btn(ui, SvgIcon::Close, "Stop stream", self.pal.red)
+                    {
+                        crate::player::stop_play();
+                        self.toast("Stream stopped", self.pal.sub);
+                        ui.add_space(4.0);
+                    }
+                    ui.add_space(4.0);
+                    // Multi-file torrents (season packs) stream their largest file
+                    // unless a file is chosen; the chooser handles long lists with
+                    // a filter.
+                    match &pick {
+                        Some(p) if p.loading => {
+                            lbl(ui, "Listing files…", self.pal.dim, fs - 1.0);
+                        }
+                        Some(p) if !p.files.is_empty() => {
+                            let label = match p.sel.and_then(|i| p.files.get(i)) {
+                                Some(f) => format!("{} ({})", short_name(&f.name), f.size),
+                                None => format!("Largest file (of {})", p.files.len()),
+                            };
+                            if wide_icon_btn(ui, SvgIcon::Search, &label, self.pal.sub) {
+                                if let Some(st) = self.ui.pick.as_mut() {
+                                    st.window = true;
+                                }
+                            }
+                        }
+                        Some(p) => {
+                            if let Some(e) = &p.err {
+                                lbl(ui, e, self.pal.red, fs - 1.5);
+                            }
+                            if wide_icon_btn(ui, SvgIcon::Refresh, "Retry file list", self.pal.sub)
+                            {
+                                self.pick_files(&r.title, &mag);
+                            }
+                        }
+                        None => {
+                            if wide_icon_btn(
+                                ui,
+                                SvgIcon::Search,
+                                "Choose episode/file…",
+                                self.pal.sub,
+                            ) {
+                                self.pick_files(&r.title, &mag);
+                            }
                         }
                     }
                     ui.add_space(4.0);
@@ -789,5 +842,74 @@ impl App {
                     self.add_fav(&r2);
                 }
             });
+
+        // File chooser: drawn as a top-level window, but the list lives in
+        // `ui.pick` so the choice survives closing it and the panel scrolling.
+        if let Some(mut p) = self.ui.pick.clone() {
+            if p.window && !p.files.is_empty() {
+                let mut open = true;
+                egui::Window::new(format!("Files — {}", short_name(&p.key)))
+                    .id(egui::Id::new(("pick_win", p.key.clone())))
+                    .open(&mut open)
+                    .resizable(true)
+                    .collapsible(false)
+                    .default_width(560.0)
+                    .show(ui.ctx(), |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut p.filter)
+                                .hint_text("filter files…")
+                                .desired_width(f32::INFINITY),
+                        );
+                        ui.add_space(4.0);
+                        let needle = p.filter.to_lowercase();
+                        egui::ScrollArea::vertical()
+                            .max_height(340.0)
+                            .show(ui, |ui| {
+                                if ui
+                                    .selectable_label(p.sel.is_none(), "Largest file (default)")
+                                    .clicked()
+                                {
+                                    p.sel = None;
+                                    p.window = false;
+                                }
+                                for (i, f) in p.files.iter().enumerate() {
+                                    if !needle.is_empty()
+                                        && !f.name.to_lowercase().contains(&needle)
+                                    {
+                                        continue;
+                                    }
+                                    if ui
+                                        .selectable_label(
+                                            p.sel == Some(i),
+                                            format!("{:>3}  {}  ({})", f.idx, f.name, f.size),
+                                        )
+                                        .clicked()
+                                    {
+                                        p.sel = Some(i);
+                                        p.window = false;
+                                    }
+                                }
+                            });
+                    });
+                if !open {
+                    p.window = false;
+                }
+                self.ui.pick = Some(p);
+            }
+        }
     }
+}
+
+/// Short middle/start-trimmed file name for the picker's closed state: the
+/// distinguishing part of an episode name is usually its tail.
+fn short_name(n: &str) -> String {
+    const MAX: usize = 34;
+    if n.chars().count() <= MAX {
+        return n.to_string();
+    }
+    let tail: String = n
+        .chars()
+        .skip(n.chars().count().saturating_sub(MAX - 1))
+        .collect();
+    format!("…{tail}")
 }
