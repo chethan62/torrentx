@@ -18,6 +18,8 @@ use themes::{tint, Pal};
 use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 use std::time::{Duration, Instant};
 
+use crate::ui::SP2;
+
 // ─── Constants ─────────────────────────────────────────────────────────────
 
 pub(crate) const MARGIN_DEFAULT: f32 = 12.0;
@@ -483,9 +485,9 @@ pub(crate) fn labeled_input(
     dim: Color32,
 ) {
     ui.horizontal(|ui| {
-        ui.add_space(4.0);
+        ui.add_space(SP2);
         lbl(ui, label, dim, fs);
-        ui.add_space(4.0);
+        ui.add_space(SP2);
         ui.add(
             egui::TextEdit::singleline(value)
                 .desired_width(width)
