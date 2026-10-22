@@ -140,7 +140,7 @@ pub(crate) enum SearchState {
     Error(String),
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub(crate) enum Hlth {
     All,
     Hot,

@@ -119,6 +119,310 @@ pub(crate) struct App {
 }
 
 /// Search + filter + sort + results + pagination state.
+/// The result filters as parsed values. Built once per frame from `SearchUi`
+/// and consumed by the pure predicate below, so the filtering rules can be
+/// tested without an `App` (which needs a live egui context).
+#[derive(Clone, Debug)]
+pub(crate) struct FilterQuery {
+    pub(crate) min_seed: u32,
+    pub(crate) max_bytes: u64,
+    pub(crate) min_year: u32,
+    pub(crate) tracker: String,
+    pub(crate) text: String,
+    pub(crate) health: Hlth,
+}
+
+impl FilterQuery {
+    pub(crate) fn from_search(s: &SearchUi) -> Self {
+        let max_gb: f64 = s.f_size.parse::<f64>().unwrap_or(0.0).max(0.0);
+        Self {
+            min_seed: s.f_seed.parse().unwrap_or(0),
+            max_bytes: (max_gb as u64).saturating_mul(1_073_741_824),
+            min_year: s.f_year.parse().unwrap_or(0),
+            tracker: s.f_trk.to_lowercase(),
+            text: s.f_text.to_lowercase(),
+            health: s.f_hlth.clone(),
+        }
+    }
+
+    /// No filter active — every row passes. Test-only: the app always builds
+    /// the query from the live filter fields.
+    #[cfg(test)]
+    pub(crate) fn none() -> Self {
+        Self {
+            min_seed: 0,
+            max_bytes: 0,
+            min_year: 0,
+            tracker: String::new(),
+            text: String::new(),
+            health: Hlth::All,
+        }
+    }
+}
+
+/// Does one row survive the filters? Pure.
+pub(crate) fn matches_filters(r: &TorrentResult, q: &FilterQuery) -> bool {
+    let s = r.seeders.unwrap_or(0);
+    if s < q.min_seed {
+        return false;
+    }
+    if q.max_bytes > 0 && r.size.unwrap_or(0) > q.max_bytes {
+        return false;
+    }
+    if q.min_year > 0 && r.publish_date.as_deref().map(pub_year).unwrap_or(0) < q.min_year {
+        return false;
+    }
+    if !q.tracker.is_empty()
+        && !r
+            .tracker
+            .as_deref()
+            .unwrap_or("")
+            .to_lowercase()
+            .contains(&q.tracker)
+    {
+        return false;
+    }
+    if !q.text.is_empty() {
+        let hay = format!(
+            "{} {} {}",
+            r.title.to_lowercase(),
+            r.tracker.as_deref().unwrap_or("").to_lowercase(),
+            r.category_desc.as_deref().unwrap_or("").to_lowercase()
+        );
+        if !hay.contains(&q.text) {
+            return false;
+        }
+    }
+    q.health.ok(s)
+}
+
+/// Sort in place. Descending for every column, reversed for `Asc`; dates compare
+/// by parsed time (RFC 2822 strings do not sort lexically). Pure.
+pub(crate) fn sort_rows(rows: &mut [TorrentResult], col: &SortCol, dir: &SortDir) {
+    rows.sort_by(|a, b| {
+        let c = match col {
+            SortCol::Seeds => b.seeders.unwrap_or(0).cmp(&a.seeders.unwrap_or(0)),
+            SortCol::Leech => b.peers.unwrap_or(0).cmp(&a.peers.unwrap_or(0)),
+            SortCol::Ratio => {
+                let r = |x: &TorrentResult| {
+                    let s = x.seeders.unwrap_or(0) as f64;
+                    let l = x.peers.unwrap_or(0) as f64;
+                    if l > 0.0 {
+                        s / l
+                    } else {
+                        f64::INFINITY
+                    }
+                };
+                r(b).partial_cmp(&r(a)).unwrap_or(std::cmp::Ordering::Equal)
+            }
+            SortCol::Size => b.size.unwrap_or(0).cmp(&a.size.unwrap_or(0)),
+            SortCol::Name => b.title.to_lowercase().cmp(&a.title.to_lowercase()),
+            SortCol::Tracker => b
+                .tracker
+                .as_deref()
+                .unwrap_or("")
+                .to_lowercase()
+                .cmp(&a.tracker.as_deref().unwrap_or("").to_lowercase()),
+            SortCol::Date => pub_date_key(b.publish_date.as_deref().unwrap_or(""))
+                .cmp(&pub_date_key(a.publish_date.as_deref().unwrap_or(""))),
+        };
+        if *dir == SortDir::Asc {
+            c.reverse()
+        } else {
+            c
+        }
+    });
+}
+
+/// Page count for `n` rows. `page_size == 0` means "All" (one page), and an
+/// empty result set is still one (empty) page.
+pub(crate) fn page_count(n: usize, page_size: usize) -> usize {
+    if page_size == 0 || n == 0 {
+        return 1;
+    }
+    n.div_ceil(page_size)
+}
+
+/// Half-open slice bounds for `page`, clamped so a stale page index after a
+/// filter change yields an empty slice instead of a panic.
+pub(crate) fn page_bounds(n: usize, page_size: usize, page: usize) -> (usize, usize) {
+    if page_size == 0 {
+        return (0, n);
+    }
+    let s = page.saturating_mul(page_size);
+    if s >= n {
+        return (0, 0);
+    }
+    (s, (s + page_size).min(n))
+}
+
+#[cfg(test)]
+mod view_tests {
+    use super::*;
+
+    fn row(
+        title: &str,
+        tracker: &str,
+        seeds: u32,
+        peers: u32,
+        size: u64,
+        date: &str,
+        cat: &str,
+    ) -> TorrentResult {
+        TorrentResult {
+            title: title.to_string(),
+            tracker: Some(tracker.to_string()),
+            category_desc: Some(cat.to_string()),
+            size: Some(size),
+            seeders: Some(seeds),
+            peers: Some(peers),
+            publish_date: Some(date.to_string()),
+            magnet_uri: Some(format!("magnet:?xt=urn:btih:{}", "a".repeat(40))),
+            link: None,
+            details: None,
+        }
+    }
+
+    fn gb(n: u64) -> u64 {
+        n * 1_073_741_824
+    }
+
+    #[test]
+    fn filters_apply_each_field_and_combine() {
+        let rows = [
+            row(
+                "Sintel 1080p",
+                "The Pirate Bay",
+                900,
+                10,
+                gb(4),
+                "2026-09-14T00:00:00Z",
+                "Movies",
+            ),
+            row(
+                "Sintel 720p",
+                "1337x",
+                40,
+                2,
+                gb(1),
+                "Mon, 07 May 2018 00:00:00 +0000",
+                "Movies",
+            ),
+            row(
+                "Ubuntu ISO",
+                "YTS",
+                0,
+                0,
+                gb(9),
+                "2019-01-02T00:00:00Z",
+                "Software",
+            ),
+        ];
+
+        let mut q = FilterQuery::none();
+        assert_eq!(rows.iter().filter(|r| matches_filters(r, &q)).count(), 3);
+
+        q.min_seed = 41; // drops the 40- and 0-seed rows
+        assert_eq!(rows.iter().filter(|r| matches_filters(r, &q)).count(), 1);
+
+        q = FilterQuery::none();
+        q.max_bytes = gb(2); // only the 1 GB row survives
+        let got: Vec<_> = rows.iter().filter(|r| matches_filters(r, &q)).collect();
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].title, "Sintel 720p");
+
+        q = FilterQuery::none();
+        q.min_year = 2020; // RFC 2822 and ISO dates both parse
+        let got: Vec<_> = rows.iter().filter(|r| matches_filters(r, &q)).collect();
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].title, "Sintel 1080p");
+
+        q = FilterQuery::none();
+        q.tracker = "pirate".into(); // case-insensitive substring
+        assert_eq!(rows.iter().filter(|r| matches_filters(r, &q)).count(), 1);
+
+        q = FilterQuery::none();
+        q.text = "software".into(); // matches category_desc, not just the title
+        assert_eq!(rows.iter().filter(|r| matches_filters(r, &q)).count(), 1);
+
+        q = FilterQuery::none();
+        q.health = Hlth::Hot; // > 500 seeds
+        assert_eq!(rows.iter().filter(|r| matches_filters(r, &q)).count(), 1);
+        q.health = Hlth::Dead; // exactly 0
+        assert_eq!(rows.iter().filter(|r| matches_filters(r, &q)).count(), 1);
+    }
+
+    #[test]
+    fn sort_orders_by_column_and_direction() {
+        let mut rows = vec![
+            row(
+                "beta 2020",
+                "TrackerB",
+                10,
+                0,
+                gb(1),
+                "12 Apr 2018",
+                "Movies",
+            ),
+            row(
+                "Alpha 2021",
+                "TrackerA",
+                500,
+                50,
+                gb(4),
+                "07 May 2018",
+                "Movies",
+            ),
+            row(
+                "gamma 2019",
+                "TrackerC",
+                100,
+                10,
+                gb(2),
+                "2026-01-01T00:00:00Z",
+                "Movies",
+            ),
+        ];
+
+        sort_rows(&mut rows, &SortCol::Seeds, &SortDir::Desc);
+        assert_eq!(rows[0].seeders, Some(500));
+        sort_rows(&mut rows, &SortCol::Seeds, &SortDir::Asc);
+        assert_eq!(rows[0].seeders, Some(10));
+
+        // Dates compare by parsed time: 07 May 2018 is newer than 12 Apr 2018.
+        sort_rows(&mut rows, &SortCol::Date, &SortDir::Desc);
+        assert_eq!(
+            rows[0].publish_date.as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
+        assert_eq!(rows[1].publish_date.as_deref(), Some("07 May 2018"));
+        assert_eq!(rows[2].publish_date.as_deref(), Some("12 Apr 2018"));
+
+        // Name sort is case-insensitive.
+        sort_rows(&mut rows, &SortCol::Name, &SortDir::Asc);
+        assert_eq!(rows[0].title, "Alpha 2021");
+
+        // Ratio with zero leechers is infinite, so it sorts first descending.
+        sort_rows(&mut rows, &SortCol::Ratio, &SortDir::Desc);
+        assert_eq!(rows[0].title, "beta 2020");
+    }
+
+    #[test]
+    fn paging_bounds_cover_all_and_empty_cases() {
+        assert_eq!(page_count(0, 25), 1, "empty result set is one page");
+        assert_eq!(page_count(25, 25), 1);
+        assert_eq!(page_count(26, 25), 2);
+        assert_eq!(page_count(30, 0), 1, "page_size 0 means All");
+        assert_eq!(page_count(1000, 100), 10);
+
+        assert_eq!(page_bounds(30, 0, 0), (0, 30), "All shows everything");
+        assert_eq!(page_bounds(30, 25, 0), (0, 25));
+        assert_eq!(page_bounds(30, 25, 1), (25, 30), "last page is partial");
+        assert_eq!(page_bounds(30, 25, 2), (0, 0), "stale page index is empty");
+        assert_eq!(page_bounds(0, 25, 0), (0, 0));
+    }
+}
+
 pub(crate) struct SearchUi {
     pub(crate) query: String,
     pub(crate) cat: String,
@@ -750,109 +1054,23 @@ impl App {
     /// Filter + sort the results. Clones only the rows that pass the filters
     /// (the shared `Arc` input is never copied wholesale).
     pub(crate) fn filtered(&self, raw: &[TorrentResult]) -> Vec<TorrentResult> {
-        let min_s: u32 = self.search.f_seed.parse().unwrap_or(0);
-        let max_b: u64 = self.search.f_size.parse::<f64>().unwrap_or(0.0).max(0.0) as u64;
-        let max_b = max_b.saturating_mul(1_073_741_824);
-        let min_y: u32 = self.search.f_year.parse().unwrap_or(0);
-        let trk = self.search.f_trk.to_lowercase();
-        let txt = self.search.f_text.to_lowercase();
-
+        let q = FilterQuery::from_search(&self.search);
         let mut out: Vec<_> = raw
             .iter()
-            .filter(|r| {
-                let s = r.seeders.unwrap_or(0);
-                if s < min_s {
-                    return false;
-                }
-                if max_b > 0 && r.size.unwrap_or(0) > max_b {
-                    return false;
-                }
-                if min_y > 0 && r.publish_date.as_deref().map(pub_year).unwrap_or(0) < min_y {
-                    return false;
-                }
-                if !trk.is_empty()
-                    && !r
-                        .tracker
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_lowercase()
-                        .contains(&trk)
-                {
-                    return false;
-                }
-                if !txt.is_empty() {
-                    let hay = format!(
-                        "{} {} {}",
-                        r.title.to_lowercase(),
-                        r.tracker.as_deref().unwrap_or("").to_lowercase(),
-                        r.category_desc.as_deref().unwrap_or("").to_lowercase()
-                    );
-                    if !hay.contains(&txt) {
-                        return false;
-                    }
-                }
-                if !self.search.f_hlth.ok(s) {
-                    return false;
-                }
-                true
-            })
+            .filter(|r| matches_filters(r, &q))
             .cloned()
             .collect();
-
-        out.sort_by(|a, b| {
-            let c = match self.search.s_col {
-                SortCol::Seeds => b.seeders.unwrap_or(0).cmp(&a.seeders.unwrap_or(0)),
-                SortCol::Leech => b.peers.unwrap_or(0).cmp(&a.peers.unwrap_or(0)),
-                SortCol::Ratio => {
-                    let r = |x: &TorrentResult| {
-                        let s = x.seeders.unwrap_or(0) as f64;
-                        let l = x.peers.unwrap_or(0) as f64;
-                        if l > 0.0 {
-                            s / l
-                        } else {
-                            f64::INFINITY
-                        }
-                    };
-                    r(b).partial_cmp(&r(a)).unwrap_or(std::cmp::Ordering::Equal)
-                }
-                SortCol::Size => b.size.unwrap_or(0).cmp(&a.size.unwrap_or(0)),
-                // Descending like the arms above; the Asc case reverses below.
-                SortCol::Name => b.title.to_lowercase().cmp(&a.title.to_lowercase()),
-                SortCol::Tracker => b
-                    .tracker
-                    .as_deref()
-                    .unwrap_or("")
-                    .to_lowercase()
-                    .cmp(&a.tracker.as_deref().unwrap_or("").to_lowercase()),
-                // Parsed, not lexical: RFC 2822 dates compare wrongly as strings
-                // ("07 May" > "12 Apr"), which is the format torznab feeds use.
-                SortCol::Date => pub_date_key(b.publish_date.as_deref().unwrap_or(""))
-                    .cmp(&pub_date_key(a.publish_date.as_deref().unwrap_or(""))),
-            };
-            if self.search.s_dir == SortDir::Asc {
-                c.reverse()
-            } else {
-                c
-            }
-        });
+        sort_rows(&mut out, &self.search.s_col, &self.search.s_dir);
         out
     }
 
     pub(crate) fn max_pages(&self, n: usize) -> usize {
-        if self.cfg.page_size == 0 || n == 0 {
-            return 1;
-        }
-        n.div_ceil(self.cfg.page_size)
+        page_count(n, self.cfg.page_size)
     }
+
     pub(crate) fn page_slice<'a>(&self, v: &'a [TorrentResult]) -> &'a [TorrentResult] {
-        if self.cfg.page_size == 0 {
-            return v;
-        }
-        let s = self.search.page * self.cfg.page_size;
-        if s >= v.len() {
-            return &[];
-        }
-        &v[s..(s + self.cfg.page_size).min(v.len())]
+        let (s, e) = page_bounds(v.len(), self.cfg.page_size, self.search.page);
+        &v[s..e]
     }
 
     pub(crate) fn cat_chips(results: &[TorrentResult]) -> Vec<(String, usize, Color32)> {

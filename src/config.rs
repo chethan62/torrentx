@@ -335,4 +335,40 @@ mod tests {
         assert_eq!(old.win_size, None);
         assert_eq!(old.last_tab, None);
     }
+
+    /// A config written by an older build can name a column that no longer
+    /// exists and omit the ones added since; healing must fix both without
+    /// duplicating anything.
+    #[test]
+    fn heal_drops_unknown_columns_and_appends_missing_ones_once() {
+        let c = Config {
+            col_order: vec![
+                "Tracker".to_string(),
+                "GoneColumn".to_string(),
+                "Tracker".to_string(), // duplicate
+                "Seeds".to_string(),
+            ],
+            ..Default::default()
+        };
+        let healed = heal_col_order(c);
+        let known = default_col_order();
+
+        assert!(
+            !healed.col_order.iter().any(|n| n == "GoneColumn"),
+            "unknown column survived: {:?}",
+            healed.col_order
+        );
+        let mut seen = std::collections::HashSet::new();
+        for n in &healed.col_order {
+            assert!(seen.insert(n.clone()), "duplicate column {n}");
+        }
+        // Every known column is present exactly once.
+        assert_eq!(healed.col_order.len(), known.len());
+        for k in &known {
+            assert!(healed.col_order.contains(k), "missing {k}");
+        }
+        // The user's surviving order is kept at the front.
+        assert_eq!(healed.col_order[0], "Tracker");
+        assert_eq!(healed.col_order[1], "Seeds");
+    }
 }
