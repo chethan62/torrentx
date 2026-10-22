@@ -73,32 +73,18 @@ impl App {
                             } else {
                                 self.pal.sub
                             };
-                            let clicked = ui
-                                .horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 5.0;
-                                    svg_icon(ui, icon, 15.0, col);
-                                    ui.add(
-                                        egui::Button::new(
-                                            RichText::new(format!("{label}{badge}"))
-                                                .font(FontId::proportional(14.0))
-                                                .color(col),
-                                        )
-                                        .fill(if active {
-                                            tint(self.pal.accent, 22)
-                                        } else {
-                                            Color32::TRANSPARENT
-                                        })
-                                        .stroke(Stroke::new(
-                                            if active { 1.0_f32 } else { 0.0_f32 },
-                                            self.pal.accent,
-                                        ))
-                                        .corner_radius(6.0)
-                                        .min_size(Vec2::new(0.0, 30.0)),
-                                    )
-                                    .on_hover_text(tip)
-                                    .clicked()
-                                })
-                                .inner;
+                            // One widget for icon + label: clicking the
+                            // symbol switches tabs too, not just the text.
+                            let clicked = icon_text_tab(
+                                ui,
+                                icon,
+                                &format!("{label}{badge}"),
+                                col,
+                                active,
+                                self.pal.accent,
+                            )
+                            .on_hover_text(tip)
+                            .clicked();
                             if clicked && self.ui.tab != tab {
                                 if tab != Tab::Favorites {
                                     self.ui.fav_search.clear();

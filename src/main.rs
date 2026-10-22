@@ -320,6 +320,34 @@ pub(crate) fn icon_text_btn(
     .clicked()
 }
 
+/// Icon + label as ONE clickable pill — the whole tab, not just its text.
+/// `active` paints the accent fill and border the header uses for the current tab.
+pub(crate) fn icon_text_tab(
+    ui: &mut egui::Ui,
+    icon: SvgIcon,
+    label: &str,
+    color: Color32,
+    active: bool,
+    accent: Color32,
+) -> egui::Response {
+    ui.add(
+        egui::Button::image_and_text(
+            svg_image(icon, 14.0, color),
+            RichText::new(label)
+                .font(FontId::proportional(14.0))
+                .color(color),
+        )
+        .fill(if active {
+            tint(accent, 22)
+        } else {
+            Color32::TRANSPARENT
+        })
+        .stroke(Stroke::new(if active { 1.0 } else { 0.0 }, accent))
+        .corner_radius(6.0)
+        .min_size(Vec2::new(0.0, 28.0)),
+    )
+}
+
 /// Non-interactive status pill with a tofu-proof SVG icon.
 pub(crate) fn status_icon_pill(ui: &mut egui::Ui, icon: SvgIcon, label: &str, col: Color32) {
     egui::Frame::NONE
