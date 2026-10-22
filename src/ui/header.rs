@@ -44,9 +44,9 @@ impl App {
                                         .color(self.pal.accent),
                                 );
                             });
-                        ui.add_space(14.0);
+                        ui.add_space(SP5);
                         ui.separator();
-                        ui.add_space(8.0);
+                        ui.add_space(SP3);
 
                         // Tabs (SVG icon + label)
                         for (icon, label, tip, tab) in [
@@ -98,13 +98,13 @@ impl App {
                                 self.ui.hovered = None;
                                 self.rss.rss_detail = None;
                             }
-                            ui.add_space(2.0);
+                            ui.add_space(SP1);
                         }
                     }); // end horizontal_wrapped (logo + tabs wrap at narrow widths)
 
                     // Right side controls
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(12.0);
+                        ui.add_space(SP4);
 
                         // Jackett connection status dot
                         if let Some(ok) = self.net.jackett_ok {
@@ -115,11 +115,11 @@ impl App {
                             };
                             ui.add(svg_image(SvgIcon::Circle, 12.0, col))
                                 .on_hover_text(tip);
-                            ui.add_space(6.0);
+                            ui.add_space(SP3);
                         } else {
                             ui.add(svg_image(SvgIcon::CircleDot, 12.0, self.pal.dim))
                                 .on_hover_text("Checking Jackett…");
-                            ui.add_space(6.0);
+                            ui.add_space(SP3);
                         }
 
                         let sa = self.ui.show_settings;
@@ -150,7 +150,7 @@ impl App {
                         {
                             self.set_settings_open(!self.ui.show_settings);
                         }
-                        ui.add_space(10.0);
+                        ui.add_space(SP4);
 
                         // Theme picker — width adapts to available space so it
                         // never pushes past the window edge at narrow widths.
@@ -180,7 +180,7 @@ impl App {
                                         self.set_theme(t.clone());
                                     }
                                 }
-                                ui.add_space(3.0);
+                                ui.add_space(SP1);
                                 ui.label(RichText::new("─ Light ─").size(10.0).color(self.pal.dim));
                                 for t in Theme::all().iter().filter(|t| t.is_light()) {
                                     let col = t.accent_color();
@@ -198,7 +198,7 @@ impl App {
                                     }
                                 }
                             });
-                        ui.add_space(10.0);
+                        ui.add_space(SP4);
                     });
                 });
             });
@@ -215,7 +215,7 @@ impl App {
                 // Row 1 — Connection
                 ui.horizontal_wrapped(|ui| {
                     lbl(ui, "CONNECTION", self.pal.dim, 10.0);
-                    ui.add_space(6.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Jackett URL", self.pal.sub, 12.0);
                     ui.add(
                         egui::TextEdit::singleline(&mut self.cfg.jackett_url)
@@ -224,7 +224,7 @@ impl App {
                             )
                             .font(FontId::monospace(12.0)),
                     );
-                    ui.add_space(6.0);
+                    ui.add_space(SP3);
                     lbl(ui, "API Key", self.pal.sub, 12.0);
                     ui.add(
                         egui::TextEdit::singleline(&mut self.cfg.api_key)
@@ -241,7 +241,7 @@ impl App {
                     {
                         self.ui.key_vis = !self.ui.key_vis;
                     }
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     // Run a local Jackett instead of asking the user to install and
                     // start one themselves. Not bundled: 48MB + GPL-2.0 against an
                     // MIT 18MB app, and an AppImage payload is read-only.
@@ -303,7 +303,7 @@ impl App {
                             Err(e) => self.toast(&format!("Jackett: {e}"), self.pal.red),
                         }
                     }
-                    ui.add_space(6.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Timeout", self.pal.sub, 12.0);
                     let te = ui.add(
                         egui::TextEdit::singleline(&mut self.ui.timeout_buf)
@@ -320,7 +320,7 @@ impl App {
                         self.ui.timeout_buf = self.cfg.timeout_secs.to_string();
                     }
                     lbl(ui, "s", self.pal.dim, 11.0);
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     lbl(ui, "RSS", self.pal.sub, 12.0);
                     let rs_te = ui.add(
                         egui::TextEdit::singleline(&mut self.ui.rss_secs_buf)
@@ -335,12 +335,12 @@ impl App {
                         self.ui.rss_secs_buf = self.cfg.rss_refresh_secs.to_string();
                     }
                     lbl(ui, "s", self.pal.dim, 11.0);
-                    ui.add_space(2.0);
+                    ui.add_space(SP1);
                     ui.add(svg_image(SvgIcon::Info, 12.0, self.pal.dim))
                         .on_hover_text(
                             "RSS auto-refresh interval (seconds). 0 disables auto-refresh.",
                         );
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     lbl(ui, "PLAY WITH", self.pal.dim, 10.0);
                     egui::ComboBox::from_id_salt("player_cb")
                         .selected_text(self.cfg.player.clone())
@@ -356,12 +356,12 @@ impl App {
                             }
                         });
                 });
-                ui.add_space(5.0);
+                ui.add_space(SP2);
 
                 // Row 2 — Display
                 ui.horizontal_wrapped(|ui| {
                     lbl(ui, "DISPLAY", self.pal.dim, 10.0);
-                    ui.add_space(6.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Rows", self.pal.sub, 12.0);
                     for (l, h) in [
                         ("Compact", ROW_HEIGHT_COMPACT),
@@ -380,7 +380,7 @@ impl App {
                             let _ = save_cfg(&self.cfg);
                         }
                     }
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Font", self.pal.sub, 12.0);
                     for (l, sz) in [("S", 12.0f32), ("M", 14.0), ("L", 16.0)] {
                         let on = (self.cfg.font_size - sz).abs() < 0.5;
@@ -395,7 +395,7 @@ impl App {
                             let _ = save_cfg(&self.cfg);
                         }
                     }
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     lbl(ui, "Page", self.pal.sub, 12.0);
                     for (l, ps) in [("25", 25usize), ("50", 50), ("100", 100), ("All", 0)] {
                         let on = self.cfg.page_size == ps;
@@ -411,7 +411,7 @@ impl App {
                             let _ = save_cfg(&self.cfg);
                         }
                     }
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     if ui
                         .add(egui::Button::selectable(
                             self.cfg.check_updates,
@@ -423,7 +423,7 @@ impl App {
                         self.cfg.check_updates = !self.cfg.check_updates;
                         let _ = save_cfg(&self.cfg);
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(SP2);
                     if ui
                         .add(egui::Button::selectable(
                             self.cfg.show_cat_bar,
@@ -435,7 +435,7 @@ impl App {
                         self.cfg.show_cat_bar = !self.cfg.show_cat_bar;
                         let _ = save_cfg(&self.cfg);
                     }
-                    ui.add_space(8.0);
+                    ui.add_space(SP3);
                     // Custom accent color
                     lbl(ui, "Accent", self.pal.sub, 12.0);
                     let cur = self
@@ -456,7 +456,7 @@ impl App {
                         self.ui.show_color_picker = !self.ui.show_color_picker;
                     }
                     if self.cfg.accent.is_some() {
-                        ui.add_space(4.0);
+                        ui.add_space(SP2);
                         if ui
                             .add(
                                 egui::Button::new(svg_image(SvgIcon::Close, 11.0, self.pal.sub))
@@ -504,7 +504,7 @@ impl App {
                                     // toggle used to discard the colour.
                                     let _ = save_cfg(&self.cfg);
                                 }
-                                ui.add_space(6.0);
+                                ui.add_space(SP3);
                                 if ui.button("Done").clicked() {
                                     close = true;
                                 }
@@ -515,12 +515,12 @@ impl App {
                         }
                     }
                 });
-                ui.add_space(5.0);
+                ui.add_space(SP2);
 
                 // Row 3 — Columns (toggle which columns are shown)
                 ui.horizontal_wrapped(|ui| {
                     lbl(ui, "COLUMNS", self.pal.dim, 10.0);
-                    ui.add_space(6.0);
+                    ui.add_space(SP3);
                     let mut col_changed = false;
                     for (label, val) in [
                         ("Tracker", &mut self.cfg.col_tracker),
@@ -543,13 +543,13 @@ impl App {
                             *val = !*val;
                             col_changed = true;
                         }
-                        ui.add_space(2.0);
+                        ui.add_space(SP1);
                     }
                     if col_changed {
                         let _ = save_cfg(&self.cfg);
                     }
                 });
-                ui.add_space(5.0);
+                ui.add_space(SP2);
 
                 // Save button — right-aligned, no dead void on wide panels.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
