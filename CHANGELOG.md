@@ -4,7 +4,7 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [18.6.2] — 2026-10-22
 
 ### Changed
 - **Play starts from the result's `.torrent`, not the magnet.** Jackett already
