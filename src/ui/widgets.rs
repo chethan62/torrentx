@@ -12,7 +12,7 @@ pub(crate) fn draw_cell_content(
     pal: &Pal,
 ) {
     // Not flush against the cell's left edge — consistent leading padding.
-    ui.add_space(4.0);
+    ui.add_space(SP2);
     match c {
         TableCol::Tracker => {
             ui.add(
