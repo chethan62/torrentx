@@ -277,7 +277,7 @@ impl App {
                         }
                     });
                     // Worker result: adopt the url/key, or report why not.
-                    let done = crate::jackett::MANAGED.lock().unwrap().take();
+                    let done = crate::jackett::lock_or_recover(&crate::jackett::MANAGED).take();
                     if let Some(res) = done {
                         match res {
                             Ok((url, key)) => {

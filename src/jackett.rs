@@ -846,6 +846,17 @@ pub(crate) fn start_search(
 
 /// Result of the last start/install attempt, polled (and taken) by the Settings
 /// panel: `Ok((url, api_key))` or `Err(message)`.
+/// Lock a state mutex, recovering the data if a previous holder panicked.
+///
+/// These locks are only ever held for a field read or write, so a poisoned lock
+/// carries no half-written structure worth aborting over — and taking the whole
+/// GUI down because a worker thread died earlier is strictly worse for the user
+/// than showing the previous value. `unwrap()` here turns one panic into a
+/// second one on the next search.
+pub(crate) fn lock_or_recover<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 pub(crate) static MANAGED: Mutex<Option<Result<(String, String), String>>> = Mutex::new(None);
 /// True while a start/install worker is running.
 pub(crate) static MANAGED_BUSY: AtomicBool = AtomicBool::new(false);
@@ -1028,7 +1039,7 @@ pub(crate) fn start_local(
     let child = cmd
         .spawn()
         .map_err(|e| format!("cannot start Jackett ({}): {e}", bin.display()))?;
-    *JACKETT_CHILD.lock().unwrap() = Some(child);
+    *lock_or_recover(&JACKETT_CHILD) = Some(child);
 
     let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs.max(15));
     while std::time::Instant::now() < deadline {
@@ -1051,10 +1062,10 @@ pub(crate) fn start_local_async(url: String, key: String) {
     if MANAGED_BUSY.swap(true, Ordering::SeqCst) {
         return; // one at a time
     }
-    *MANAGED.lock().unwrap() = None;
+    *lock_or_recover(&MANAGED) = None;
     thread::spawn(move || {
         let r = start_local(&url, &key, 60);
-        *MANAGED.lock().unwrap() = Some(r);
+        *lock_or_recover(&MANAGED) = Some(r);
         MANAGED_BUSY.store(false, Ordering::SeqCst);
         crate::wake_ui();
     });
@@ -1062,7 +1073,7 @@ pub(crate) fn start_local_async(url: String, key: String) {
 
 /// Stop the Jackett we started (no-op if we didn't start one). Called on exit.
 pub(crate) fn stop_local() {
-    if let Some(mut c) = JACKETT_CHILD.lock().unwrap().take() {
+    if let Some(mut c) = lock_or_recover(&JACKETT_CHILD).take() {
         let _ = c.kill();
         let _ = c.wait();
     }
@@ -1072,10 +1083,10 @@ pub(crate) fn stop_local() {
 mod tests {
     use super::{
         asset_prefix, category_id, dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port,
-        hlth_lbl, is_magnet, managed_config, managed_root, normalize, parse_indexers_xml,
-        parse_latest_tag, port_open, pub_date_key, pub_year, read_server_config, search_targets,
-        start_local, stop_local, time_ago, truncate_magnet, urlenc, user_config,
-        validate_jackett_url, Hlth, Tab, TorrentResult,
+        hlth_lbl, is_magnet, lock_or_recover, managed_config, managed_root, normalize,
+        parse_indexers_xml, parse_latest_tag, port_open, pub_date_key, pub_year,
+        read_server_config, search_targets, start_local, stop_local, time_ago, truncate_magnet,
+        urlenc, user_config, validate_jackett_url, Hlth, Tab, TorrentResult,
     };
     use std::thread;
     use std::time::Duration;
@@ -1324,6 +1335,27 @@ mod tests {
 
     /// The fan-out must publish each indexer's rows as they arrive: the fast
     /// tracker's result is visible while the slow one is still in flight.
+    /// A worker that panicked while holding the state lock poisons it. The GUI
+    /// must keep working: `lock_or_recover` returns the data instead of panicking.
+    #[test]
+    fn lock_or_recover_survives_a_poisoned_mutex() {
+        use std::sync::{Arc, Mutex};
+
+        let state = Arc::new(Mutex::new(7u32));
+        let s2 = Arc::clone(&state);
+        let _ = std::thread::spawn(move || {
+            let mut g = s2.lock().unwrap();
+            *g = 9;
+            panic!("holder dies with the lock held");
+        })
+        .join(); // the panic is expected
+
+        assert!(state.lock().is_err(), "the mutex must actually be poisoned");
+        assert_eq!(*lock_or_recover(&state), 9, "recovered value is readable");
+        *lock_or_recover(&state) = 11;
+        assert_eq!(*lock_or_recover(&state), 11, "and writable");
+    }
+
     #[test]
     fn fan_out_publishes_the_fast_indexer_before_the_slow_one() {
         use super::{start_search, SearchState};
