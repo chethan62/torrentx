@@ -166,6 +166,48 @@ pub(crate) fn tint(c: Color32, a: u8) -> Color32 {
     rgba(c.r(), c.g(), c.b(), a)
 }
 
+/// WCAG 2.1 relative luminance of an sRGB colour (0..1 channels).
+fn rel_lum(c: Color32) -> f32 {
+    let ch = |v: u8| {
+        let s = v as f32 / 255.0;
+        if s <= 0.039_28 {
+            s / 12.92
+        } else {
+            ((s + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * ch(c.r()) + 0.7152 * ch(c.g()) + 0.0722 * ch(c.b())
+}
+
+/// WCAG contrast ratio between two opaque colours (1.0 ..= 21.0).
+pub(crate) fn contrast(a: Color32, b: Color32) -> f32 {
+    let (x, y) = (rel_lum(a), rel_lum(b));
+    let (hi, lo) = if x > y { (x, y) } else { (y, x) };
+    (hi + 0.05) / (lo + 0.05)
+}
+
+/// Blend `c` toward `toward` in 2 % steps until it reaches `min` contrast on
+/// `bg`. Returns `c` unchanged when it already passes (most themes).
+fn ensure_contrast(bg: Color32, c: Color32, toward: Color32, min: f32) -> Color32 {
+    if contrast(bg, c) >= min {
+        return c;
+    }
+    let mix = |k: f32| {
+        Color32::from_rgb(
+            (c.r() as f32 * (1.0 - k) + toward.r() as f32 * k).round() as u8,
+            (c.g() as f32 * (1.0 - k) + toward.g() as f32 * k).round() as u8,
+            (c.b() as f32 * (1.0 - k) + toward.b() as f32 * k).round() as u8,
+        )
+    };
+    for step in 1..=50 {
+        let m = mix(step as f32 / 50.0);
+        if contrast(bg, m) >= min {
+            return m;
+        }
+    }
+    toward
+}
+
 impl Pal {
     pub(crate) fn from(t: &Theme, accent: Option<[u8; 3]>) -> Self {
         use Theme::*;
@@ -539,6 +581,38 @@ impl Pal {
             p.row_sel = tint(ac, if p.light { 40 } else { 55 });
             p.row_hov = tint(ac, if p.light { 10 } else { 18 });
         }
+        // Security/legibility: secondary and tertiary text must stay readable on
+        // every theme. Measured before this existed: dim was 1.9-3.4:1.
+        p.dim = ensure_contrast(p.bg, p.dim, p.text, 4.5);
+        p.sub = ensure_contrast(p.bg, p.sub, p.text, 4.5);
         p
+    }
+}
+
+#[cfg(test)]
+mod contrast_tests {
+    use super::*;
+
+    #[test]
+    fn every_theme_passes_aa_for_all_three_text_tiers() {
+        for t in Theme::all() {
+            let p = Pal::from(t, None);
+            for (name, c) in [("text", p.text), ("sub", p.sub), ("dim", p.dim)] {
+                let r = contrast(p.bg, c);
+                assert!(r >= 4.5, "{t:?} {name} is {r:.2}:1 (needs 4.5:1)");
+            }
+        }
+    }
+
+    #[test]
+    fn accent_stays_visible_on_every_background() {
+        for t in Theme::all() {
+            let p = Pal::from(t, None);
+            let r = contrast(p.bg, p.accent);
+            assert!(
+                r >= 3.0,
+                "{t:?} accent is {r:.2}:1 (needs 3:1 for UI graphics)"
+            );
+        }
     }
 }
