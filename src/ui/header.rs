@@ -51,12 +51,7 @@ impl App {
                         // Tabs (SVG icon + label)
                         for (icon, label, tip, tab) in [
                             (SvgIcon::Search, "Search", "Search torrents", Tab::Search),
-                            (
-                                SvgIcon::Bookmark,
-                                "Favorites",
-                                "Saved torrents",
-                                Tab::Favorites,
-                            ),
+                            (SvgIcon::Star, "Favorites", "Saved torrents", Tab::Favorites),
                             (SvgIcon::Rss, "RSS", "RSS feed reader", Tab::Rss),
                             (SvgIcon::Info, "About", "About TorrentX", Tab::About),
                         ] {

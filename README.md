@@ -80,6 +80,13 @@ RSS, settings reference, config file, troubleshooting, and privacy notes.
 - **Config:** `~/.config/torrentx/config.json`
 - **Binary size:** ~32 MB stripped + LTO; ~16 MB packed as AppImage (measured)
 
+### Bundled icons
+
+`assets/icons/*.svg` are [Lucide](https://lucide.dev) glyphs (ISC licence, ©
+Lucide Contributors), pinned to lucide-static 1.61.0 and re-tintable via
+`stroke="currentColor"`. `assets/icons/update-icons.sh <version>` refreshes
+them; `assets/icons/README.md` has the details.
+
 ## License
 
 MIT © [chethan62](https://github.com/chethan62)
