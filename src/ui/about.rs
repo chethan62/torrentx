@@ -195,44 +195,23 @@ impl App {
                 // and the release artifacts are a bare binary and an AppImage, so
                 // "stand-alone text file" means in here as well as in the repo.
                 ui.add_space(SP4);
-                egui::CollapsingHeader::new(
-                    RichText::new("Bundled font licence (SIL OFL 1.1)")
-                        .font(FontId::proportional(fs - 1.0))
-                        .color(self.pal.sub),
-                )
-                .id_salt("font_license")
-                .show(ui, |ui| {
-                    egui::ScrollArea::vertical()
-                        .max_height(180.0)
-                        .id_salt("font_license_scroll")
-                        .show(ui, |ui| {
-                            ui.label(
-                                RichText::new(crate::app::FONT_LICENSE)
-                                    .font(FontId::monospace(fs - 3.5))
-                                    .color(self.pal.dim),
-                            );
-                        });
-                });
-
+                licence_section(
+                    ui,
+                    &self.pal,
+                    fs,
+                    "Bundled font licence (SIL OFL 1.1)",
+                    "font_license",
+                    crate::app::FONT_LICENSE,
+                );
                 ui.add_space(SP2);
-                egui::CollapsingHeader::new(
-                    RichText::new("Bundled icon licence (ISC, Lucide)")
-                        .font(FontId::proportional(fs - 1.0))
-                        .color(self.pal.sub),
-                )
-                .id_salt("icon_license")
-                .show(ui, |ui| {
-                    egui::ScrollArea::vertical()
-                        .max_height(180.0)
-                        .id_salt("icon_license_scroll")
-                        .show(ui, |ui| {
-                            ui.label(
-                                RichText::new(crate::app::ICON_LICENSE)
-                                    .font(FontId::monospace(fs - 3.5))
-                                    .color(self.pal.dim),
-                            );
-                        });
-                });
+                licence_section(
+                    ui,
+                    &self.pal,
+                    fs,
+                    "Bundled icon licence (ISC, Lucide)",
+                    "icon_license",
+                    crate::app::ICON_LICENSE,
+                );
 
                 // Links
                 ui.add_space(SP4);
@@ -317,4 +296,39 @@ impl App {
             y -= 46.0;
         }
     }
+}
+
+/// One licence notice, collapsed by default. The text is a legal notice, so it
+/// uses the secondary text tier (not the dimmest) and is selectable: a user can
+/// copy it out of the app instead of hunting for the file.
+fn licence_section(
+    ui: &mut egui::Ui,
+    pal: &Pal,
+    fs: f32,
+    title: &str,
+    id: &str,
+    text: &'static str,
+) {
+    egui::CollapsingHeader::new(
+        RichText::new(title)
+            .font(FontId::proportional(fs - 1.0))
+            .color(pal.sub),
+    )
+    .id_salt(id)
+    .show(ui, |ui| {
+        egui::ScrollArea::vertical()
+            .max_height(200.0)
+            .id_salt(format!("{id}_scroll"))
+            .show(ui, |ui| {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(text)
+                            .font(FontId::monospace(fs - 2.0))
+                            .color(pal.sub),
+                    )
+                    .selectable(true)
+                    .wrap(),
+                );
+            });
+    });
 }
