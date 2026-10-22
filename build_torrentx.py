@@ -51,18 +51,17 @@ def build_linux():
 def build_windows():
     header("Building Windows .exe")
     if not check_tool("x86_64-w64-mingw32-gcc"):
-        print("  Installing mingw-w64...")
-        if shutil.which("pacman"):
-            run("sudo pacman -S --noconfirm mingw-w64-gcc", cwd="/")
-        elif shutil.which("apt"):
-            run("sudo apt install -y gcc-mingw-w64-x86-64", cwd="/")
-        else:
-            print("  ✗ Cannot auto-install mingw. Install manually:")
-            print("    Ubuntu/Debian: sudo apt install gcc-mingw-w64-x86-64")
-            print("    Arch:          sudo pacman -S mingw-w64-gcc")
-            return None
+        # A build script must never sudo-install packages: there is no TTY for a
+        # password, and a missing cross-compiler would kill the Linux build that
+        # already succeeded. Skip the step and print the one command that fixes it.
+        print("  ⚠ cross-compiler missing — skipping the Windows build (Linux artefacts stand)")
+        print("    Arch:          sudo pacman -S mingw-w64-gcc")
+        print("    Ubuntu/Debian: sudo apt install gcc-mingw-w64-x86-64")
+        return None
 
-    run("rustup target add " + WIN_TARGET)
+    if run("rustup target add " + WIN_TARGET, check=False) != 0:
+        print("  ⚠ could not add the Windows rustup target — skipping the Windows build")
+        return None
 
     cargo_config = PROJECT / ".cargo" / "config.toml"
     cargo_config.parent.mkdir(exist_ok=True)
@@ -221,7 +220,14 @@ if __name__ == "__main__":
 
     linux_bin = build_linux()
     appimage  = build_appimage(linux_bin, version)
-    exe = None if os.environ.get("TORRENTX_SKIP_WINDOWS") == "1" else build_windows()
+    # Windows is best-effort: never let a missing cross toolchain fail a Linux
+    # build that already produced an AppImage and a binary.
+    exe = None
+    if os.environ.get("TORRENTX_SKIP_WINDOWS") != "1":
+        try:
+            exe = build_windows()
+        except Exception as e:  # noqa: BLE001 — the Linux artefacts are already built
+            print(f"  ⚠ Windows build failed ({e}) — continuing with Linux artefacts")
     collect_outputs(appimage, exe)
 
     print("\n✓ Build complete!")
