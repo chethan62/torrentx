@@ -4,6 +4,16 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **`--minimized`** — start with no window (tray icon and RSS polling only). The
+  At login entry now uses it, so logging in no longer opens a window over
+  whatever you were doing. On Wayland it starts minimised, since hiding a window
+  is impossible there.
+- `tests/cli.rs` spawns the binary and pins `--version` (exact string) and
+  `--help` (every flag listed) — the CLI had no automated check on Linux.
+
 ## [18.6.10] — 2026-10-23
 
 ### Fixed

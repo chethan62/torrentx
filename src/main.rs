@@ -63,7 +63,9 @@ fn autostart_exe() -> std::path::PathBuf {
 #[cfg(target_os = "linux")]
 fn desktop_entry(exe: &std::path::Path) -> String {
     format!(
-        "[Desktop Entry]\nType=Application\nName=TorrentX\nComment=Search all your Jackett indexers\nExec=\"{}\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
+        // --minimized: at login the app belongs in the tray, polling RSS, not
+        // in front of whatever the user is doing.
+        "[Desktop Entry]\nType=Application\nName=TorrentX\nComment=Search all your Jackett indexers\nExec=\"{}\" --minimized\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
         exe.display()
     )
 }
@@ -581,6 +583,18 @@ impl eframe::App for App {
         self.apply_theme(&ctx);
         let state = self.cur_state();
 
+        // --minimized. `with_visible(false)` alone does not hold on X11 (winit
+        // maps the window during init), so hide it again on the first frame —
+        // the same lever the tray's Show/Hide uses. On Wayland hiding is
+        // impossible, so minimize instead (the taskbar restores it).
+        if START_MINIMIZED.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            if wayland_session() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            }
+        }
+
         // Tray "Quit" → exit the whole app.
         if QUIT.load(std::sync::atomic::Ordering::SeqCst) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1036,6 +1050,9 @@ fn native_options() -> eframe::NativeOptions {
         // Min width tuned so the header right-side controls + search bar
         // still fit without clipping on small screens (1280x720 laptops).
         .with_min_inner_size([820.0, 560.0]);
+    if START_MINIMIZED.load(std::sync::atomic::Ordering::Relaxed) {
+        viewport = viewport.with_visible(false);
+    }
     if let Some([w, h]) = crate::config::load_cfg().win_size {
         if w >= 820.0 && h >= 560.0 {
             viewport = viewport.with_inner_size([w, h]);
@@ -1065,6 +1082,12 @@ fn app_creator() -> AppCreator {
 /// Shared quit flag: set when the tray "Quit" is clicked, so the app exits
 /// even from the tray (which runs outside the egui event loop).
 static QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// `--minimized`: start with no visible window (the tray icon is the way in).
+/// Used by the "At login" autostart entry so logging in does not throw the
+/// search window in your face. Consumed once by the first frame on Wayland.
+pub(crate) static START_MINIMIZED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 /// Set when the tray "Show / Hide" is clicked; the app toggles window visibility.
 static TOGGLE_VIS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -1242,6 +1265,7 @@ fn main() -> eframe::Result<()> {
              USAGE:\n  torrentx [OPTIONS]\n\n\
              OPTIONS:\n  \
              --config <path>   Use an alternate config file (default: ~/.config/torrentx/config.json)\n  \
+             --minimized       Start without a window (tray icon only; used by At login)\n  \
              -h, --help        Print this help and exit\n  \
              -V, --version     Print the version and exit\n",
             env!("CARGO_PKG_VERSION")
@@ -1252,6 +1276,11 @@ fn main() -> eframe::Result<()> {
         print_cli(&format!("TorrentX {}\n", env!("CARGO_PKG_VERSION")));
         return Ok(());
     }
+
+    START_MINIMIZED.store(
+        args.iter().any(|a| a == "--minimized"),
+        std::sync::atomic::Ordering::Relaxed,
+    );
 
     // Optional --config <path> override (before any config is loaded).
     if let Some(i) = args.iter().position(|a| a == "--config") {
@@ -1337,16 +1366,17 @@ mod tests {
         ));
         assert!(e.starts_with("[Desktop Entry]\n"), "{e}");
         // Quoted per the desktop-entry spec: an unquoted path with a space is
-        // split into argv words by every launcher.
+        // split into argv words by every launcher. --minimized keeps a login
+        // from throwing the window in front of the user.
         assert!(
-            e.contains("\nExec=\"/home/u/Applications/TorrentX.AppImage\"\n"),
+            e.contains("\nExec=\"/home/u/Applications/TorrentX.AppImage\" --minimized\n"),
             "{e}"
         );
         assert!(e.contains("\nType=Application\n"), "{e}");
         assert!(e.ends_with('\n'), "desktop entries end with a newline");
         let spaced = desktop_entry(std::path::Path::new("/home/u/My Apps/TorrentX.AppImage"));
         assert!(
-            spaced.contains("\nExec=\"/home/u/My Apps/TorrentX.AppImage\"\n"),
+            spaced.contains("\nExec=\"/home/u/My Apps/TorrentX.AppImage\" --minimized\n"),
             "{spaced}"
         );
     }

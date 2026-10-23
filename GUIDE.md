@@ -151,7 +151,7 @@ open.
 | Page | 25 / 50 / 100 / All | results per page |
 | Dedupe | on/off | merge near-duplicate titles across trackers |
 | Updates | on/off | startup check for newer releases |
-| At login | on/off | Linux only: writes `~/.config/autostart/torrentx.desktop` so RSS keeps polling |
+| At login | on/off | Linux only: writes `~/.config/autostart/torrentx.desktop` (launched with `--minimized`, tray only) so RSS keeps polling |
 | Cat bar | on/off | category chips above results |
 | Columns | per-column toggles | Tracker…Date; the order is fixed (Tracker, Name, Size, Seeds, Leech, Ratio, Health, Date) |
 | Accent | color | overrides the theme's accent |
@@ -220,11 +220,16 @@ Rules:
 ## CLI flags
 
 ```
-torrentx [--config <path>] [-h] [-V]
+torrentx [--config <path>] [--minimized] [-h] [-V]
 ```
 
 `--config <path>` runs a fully separate profile (own config file) — handy for
 pointing two instances at different Jackett servers.
+
+`--minimized` starts with no window: the app runs for its tray icon and RSS
+polling only (the tray's **Show / Hide** brings the window back; on Wayland it
+starts minimised instead, and the taskbar restores it). The **At login** autostart
+entry uses it, so logging in does not open a window in front of you.
 
 ## Known limitations
 
