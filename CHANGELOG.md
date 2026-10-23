@@ -4,6 +4,25 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.12] — 2026-10-23
+
+### Fixed
+- **Clicking a past search did nothing.** The recent-searches popup is drawn at the
+  end of the search row, but the field's focus-loss handler ran first and closed it
+  — and clicking the popup IS a focus loss, so the popup was never drawn in that
+  frame and the click never landed. It now stays up when the pointer is inside the
+  rect it reported last frame, and still closes on any other focus loss so a click
+  meant for a filter cannot silently re-run an entry. The entry sets the query,
+  fills the search box and runs the search.
+- **The clear button sits inside the field and clears the search.** It used to come
+  after the Search button in a wrapping row and fell onto a second line; and it
+  cleared only the text, leaving the table and the status line still describing the
+  old query. It is now the usual in-field × at the field's right edge, and it drops
+  the results, returns to the welcome screen and invalidates any search still in
+  flight. Esc uses the same reset.
+- Removed-history buttons were laid out on the line below each entry, so every row
+  of the popup was double height and misaligned.
+
 ## [18.6.11] — 2026-10-23
 
 ### Fixed
