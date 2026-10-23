@@ -1,4 +1,5 @@
 // ─── Jackett types ─────────────────────────────────────────────────────────
+use crate::lock_or_recover;
 use crate::themes::rgb;
 use eframe::egui::Color32;
 use reqwest::blocking::Client;
@@ -317,9 +318,7 @@ pub(crate) fn now_str() -> String {
 }
 
 pub(crate) fn set_err(st: &Arc<Mutex<SearchState>>, msg: String) {
-    if let Ok(mut s) = st.lock() {
-        *s = SearchState::Error(msg);
-    }
+    *lock_or_recover(st) = SearchState::Error(msg);
 }
 
 // ─── Search thread ─────────────────────────────────────────────────────────
@@ -699,18 +698,15 @@ fn append_results(
     count: &Arc<Mutex<usize>>,
     mut add: Vec<TorrentResult>,
 ) {
-    let total = if let Ok(mut r) = results.lock() {
+    let total = {
+        let mut r = lock_or_recover(results);
         let mut v = (**r).clone();
         v.append(&mut add);
         let n = v.len();
         *r = Arc::new(v);
         n
-    } else {
-        return;
     };
-    if let Ok(mut c) = count.lock() {
-        *c = total;
-    }
+    *lock_or_recover(count) = total;
 }
 
 /// One search's connection parameters, cloned per fan-out worker.
@@ -771,9 +767,7 @@ pub(crate) fn start_search(
             return;
         }
         let live = || epoch.load(Ordering::Relaxed) == gen;
-        if let Ok(mut s) = state.lock() {
-            *s = SearchState::Searching;
-        }
+        *lock_or_recover(&state) = SearchState::Searching;
 
         let ctx = SearchCtx {
             url: url.clone(),
@@ -788,9 +782,7 @@ pub(crate) fn start_search(
             let idx = targets.first().map(String::as_str).unwrap_or("all");
             match fetch_into(&ctx, idx, &results, &count) {
                 Ok(_) if live() => {
-                    if let Ok(mut s) = state.lock() {
-                        *s = SearchState::Done;
-                    }
+                    *lock_or_recover(&state) = SearchState::Done;
                 }
                 Ok(_) => {}
                 Err(e) if live() => set_err(&state, e),
@@ -823,9 +815,7 @@ pub(crate) fn start_search(
         }
         if live() {
             if ok_count > 0 {
-                if let Ok(mut s) = state.lock() {
-                    *s = SearchState::Done;
-                }
+                *lock_or_recover(&state) = SearchState::Done;
             } else {
                 set_err(
                     &state,
@@ -846,17 +836,6 @@ pub(crate) fn start_search(
 
 /// Result of the last start/install attempt, polled (and taken) by the Settings
 /// panel: `Ok((url, api_key))` or `Err(message)`.
-/// Lock a state mutex, recovering the data if a previous holder panicked.
-///
-/// These locks are only ever held for a field read or write, so a poisoned lock
-/// carries no half-written structure worth aborting over — and taking the whole
-/// GUI down because a worker thread died earlier is strictly worse for the user
-/// than showing the previous value. `unwrap()` here turns one panic into a
-/// second one on the next search.
-pub(crate) fn lock_or_recover<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
 pub(crate) static MANAGED: Mutex<Option<Result<(String, String), String>>> = Mutex::new(None);
 /// True while a start/install worker is running.
 pub(crate) static MANAGED_BUSY: AtomicBool = AtomicBool::new(false);
@@ -1083,11 +1062,12 @@ pub(crate) fn stop_local() {
 mod tests {
     use super::{
         asset_prefix, category_id, dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port,
-        hlth_lbl, is_magnet, lock_or_recover, managed_config, managed_root, normalize,
-        parse_indexers_xml, parse_latest_tag, port_open, pub_date_key, pub_year,
-        read_server_config, search_targets, start_local, stop_local, time_ago, truncate_magnet,
-        urlenc, user_config, validate_jackett_url, Hlth, Tab, TorrentResult,
+        hlth_lbl, is_magnet, managed_config, managed_root, normalize, parse_indexers_xml,
+        parse_latest_tag, port_open, pub_date_key, pub_year, read_server_config, search_targets,
+        set_err, start_local, stop_local, time_ago, truncate_magnet, urlenc, user_config,
+        validate_jackett_url, Hlth, SearchState, Tab, TorrentResult,
     };
+    use crate::lock_or_recover;
     use std::thread;
     use std::time::Duration;
 
@@ -1335,6 +1315,30 @@ mod tests {
 
     /// The fan-out must publish each indexer's rows as they arrive: the fast
     /// tracker's result is visible while the slow one is still in flight.
+    /// A poisoned state lock used to make `set_err` a silent no-op: the error
+    /// was dropped and the UI kept showing "Searching" forever. It must land.
+    #[test]
+    fn set_err_still_records_the_failure_on_a_poisoned_lock() {
+        use std::sync::{Arc, Mutex};
+
+        let st = Arc::new(Mutex::new(SearchState::Idle));
+        let s2 = Arc::clone(&st);
+        let _ = std::thread::spawn(move || {
+            let _g = s2.lock().unwrap();
+            panic!("worker dies holding the state lock");
+        })
+        .join();
+        assert!(st.lock().is_err(), "poisoned");
+
+        set_err(&st, "boom".into());
+
+        let guard = lock_or_recover(&st);
+        assert!(
+            matches!(&*guard, SearchState::Error(m) if m == "boom"),
+            "state stayed {guard:?}"
+        );
+    }
+
     /// A worker that panicked while holding the state lock poisons it. The GUI
     /// must keep working: `lock_or_recover` returns the data instead of panicking.
     #[test]

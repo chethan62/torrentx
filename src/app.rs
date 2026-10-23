@@ -9,6 +9,7 @@ use crate::jackett::{
     cat_col, dedupe_best_seeded, fmt_size, is_magnet, now_str, pub_date_key, pub_year, set_err,
     start_search, time_ago, Hlth, SearchState, SortCol, SortDir, TorrentResult,
 };
+use crate::lock_or_recover;
 use crate::rss::{start_rss_fetch, FeedStatus, RssFeedConfig, RssItem};
 use crate::themes::{tint, Pal, Theme, VisualTokens};
 use crate::{csv_esc, csv_safe, jackett::Tab};
@@ -855,12 +856,8 @@ impl App {
         self.ui.t_start = Some(Instant::now());
         self.ui.t_done = None;
         self.ui.notified = false;
-        if let Ok(mut r) = self.search.results.lock() {
-            *r = Arc::new(vec![]);
-        }
-        if let Ok(mut c) = self.search.count.lock() {
-            *c = 0;
-        }
+        *lock_or_recover(&self.search.results) = Arc::new(vec![]);
+        *lock_or_recover(&self.search.count) = 0;
         let gen = self.search.epoch.fetch_add(1, Ordering::Relaxed) + 1;
         // Fan out per indexer so results land as each tracker answers.
         let targets = crate::jackett::search_targets(&self.net.indexer, &self.net.indexers);
@@ -945,7 +942,7 @@ impl App {
     /// Fire a desktop notification when a search completes while the window
     /// is hidden (minimized to tray). No-op on failure / missing daemon.
     pub(crate) fn notify_search_done(&mut self) {
-        let n = self.search.count.lock().map(|c| *c).unwrap_or(0);
+        let n = *lock_or_recover(&self.search.count);
         let q = self.search.last_query.clone();
         if let Ok(h) = notify_rust::Notification::new()
             .summary("TorrentX — search complete")
@@ -1131,20 +1128,12 @@ impl App {
     }
 
     pub(crate) fn cur_state(&self) -> SearchState {
-        self.search
-            .state
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or(SearchState::Idle)
+        lock_or_recover(&self.search.state).clone()
     }
     /// Cheap snapshot of the current results (Arc refcount bump — no deep
     /// copy). The vec inside is never mutated after publication.
     pub(crate) fn all_results(&self) -> Arc<Vec<TorrentResult>> {
-        self.search
-            .results
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default()
+        lock_or_recover(&self.search.results).clone()
     }
     /// Collapse cross-tracker duplicates **into the stored results** once a
     /// search finishes. Doing it per-frame in `compute_view` left every counter
@@ -1154,9 +1143,7 @@ impl App {
         if !self.cfg.dedupe {
             return;
         }
-        let Ok(mut g) = self.search.results.lock() else {
-            return;
-        };
+        let mut g = lock_or_recover(&self.search.results);
         let deduped = dedupe_best_seeded((**g).clone());
         if deduped.len() == g.len() {
             return;
@@ -1164,13 +1151,11 @@ impl App {
         *g = std::sync::Arc::new(deduped);
         let n = g.len();
         drop(g);
-        if let Ok(mut c) = self.search.count.lock() {
-            *c = n;
-        }
+        *lock_or_recover(&self.search.count) = n;
     }
 
     pub(crate) fn total_count(&self) -> usize {
-        self.search.count.lock().map(|g| *g).unwrap_or(0)
+        *lock_or_recover(&self.search.count)
     }
 
     /// Filter+sort the current results ONCE per frame. Every consumer in the
@@ -1246,12 +1231,7 @@ impl App {
         (self.search.s_dir.clone() as u8).hash(&mut h);
         self.search.page.hash(&mut h);
         self.cfg.page_size.hash(&mut h);
-        self.search
-            .count
-            .lock()
-            .map(|c| *c)
-            .unwrap_or(0)
-            .hash(&mut h);
+        lock_or_recover(&self.search.count).hash(&mut h);
         h.finish()
     }
 

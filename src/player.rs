@@ -3,6 +3,7 @@
 // pieces on demand (so seeking works) and mpv/vlc decode. All this module owns
 // is the argv, one child process, and an honest error when it is missing.
 
+use crate::lock_or_recover;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -256,18 +257,14 @@ pub(crate) fn start_play(
             }
             _ => format!("Could not start webtorrent: {e}"),
         })?;
-    if let Ok(mut p) = PLAYER.lock() {
-        *p = Some(child);
-    }
+    *lock_or_recover(&PLAYER) = Some(child);
     Ok(())
 }
 
 /// Whether a stream we started is still running. Reaps a streamer that already
 /// exited (its player was closed) so the UI stops offering "Stop".
 pub(crate) fn is_playing() -> bool {
-    let Ok(mut p) = PLAYER.lock() else {
-        return false;
-    };
+    let mut p = lock_or_recover(&PLAYER);
     match p.as_mut().map(|c| c.try_wait()) {
         Some(Ok(Some(_))) | Some(Err(_)) => {
             *p = None;
@@ -281,7 +278,7 @@ pub(crate) fn is_playing() -> bool {
 /// Stop the stream we started (the player sees EOF and closes). No-op when
 /// nothing is playing.
 pub(crate) fn stop_play() {
-    let Ok(mut p) = PLAYER.lock() else { return };
+    let mut p = lock_or_recover(&PLAYER);
     if let Some(mut c) = p.take() {
         let _ = c.kill();
         let _ = c.wait();

@@ -3,6 +3,7 @@
 use super::*;
 
 use crate::app::App;
+use crate::lock_or_recover;
 
 impl App {
     pub(crate) fn draw_header(&mut self, ui: &mut egui::Ui) {
@@ -59,7 +60,7 @@ impl App {
                             let badge = if tab == Tab::Favorites && !self.cfg.favorites.is_empty() {
                                 format!(" {}", self.cfg.favorites.len())
                             } else if tab == Tab::Search {
-                                let n = self.search.count.lock().map(|c| *c).unwrap_or(0);
+                                let n = *lock_or_recover(&self.search.count);
                                 if n > 0 {
                                     format!(" {n}")
                                 } else {
@@ -277,7 +278,7 @@ impl App {
                         }
                     });
                     // Worker result: adopt the url/key, or report why not.
-                    let done = crate::jackett::lock_or_recover(&crate::jackett::MANAGED).take();
+                    let done = lock_or_recover(&crate::jackett::MANAGED).take();
                     if let Some(res) = done {
                         match res {
                             Ok((url, key)) => {

@@ -31,6 +31,18 @@ pub(crate) const CATS: &[&str] = &[
 ];
 
 /// CSV field escaping: wrap in quotes, double any embedded quotes.
+/// Lock a state mutex, recovering the data if a previous holder panicked.
+///
+/// These locks are only ever held for a field read or write, so a poisoned lock
+/// carries no half-written structure worth aborting over — and taking the whole
+/// GUI down because a worker thread died earlier is strictly worse for the user
+/// than showing the previous value. `unwrap()` here turns one panic into a
+/// second one on the next search; `if let Ok(..)` silently drops the update
+/// instead. One convention: always go through here.
+pub(crate) fn lock_or_recover<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 pub(crate) fn csv_esc(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
