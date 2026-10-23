@@ -11,6 +11,22 @@ versions follow [SemVer](https://semver.org/).
   writes an XDG autostart file, so on Windows/macOS it was a control that silently
   did nothing. Hidden there rather than left lying (no build ships for either).
 
+## [18.6.9] — 2026-10-23
+
+### Fixed
+- **The Jackett API key could appear on screen.** A failed decode printed reqwest's
+  error verbatim, which appends ` for url (…&apikey=<KEY>…)` — an HTML login wall
+  or a schema change therefore showed the key in the results area, and in any
+  screenshot or pasted bug report. Decode errors now use `without_url()` and name
+  the likely cause instead, with a test that answers with HTML and asserts the
+  message carries neither `apikey` nor the key.
+- "At login" is compiled only on Linux (XDG autostart); elsewhere it is absent
+  rather than a control that writes a file nothing reads.
+
+### Verified
+- Fault-injection pass against the stub (500 / 401 / HTML / 30 s / empty /
+  garbage / all-500): every other path already reported a plain-language message.
+
 ## [18.6.8] — 2026-10-23
 
 ### Added
