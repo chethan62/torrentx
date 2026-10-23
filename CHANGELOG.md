@@ -11,6 +11,10 @@ versions follow [SemVer](https://semver.org/).
   At login entry now uses it, so logging in no longer opens a window over
   whatever you were doing. On Wayland it starts minimised, since hiding a window
   is impossible there.
+- **`--minimized` is now a round trip.** The tray's Show/Hide read focus as the
+  visibility source, and a hidden window keeps its last focus state, so "Show"
+  hid it again — a one-way door. Visibility is tracked explicitly, and the flag
+  is ignored entirely when the tray could not be created.
 - `tests/cli.rs` spawns the binary and pins `--version` (exact string) and
   `--help` (every flag listed) — the CLI had no automated check on Linux.
 

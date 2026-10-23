@@ -591,6 +591,7 @@ impl eframe::App for App {
             if wayland_session() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
             } else {
+                WINDOW_HIDDEN.store(true, std::sync::atomic::Ordering::SeqCst);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             }
         }
@@ -612,12 +613,11 @@ impl eframe::App for App {
                 // (panel / taskbar click).
                 ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
             } else {
-                // X11: a hidden window is restorable, so keep true show/hide.
-                let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(!focused));
-                if focused {
-                    ctx.request_repaint();
-                }
+                // X11: a hidden window is restorable, so keep true show/hide —
+                // driven by our own record of the state, never by focus.
+                let was_hidden = WINDOW_HIDDEN.fetch_xor(true, std::sync::atomic::Ordering::SeqCst);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(next_visible(was_hidden)));
+                ctx.request_repaint();
             }
         }
 
@@ -1041,23 +1041,34 @@ pub(crate) fn grid_row(
 
 // ─── Entry point ────────────────────────────────────────────────────────────
 
-fn native_options() -> eframe::NativeOptions {
-    // Restore the last window size (persisted in the config; see the
-    // throttled save in App::ui). Falls back to the 1300x800 default.
+/// The window as it should be created. Pure so `--minimized` can be pinned by a
+/// test: the flag's whole promise is "no window", and a silent no-op would make
+/// At login open its window again.
+fn viewport_for(minimized: bool, saved: Option<[f32; 2]>) -> egui::ViewportBuilder {
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("TorrentX")
         .with_inner_size([1300.0, 800.0])
         // Min width tuned so the header right-side controls + search bar
         // still fit without clipping on small screens (1280x720 laptops).
         .with_min_inner_size([820.0, 560.0]);
-    if START_MINIMIZED.load(std::sync::atomic::Ordering::Relaxed) {
+    if minimized {
         viewport = viewport.with_visible(false);
     }
-    if let Some([w, h]) = crate::config::load_cfg().win_size {
+    // Restore the last window size (persisted in the config; see the throttled
+    // save in App::ui). Falls back to the 1300x800 default.
+    if let Some([w, h]) = saved {
         if w >= 820.0 && h >= 560.0 {
             viewport = viewport.with_inner_size([w, h]);
         }
     }
+    viewport
+}
+
+fn native_options() -> eframe::NativeOptions {
+    let viewport = viewport_for(
+        START_MINIMIZED.load(std::sync::atomic::Ordering::Relaxed),
+        crate::config::load_cfg().win_size,
+    );
     eframe::NativeOptions {
         viewport,
         ..Default::default()
@@ -1088,6 +1099,25 @@ static QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(
 pub(crate) static START_MINIMIZED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+/// Whether WE hid the X11 window (tray toggle or `--minimized`).
+///
+/// Focus is not a proxy: a hidden window keeps its last `focused` value, so the
+/// old `Visible(!focused)` hid an already-hidden window a second time and the
+/// app became unreachable from its own tray.
+static WINDOW_HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Hide the window at startup only when there is a tray to get it back from.
+/// A hidden window with no tray is unreachable, so the flag yields.
+fn should_start_hidden(requested: bool, tray: bool) -> bool {
+    requested && tray
+}
+
+/// What a tray "Show / Hide" should do, given the current state: `true` = show.
+/// Pure so the one-way-door failure is pinned by a test.
+fn next_visible(hidden: bool) -> bool {
+    hidden
+}
+
 /// Set when the tray "Show / Hide" is clicked; the app toggles window visibility.
 static TOGGLE_VIS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -1117,10 +1147,14 @@ fn wayland_session() -> bool {
 /// service on its own worker thread, so no GTK event loop (and no GTK at all)
 /// is needed. Returns immediately; the tray lives for the app's lifetime.
 /// Failure is non-fatal.
-fn setup_tray() {
+fn setup_tray() -> bool {
+    // The tray is built on its own thread, and every failure path there used to
+    // just `return` — so `--minimized` could hide the window on a machine whose
+    // tray never came up, leaving no way back. Report the outcome instead.
     #[cfg(target_os = "linux")]
     {
-        std::thread::spawn(|| {
+        let (tx, rx) = std::sync::mpsc::channel::<bool>();
+        std::thread::spawn(move || {
             use tray_icon::{
                 menu::{Menu, MenuEvent, MenuItem},
                 Icon, TrayIconBuilder,
@@ -1163,6 +1197,7 @@ fn setup_tray() {
                 }
             }
             let Ok(icon) = Icon::from_rgba(rgba, TS as u32, TS as u32) else {
+                let _ = tx.send(false);
                 return;
             };
 
@@ -1180,6 +1215,7 @@ fn setup_tray() {
             let quit = MenuItem::new("Quit", true, None);
             let menu = Menu::new();
             if menu.append_items(&[&show, &quit]).is_err() {
+                let _ = tx.send(false);
                 return;
             }
 
@@ -1196,8 +1232,10 @@ fn setup_tray() {
                 .with_icon(icon)
                 .build()
             else {
+                let _ = tx.send(false);
                 return;
             };
+            let _ = tx.send(true);
 
             // Menu events arrive on this thread's channel; signal the app.
             let show_id = show.id().clone();
@@ -1223,6 +1261,14 @@ fn setup_tray() {
                 std::thread::park_timeout(std::time::Duration::from_secs(3600));
             }
         });
+        // Bounded: a host without a tray, or one that never answers, must not
+        // stall startup — it just means the window stays visible.
+        rx.recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
     }
 }
 
@@ -1289,8 +1335,17 @@ fn main() -> eframe::Result<()> {
         }
     }
 
-    // System tray on a dedicated GTK thread (optional; non-fatal if unavailable).
-    setup_tray();
+    // System tray on a dedicated thread (optional; non-fatal if unavailable).
+    // `--minimized` is only honoured when the tray actually came up.
+    let tray = setup_tray();
+    let requested_minimized = START_MINIMIZED.load(std::sync::atomic::Ordering::Relaxed);
+    if requested_minimized && !tray {
+        eprintln!("--minimized ignored: no system tray, so a hidden window could not be restored");
+    }
+    START_MINIMIZED.store(
+        should_start_hidden(requested_minimized, tray),
+        std::sync::atomic::Ordering::Relaxed,
+    );
 
     // Try the normal (GPU-accelerated) run first.
     let result = match eframe::run_native("TorrentX", native_options(), app_creator()) {
@@ -1319,7 +1374,10 @@ fn main() -> eframe::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{csv_esc, csv_safe, desktop_entry, safe_scheme};
+    use super::{
+        csv_esc, csv_safe, desktop_entry, next_visible, safe_scheme, should_start_hidden,
+        viewport_for,
+    };
 
     #[test]
     fn csv_esc_quotes_and_doubles_embedded_quotes() {
@@ -1353,6 +1411,57 @@ mod tests {
         assert!(!safe_scheme("ftp://host/f"));
         assert!(!safe_scheme("javascript:alert(1)"));
         assert!(!safe_scheme(""));
+    }
+
+    /// A hidden window with no tray icon is unreachable: `--minimized` must yield
+    /// when the tray failed to build (missing appindicator, no D-Bus watcher).
+    #[test]
+    fn minimized_is_ignored_without_a_tray() {
+        assert!(
+            should_start_hidden(true, true),
+            "tray present: honour --minimized"
+        );
+        assert!(
+            !should_start_hidden(true, false),
+            "no tray: keep the window visible"
+        );
+        assert!(
+            !should_start_hidden(false, true),
+            "no flag: visible as usual"
+        );
+    }
+
+    /// The tray toggle must bring a hidden window BACK. The old branch read
+    /// `focused` as the visibility source, and a hidden window reports its last
+    /// focus state — so "Show" hid it again and `--minimized` was a one-way door.
+    #[test]
+    fn tray_toggle_shows_a_hidden_window() {
+        assert!(next_visible(true), "hidden window must be shown");
+        assert!(!next_visible(false), "visible window must be hidden");
+    }
+
+    /// `--minimized` is only honest if the window is created invisible; the flag
+    /// also must not disturb the saved-size restore.
+    #[test]
+    fn minimized_creates_an_invisible_window_and_keeps_the_saved_size() {
+        assert_eq!(
+            viewport_for(true, None).visible,
+            Some(false),
+            "--minimized must start hidden"
+        );
+        assert_eq!(
+            viewport_for(false, None).visible,
+            None,
+            "a normal start leaves visibility to eframe"
+        );
+
+        let saved = viewport_for(false, Some([1024.0, 700.0]));
+        assert_eq!(saved.inner_size, Some(egui::vec2(1024.0, 700.0)));
+
+        // Too small to be a real window (a corrupt or pre-min-size config):
+        // fall back to the default rather than restoring a useless geometry.
+        let tiny = viewport_for(false, Some([100.0, 80.0]));
+        assert_eq!(tiny.inner_size, Some(egui::vec2(1300.0, 800.0)));
     }
 
     /// The autostart entry is the whole feature: it must name the AppImage (the

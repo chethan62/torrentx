@@ -229,7 +229,9 @@ pointing two instances at different Jackett servers.
 `--minimized` starts with no window: the app runs for its tray icon and RSS
 polling only (the tray's **Show / Hide** brings the window back; on Wayland it
 starts minimised instead, and the taskbar restores it). The **At login** autostart
-entry uses it, so logging in does not open a window in front of you.
+entry uses it, so logging in does not open a window in front of you. If the tray
+cannot be created (no system-tray host, missing appindicator), the flag is ignored
+and the window opens — a hidden window with no way back would be a dead end.
 
 ## Known limitations
 
