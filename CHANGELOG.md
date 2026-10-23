@@ -7,6 +7,12 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **One instance per profile.** Two copies shared `config.json` and each save
+  rewrites the whole file, so the second silently clobbered the first one's
+  favourites and history (and both polled RSS). A Unix socket beside the config is
+  the lock: launching again asks the running copy to show its window and exits
+  with a message. A socket left by a crash is reclaimed on the next start, and
+  `--config <path>` keeps its own instance.
 - **`--minimized`** — start with no window (tray icon and RSS polling only). The
   At login entry now uses it, so logging in no longer opens a window over
   whatever you were doing. On Wayland it starts minimised, since hiding a window

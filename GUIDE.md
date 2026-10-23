@@ -226,6 +226,12 @@ torrentx [--config <path>] [--minimized] [-h] [-V]
 `--config <path>` runs a fully separate profile (own config file) — handy for
 pointing two instances at different Jackett servers.
 
+**One instance per profile.** Launching TorrentX again (from the menu, or from a
+second copy of the AppImage) asks the running one to show its window and exits —
+two copies would otherwise both poll RSS and rewrite the same `config.json`. The
+lock is a `torrentx.sock` beside the config file; a socket left behind by a crash
+is reclaimed on the next start, and `--config <path>` gets its own instance.
+
 `--minimized` starts with no window: the app runs for its tray icon and RSS
 polling only (the tray's **Show / Hide** brings the window back; on Wayland it
 starts minimised instead, and the taskbar restores it). The **At login** autostart

@@ -30,6 +30,80 @@ pub(crate) const CATS: &[&str] = &[
     "All", "Movies", "TV", "Music", "PC Games", "Software", "Anime", "Books", "XXX",
 ];
 
+// ─── Single instance ───────────────────────────────────────────────────────
+// Two copies of the app share one config file and each save rewrites the whole
+// file (favourites, history, window size), so a second copy silently clobbers
+// the first one's changes. A Unix socket next to the config is the lock: it is
+// per-profile (so `--config` still gives a separate instance), and a *connect*
+// to it answers whether the owner is alive — a stale file left by a crash
+// refuses the connection and can be reclaimed.
+
+/// Set when another copy was launched and asked this one to show its window.
+static SHOW_REQ: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(unix)]
+fn instance_socket() -> std::path::PathBuf {
+    let cfg = crate::config::cfg_path();
+    cfg.parent()
+        .map(|d| d.join("torrentx.sock"))
+        .unwrap_or_else(|| std::path::PathBuf::from("torrentx.sock"))
+}
+
+/// Claim the single-instance lock at `path`.
+///
+/// `None` means a live copy owns it and has been asked to show its window — the
+/// caller should exit quietly. `Some(listener)` means we own it; the caller keeps
+/// it alive for the process lifetime (dropping it releases the lock).
+#[cfg(unix)]
+fn claim_instance_at(path: &std::path::Path) -> Option<std::os::unix::net::UnixListener> {
+    use std::io::Write;
+    use std::os::unix::net::{UnixListener, UnixStream};
+
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(mut s) = UnixStream::connect(path) {
+        let _ = s.write_all(b"show\n");
+        return None;
+    }
+    // Nothing answered: either no file, or a socket left behind by a crash.
+    let _ = std::fs::remove_file(path);
+    UnixListener::bind(path).ok()
+}
+
+/// Serve "show me" requests from later launches until the process exits.
+#[cfg(unix)]
+fn serve_show_requests(l: std::os::unix::net::UnixListener) {
+    use std::io::Read;
+    std::thread::spawn(move || {
+        for conn in l.incoming() {
+            let Ok(mut c) = conn else { break };
+            let mut buf = [0u8; 16];
+            let _ = c.read(&mut buf);
+            SHOW_REQ.store(true, std::sync::atomic::Ordering::SeqCst);
+            wake_ui();
+        }
+    });
+}
+
+/// Claim the lock for this profile (the socket lives beside the config, so
+/// `--config` still gives a second, independent instance).
+#[cfg(unix)]
+fn claim_instance() -> bool {
+    match claim_instance_at(&instance_socket()) {
+        Some(l) => {
+            serve_show_requests(l);
+            true
+        }
+        None => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn claim_instance() -> bool {
+    true
+}
+
 // ─── Autostart (Linux) ─────────────────────────────────────────────────────
 // TorrentX has no daemon, so RSS feeds only poll while the window is open.
 // Starting at login is the whole feature: one XDG autostart file, no service.
@@ -594,6 +668,14 @@ impl eframe::App for App {
                 WINDOW_HIDDEN.store(true, std::sync::atomic::Ordering::SeqCst);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             }
+        }
+
+        // A second launch asked us to show the window (the escape hatch for
+        // --minimized that does not depend on the tray icon being visible).
+        if SHOW_REQ.swap(false, std::sync::atomic::Ordering::SeqCst) && !wayland_session() {
+            WINDOW_HIDDEN.store(false, std::sync::atomic::Ordering::SeqCst);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
 
         // Tray "Quit" → exit the whole app.
@@ -1335,6 +1417,13 @@ fn main() -> eframe::Result<()> {
         }
     }
 
+    // One copy per profile: a second launch tells the running one to show its
+    // window instead of starting a rival config writer.
+    if !claim_instance() {
+        eprintln!("TorrentX is already running — asked it to show its window.");
+        return Ok(());
+    }
+
     // System tray on a dedicated thread (optional; non-fatal if unavailable).
     // `--minimized` is only honoured when the tray actually came up.
     let tray = setup_tray();
@@ -1429,6 +1518,65 @@ mod tests {
             !should_start_hidden(false, true),
             "no flag: visible as usual"
         );
+    }
+
+    /// One copy per profile. Two copies share `config.json` and each save
+    /// rewrites the whole file, so the second one silently clobbers the first
+    /// one's favourites and history.
+    #[cfg(unix)]
+    #[test]
+    fn a_second_launch_is_refused_and_told_to_show() {
+        use super::{claim_instance_at, serve_show_requests, SHOW_REQ};
+        use std::sync::atomic::Ordering;
+
+        let dir = std::env::temp_dir().join(format!("tx-oneinst-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("torrentx.sock");
+
+        let owner = claim_instance_at(&sock).expect("first claim owns the lock");
+        serve_show_requests(owner);
+
+        SHOW_REQ.store(false, Ordering::SeqCst);
+        assert!(
+            claim_instance_at(&sock).is_none(),
+            "a second launch must be refused while the first is alive"
+        );
+        // The refused launch asked the owner to show its window.
+        let mut waited = 0;
+        while !SHOW_REQ.load(Ordering::SeqCst) && waited < 100 {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            waited += 1;
+        }
+        assert!(
+            SHOW_REQ.load(Ordering::SeqCst),
+            "owner was not asked to show"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A crashed instance leaves its socket file behind. That file must not lock
+    /// the user out of their own app forever.
+    #[cfg(unix)]
+    #[test]
+    fn a_stale_socket_is_reclaimed() {
+        use super::claim_instance_at;
+
+        let dir = std::env::temp_dir().join(format!("tx-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("torrentx.sock");
+
+        {
+            let dead = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+            drop(dead); // process died: the file stays, nothing listens
+        }
+        assert!(sock.exists(), "the stale socket file should still be there");
+        assert!(
+            claim_instance_at(&sock).is_some(),
+            "a stale socket must be reclaimed, not block startup"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The tray toggle must bring a hidden window BACK. The old branch read
