@@ -536,7 +536,7 @@ impl App {
                                     // Full-cell click — anywhere in the row opens detail.
                                     let cell_resp = ui.interact(
                                         ui.max_rect(),
-                                        egui::Id::new(("rsscell", i)),
+                                        egui::Id::unique(("rsscell", i)),
                                         egui::Sense::click(),
                                     );
                                     if cell_resp.clicked() {
@@ -560,7 +560,7 @@ impl App {
                                     // Full-cell click — every column opens detail.
                                     let cell_resp = ui.interact(
                                         ui.max_rect(),
-                                        egui::Id::new(("rsstracker", i)),
+                                        egui::Id::unique(("rsstracker", i)),
                                         egui::Sense::click(),
                                     );
                                     if cell_resp.clicked() {
@@ -580,7 +580,7 @@ impl App {
                                     ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                                     let cell_resp = ui.interact(
                                         ui.max_rect(),
-                                        egui::Id::new(("rsssize", i)),
+                                        egui::Id::unique(("rsssize", i)),
                                         egui::Sense::click(),
                                     );
                                     if cell_resp.clicked() {
@@ -599,7 +599,7 @@ impl App {
                                     ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                                     let cell_resp = ui.interact(
                                         ui.max_rect(),
-                                        egui::Id::new(("rssseeds", i)),
+                                        egui::Id::unique(("rssseeds", i)),
                                         egui::Sense::click(),
                                     );
                                     if cell_resp.clicked() {
@@ -618,7 +618,7 @@ impl App {
                                     ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
                                     let cell_resp = ui.interact(
                                         ui.max_rect(),
-                                        egui::Id::new(("rssdate", i)),
+                                        egui::Id::unique(("rssdate", i)),
                                         egui::Sense::click(),
                                     );
                                     if cell_resp.clicked() {
@@ -681,7 +681,7 @@ impl App {
                                         ) {
                                             actions.push((i, "fav"));
                                         }
-                                        let cell_id = egui::Id::new(("rsshov", i));
+                                        let cell_id = egui::Id::unique(("rsshov", i));
                                         let hover_resp = ui.interact(
                                             ui.max_rect(),
                                             cell_id,

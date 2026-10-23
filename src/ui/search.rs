@@ -32,7 +32,7 @@ impl App {
             let field_w = (ui.available_width() - 505.0).max(140.0);
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.search.query)
-                    .id(egui::Id::new("q"))
+                    .id(egui::Id::unique("q"))
                     .desired_width(field_w)
                     .hint_text("Search torrents — movies, shows, games, software, anime…")
                     .font(FontId::proportional(fs + 2.0))
@@ -336,7 +336,7 @@ impl App {
                                         // Whole-chip click (not just the text).
                                         let chip_resp = ui.interact(
                                             ui.max_rect(),
-                                            egui::Id::new(("chip", cat)),
+                                            egui::Id::unique(("chip", cat)),
                                             egui::Sense::click(),
                                         );
                                         ui.label(

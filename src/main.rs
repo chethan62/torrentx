@@ -908,7 +908,7 @@ impl eframe::App for App {
 
         // Global shortcuts
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::F)) {
-            ctx.memory_mut(|m| m.request_focus(egui::Id::new("q")));
+            ctx.memory_mut(|m| m.request_focus(egui::Id::unique("q")));
         }
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::R)) {
             self.do_search();

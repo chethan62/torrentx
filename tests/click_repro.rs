@@ -37,7 +37,7 @@ fn run_frame(ctx: &egui::Context, pos: Pos2, press: bool, release: bool) -> bool
                     egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(200.0, 30.0));
                 let _ = ui.allocate_rect(cell, egui::Sense::hover());
                 // REPRO STACK:
-                let cell_resp = ui.interact(cell, egui::Id::new("cell"), egui::Sense::click());
+                let cell_resp = ui.interact(cell, egui::Id::unique("cell"), egui::Sense::click());
                 clicked = cell_resp.clicked();
                 // Text drawn on top at the same position:
                 ui.horizontal(|ui| {

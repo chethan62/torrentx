@@ -285,7 +285,7 @@ impl App {
         {
             let mut open = true;
             egui::Window::new(format!("Files — {}", short_name(&p.key)))
-                .id(egui::Id::new(("pick_win", p.key.clone())))
+                .id(egui::Id::unique(("pick_win", p.key.clone())))
                 .open(&mut open)
                 .resizable(true)
                 .collapsible(false)

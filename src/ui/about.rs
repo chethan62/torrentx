@@ -273,7 +273,7 @@ impl App {
             // Clamp to viewport so toasts never go off-screen at narrow widths
             let x_pos = (scr.max.x - 310.0 + slide_progress).max(8.0);
 
-            egui::Area::new(egui::Id::new(format!("toast_{}", toast.msg)))
+            egui::Area::new(egui::Id::unique(format!("toast_{}", toast.msg)))
                 .fixed_pos([x_pos, y])
                 .order(egui::Order::Foreground)
                 .show(ctx, |ui| {

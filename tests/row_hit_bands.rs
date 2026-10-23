@@ -84,7 +84,7 @@ fn run(ctx: &egui::Context, click: Option<Pos2>, pattern: &str) -> Outcome {
                                 .show(ui, |ui| {
                                     let resp = ui.interact(
                                         ui.max_rect(),
-                                        egui::Id::new(("row", i)),
+                                        egui::Id::unique(("row", i)),
                                         egui::Sense::click(),
                                     );
                                     out.bands.push((i, resp.rect));

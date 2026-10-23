@@ -59,7 +59,7 @@ fn run(
                                 if in_frame {
                                     let r = ui.interact(
                                         ui.max_rect(),
-                                        egui::Id::new(("row", i)),
+                                        egui::Id::unique(("row", i)),
                                         egui::Sense::click(),
                                     );
                                     if r.clicked() {
@@ -72,7 +72,7 @@ fn run(
                         if !in_frame {
                             let r = ui.interact(
                                 ui.max_rect(),
-                                egui::Id::new(("row", i)),
+                                egui::Id::unique(("row", i)),
                                 egui::Sense::click(),
                             );
                             if r.clicked() {

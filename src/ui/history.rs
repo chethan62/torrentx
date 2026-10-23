@@ -24,7 +24,7 @@ impl App {
             let mut deleted: Option<String> = None;
             let mut clear_all = false;
 
-            let area = egui::Area::new(egui::Id::new("hist_dd"))
+            let area = egui::Area::new(egui::Id::unique("hist_dd"))
                 .fixed_pos(pos)
                 .order(egui::Order::Foreground)
                 .show(ctx, |ui| {

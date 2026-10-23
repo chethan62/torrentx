@@ -151,7 +151,7 @@ impl App {
                     } else {
                         let hresp = ui.interact(
                             cell_rect(ui),
-                            egui::Id::new(("sort_hdr", c.label())),
+                            egui::Id::unique(("sort_hdr", c.label())),
                             egui::Sense::click(),
                         );
                         hdr(ui, c.label(), &sortcol);
@@ -254,7 +254,7 @@ impl App {
                                     // Full-cell click layer — clicking ANYWHERE
                                     // in the Name cell (not just the text)
                                     // selects the row. Double-click opens magnet.
-                                    let cell_id = egui::Id::new(("namecell", gi));
+                                    let cell_id = egui::Id::unique(("namecell", gi));
                                     let cell_resp = ui.interact(
                                         cell_rect(ui),
                                         cell_id,
@@ -345,7 +345,7 @@ impl App {
                                     // cell rect), THEN draw the label as non-interactive
                                     // content. If drawn first, the label shrinks
                                     // ui.max_rect() and clicks on the text miss.
-                                    let cell_id = egui::Id::new(("rowcell", gi, c.label()));
+                                    let cell_id = egui::Id::unique(("rowcell", gi, c.label()));
                                     let cell_resp = ui.interact(
                                         cell_rect(ui),
                                         cell_id,
@@ -431,7 +431,7 @@ impl App {
                             ) {
                                 actions.push((i, "info"));
                             }
-                            let cell_id = egui::Id::new(("rowhov", gi));
+                            let cell_id = egui::Id::unique(("rowhov", gi));
                             let _hover_resp =
                                 ui.interact(ui.max_rect(), cell_id, egui::Sense::hover());
                         });
