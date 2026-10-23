@@ -238,13 +238,28 @@ fn default_player() -> String {
 }
 
 pub(crate) fn save_cfg(c: &Config) -> Result<(), String> {
-    let p = cfg_path();
+    save_to(&cfg_path(), c)
+}
+
+/// Durable atomic save: temp file, fsync, rename, fsync the directory. Split
+/// from `save_cfg` so the durability behaviour is testable without the global
+/// config path.
+fn save_to(p: &std::path::Path, c: &Config) -> Result<(), String> {
     let j = serde_json::to_string_pretty(c).map_err(|e| format!("serialize config: {e}"))?;
     // Write a sibling temp file and rename over the config: a plain fs::write
     // truncates first, so an interrupted save (kill, power loss) would leave an
     // unparseable config behind — which used to be replaced by defaults.
     let tmp = p.with_extension("json.tmp");
-    if let Err(e) = fs::write(&tmp, j) {
+    // Write through a File so the bytes can be fsync'd BEFORE the rename: on a
+    // crash the renamed name must never resolve to an empty file (ext4 with
+    // data=writeback will do exactly that without the barrier), and the rename
+    // itself is only durable once the directory is synced.
+    let written = fs::File::create(&tmp).and_then(|mut f| {
+        use std::io::Write;
+        f.write_all(j.as_bytes())?;
+        f.sync_all()
+    });
+    if let Err(e) = written {
         let msg = format!("write {}: {e}", tmp.display());
         eprintln!("torrentx: failed to save config: {msg}");
         return Err(msg);
@@ -255,11 +270,17 @@ pub(crate) fn save_cfg(c: &Config) -> Result<(), String> {
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
     }
-    if let Err(e) = fs::rename(&tmp, &p) {
+    if let Err(e) = fs::rename(&tmp, p) {
         let _ = fs::remove_file(&tmp);
         let msg = format!("save {}: {e}", p.display());
         eprintln!("torrentx: failed to save config: {msg}");
         return Err(msg);
+    }
+    // Make the NAME durable, not just the contents. Best effort: a failure here
+    // does not invalidate the saved config, it only weakens crash durability.
+    #[cfg(unix)]
+    if let Some(dir) = p.parent() {
+        let _ = fs::File::open(dir).and_then(|d| d.sync_all());
     }
     Ok(())
 }
@@ -267,6 +288,55 @@ pub(crate) fn save_cfg(c: &Config) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{default_col_order, heal_col_order, Config};
+
+    /// The config holds the API key and the user's favourites: a save must be
+    /// all-or-nothing (temp + fsync + rename), private, and leave no debris.
+    #[test]
+    fn save_is_atomic_private_and_round_trips() {
+        use super::{save_to, Config};
+
+        let dir = std::env::temp_dir().join(format!("tx-cfg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+
+        let mut c = Config {
+            api_key: "SECRET".to_string(),
+            history: vec!["ubuntu".to_string()],
+            ..Default::default()
+        };
+        save_to(&path, &c).expect("save");
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        let back: Config = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.api_key, "SECRET");
+        assert_eq!(back.history, ["ubuntu"]);
+
+        // No temp file left behind.
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n != "config.json")
+            .collect();
+        assert!(leftovers.is_empty(), "leftover files: {leftovers:?}");
+
+        // The key is user-private.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "config mode is {mode:o}");
+        }
+
+        // A second save replaces the file rather than appending.
+        c.history.push("debian".to_string());
+        save_to(&path, &c).expect("resave");
+        let back: Config = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(back.history, ["ubuntu", "debian"]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn heal_fills_empty_col_order() {
