@@ -1472,17 +1472,15 @@ mod tests {
             }
             false
         };
-        let t0 = Instant::now();
         assert!(wait(1), "the fast indexer's rows must arrive first");
-        // One row, not both: the slow indexer is still in flight.
+        // One row, not both, and still Searching: the slow indexer is in flight.
+        // This PAIR is the ordering proof — a batched implementation would
+        // publish both rows together, so the first observation would already be
+        // count == 2 with state Done. No wall-clock bound: a 300 ms assertion
+        // against a 400 ms server failed on a loaded CI runner at 662 ms while
+        // the behaviour was correct.
         assert_eq!(*count.lock().unwrap(), 1);
         assert_eq!(*state.lock().unwrap(), SearchState::Searching);
-        // A batched implementation would only publish after the 400 ms indexer.
-        assert!(
-            t0.elapsed() < Duration::from_millis(300),
-            "first row waited for the slow indexer ({} ms)",
-            t0.elapsed().as_millis()
-        );
         assert!(wait(2), "both indexers must land");
         assert_eq!(*state.lock().unwrap(), SearchState::Done);
         assert_eq!(results.lock().unwrap().len(), 2);
