@@ -4,6 +4,20 @@ use super::*;
 
 use crate::app::App;
 
+/// The clickable part of a table cell.
+///
+/// egui_extras puts each column's resize handle in the gap to the cell's right and
+/// registers it BEFORE the cell closure runs, so a full-cell `ui.interact` added
+/// inside the closure sits on top of it: dragging the divider selected a row (or
+/// re-sorted the table) instead of resizing, and the cursor never showed the
+/// resize arrow. Excluding the handle band gives the drag back to the table.
+fn cell_rect(ui: &egui::Ui) -> egui::Rect {
+    let grab = ui.style().interaction.resize_grab_radius_side + 1.0;
+    let mut r = ui.max_rect();
+    r.max.x = (r.max.x - grab).max(r.min.x + 1.0);
+    r
+}
+
 impl App {
     pub(crate) fn draw_results_table(
         &mut self,
@@ -136,7 +150,7 @@ impl App {
                         );
                     } else {
                         let hresp = ui.interact(
-                            ui.max_rect(),
+                            cell_rect(ui),
                             egui::Id::new(("sort_hdr", c.label())),
                             egui::Sense::click(),
                         );
@@ -241,8 +255,11 @@ impl App {
                                     // in the Name cell (not just the text)
                                     // selects the row. Double-click opens magnet.
                                     let cell_id = egui::Id::new(("namecell", gi));
-                                    let cell_resp =
-                                        ui.interact(ui.max_rect(), cell_id, egui::Sense::click());
+                                    let cell_resp = ui.interact(
+                                        cell_rect(ui),
+                                        cell_id,
+                                        egui::Sense::click(),
+                                    );
                                     // The title cell is the row's primary hit area, so
                                     // the right-click menu lives here.
                                     let fav = self.is_fav(&r.title);
@@ -329,8 +346,11 @@ impl App {
                                     // content. If drawn first, the label shrinks
                                     // ui.max_rect() and clicks on the text miss.
                                     let cell_id = egui::Id::new(("rowcell", gi, c.label()));
-                                    let cell_resp =
-                                        ui.interact(ui.max_rect(), cell_id, egui::Sense::click());
+                                    let cell_resp = ui.interact(
+                                        cell_rect(ui),
+                                        cell_id,
+                                        egui::Sense::click(),
+                                    );
                                     if cell_resp.clicked() && !self.ui.sel_mode {
                                         actions.push((i, "select"));
                                     }

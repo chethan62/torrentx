@@ -4,6 +4,16 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.18] — 2026-10-23
+
+### Fixed
+- **Dragging a column separator resizes the column again.** Every table cell —
+  header and body — puts a full-rect click layer on top (row selection, sort,
+  right-click menu). egui_extras registers its resize handle *before* the cell
+  content, so that layer covered the divider: the drag selected a row or re-sorted
+  the column and the width never changed. The hit rect now stops at the handle band
+  (`cell_rect`), which gives the drag back to the table.
+
 ## [18.6.17] — 2026-10-23
 
 ### Fixed

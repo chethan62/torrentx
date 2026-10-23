@@ -168,6 +168,8 @@ Changes apply immediately; press **Save** to persist connection changes.
 | D | Toggle detail panel |
 | F | Favorite selected row |
 | M | Open magnet for selected row |
+
+Drag a column separator to resize that column; the result table remembers the widths for the session.
 | P | Stream selected row (direct play) |
 | Esc | Close detail panel / clear query |
 | Ctrl+F | Focus search bar |
