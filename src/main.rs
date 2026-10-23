@@ -1203,12 +1203,41 @@ fn setup_tray() {
     }
 }
 
+/// Print CLI output without ever panicking.
+///
+/// A release build on Windows is a GUI-subsystem binary (`windows_subsystem =
+/// "windows"`), so it starts with no console and stdout is not a usable handle:
+/// `println!` panics with "failed printing to stdout: The pipe is being closed"
+/// (os error 232) when a shell captures it. Attach to the parent console, then
+/// write and ignore the error — `--version` from Explorer prints nowhere, which
+/// is fine, and `--version` from a terminal prints normally.
+fn print_cli(s: &str) {
+    #[cfg(all(windows, not(debug_assertions)))]
+    {
+        // kernel32 is always linked; declaring the one symbol beats adding
+        // windows-sys as a direct dependency for eight lines.
+        extern "system" {
+            fn AttachConsole(process_id: u32) -> i32;
+        }
+        const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
+        // SAFETY: single documented call, no pointers; it either attaches this
+        // process to the parent's console or fails harmlessly.
+        unsafe {
+            AttachConsole(ATTACH_PARENT_PROCESS);
+        }
+    }
+    use std::io::Write;
+    let mut out = std::io::stdout();
+    let _ = out.write_all(s.as_bytes());
+    let _ = out.flush();
+}
+
 fn main() -> eframe::Result<()> {
     // Parse CLI flags before any GUI/config work.
     let args: Vec<String> = std::env::args().collect();
 
     if args.iter().any(|a| a == "--help" || a == "-h") {
-        println!(
+        print_cli(&format!(
             "TorrentX {} — native Jackett torrent-search GUI\n\n\
              USAGE:\n  torrentx [OPTIONS]\n\n\
              OPTIONS:\n  \
@@ -1216,11 +1245,11 @@ fn main() -> eframe::Result<()> {
              -h, --help        Print this help and exit\n  \
              -V, --version     Print the version and exit\n",
             env!("CARGO_PKG_VERSION")
-        );
+        ));
         return Ok(());
     }
     if args.iter().any(|a| a == "--version" || a == "-V") {
-        println!("TorrentX {}", env!("CARGO_PKG_VERSION"));
+        print_cli(&format!("TorrentX {}\n", env!("CARGO_PKG_VERSION")));
         return Ok(());
     }
 

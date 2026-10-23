@@ -40,15 +40,29 @@ jobs:
             ${{ runner.os }}-native-cargo-
 
       - name: Build (native MSVC)
-        run: cargo build --release
+        run: |
+          cargo build --release
+          cargo build
 
-      - name: --version answers
+      - name: --version answers (debug build: console subsystem)
         shell: pwsh
         run: |
-          $v = & .\target\release\torrentx.exe --version
+          $v = & .\target\debug\torrentx.exe --version
           "version output: $v"
           if ($LASTEXITCODE -ne 0) { throw "torrentx.exe --version exited $LASTEXITCODE" }
           if ($v -notmatch 'TorrentX 18\.') { throw "unexpected --version output: $v" }
+
+      # The release .exe is a GUI-subsystem binary, so a shell that captures it
+      # closes the pipe immediately — `println!` used to PANIC here ("pipe is
+      # being closed", os error 232) and exit 101. print_cli() attaches to the
+      # parent console and ignores the write error, so the exit code is the
+      # assertion: launched-and-failed-to-print must not be a crash.
+      - name: release .exe survives a closed stdout pipe
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath .\target\release\torrentx.exe -ArgumentList '--version' -PassThru -Wait
+          "exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "--version exited $($p.ExitCode) (a panic is 101)" }
 
       - name: Launch smoke — a window must appear
         shell: pwsh
