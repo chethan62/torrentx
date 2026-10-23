@@ -481,6 +481,11 @@ impl App {
                     }
                     "pick" => {
                         if let Some(m) = r.magnet_uri.clone() {
+                            // The listing can take 30 s, and its progress line
+                            // lives in the detail panel — open it, otherwise the
+                            // menu item looks like it did nothing.
+                            self.ui.selected = Some(i);
+                            self.ui.detail_open = true;
                             self.pick_files(&r.title, &m, r.link.as_deref());
                         }
                     }

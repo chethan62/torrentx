@@ -51,20 +51,54 @@ pub(crate) enum FeedStatus {
     Error,
 }
 
+/// How long to wait before re-fetching this feed.
+///
+/// A failing indexer used to be retried on every tick forever (and at a short
+/// interval the status pill oscillated Loading→Error). Failures now double the
+/// wait, capped at 30 minutes, so a dead feed costs a handful of requests a day
+/// instead of one per interval. Success resets the counter.
+pub(crate) fn refresh_delay(interval: std::time::Duration, failures: u32) -> std::time::Duration {
+    let factor = 1u32 << failures.min(3); // ×1, ×2, ×4, ×8
+    interval
+        .saturating_mul(factor)
+        .min(std::time::Duration::from_secs(1800))
+}
+
 pub(crate) struct RssFeedState {
     pub(crate) config: RssFeedConfig,
     pub(crate) items: Vec<RssItem>,
     pub(crate) status: FeedStatus,
     pub(crate) error: Option<String>,
+    /// Consecutive failed fetches — drives the backoff in `refresh_delay`.
+    pub(crate) failures: u32,
 }
 
 impl RssFeedState {
+    /// Fold a fetch result into the feed: success clears the error and the
+    /// backoff, failure records both.
+    pub(crate) fn apply_result(&mut self, res: Result<Vec<RssItem>, String>) {
+        match res {
+            Ok(items) => {
+                self.items = dedupe_items(items);
+                self.status = FeedStatus::Ok;
+                self.error = None;
+                self.failures = 0;
+            }
+            Err(e) => {
+                self.status = FeedStatus::Error;
+                self.error = Some(e);
+                self.failures = self.failures.saturating_add(1);
+            }
+        }
+    }
+
     pub(crate) fn new(config: RssFeedConfig) -> Self {
         Self {
             config,
             items: vec![],
             status: FeedStatus::Idle,
             error: None,
+            failures: 0,
         }
     }
 }
@@ -385,6 +419,36 @@ mod tests {
     </item>
   </channel>
 </rss>"#;
+
+    /// A dead feed must back off instead of being retried on every tick.
+    #[test]
+    fn failures_double_the_delay_and_success_resets_it() {
+        use super::{FeedStatus, RssFeedConfig, RssFeedState, refresh_delay};
+        use std::time::Duration;
+
+        let base = Duration::from_secs(60);
+        assert_eq!(refresh_delay(base, 0), base);
+        assert_eq!(refresh_delay(base, 1), Duration::from_secs(120));
+        assert_eq!(refresh_delay(base, 2), Duration::from_secs(240));
+        assert_eq!(refresh_delay(base, 3), Duration::from_secs(480));
+        // The exponent stops growing (×8 max) …
+        assert_eq!(refresh_delay(base, 9), Duration::from_secs(480));
+        // … and the absolute cap holds even for a long base interval.
+        assert_eq!(
+            refresh_delay(Duration::from_secs(900), 3),
+            Duration::from_secs(1800)
+        );
+
+        let mut f = RssFeedState::new(RssFeedConfig::new_default());
+        f.apply_result(Err("HTTP 500".into()));
+        f.apply_result(Err("HTTP 500".into()));
+        assert_eq!(f.failures, 2);
+        assert_eq!(f.status, FeedStatus::Error);
+        f.apply_result(Ok(vec![]));
+        assert_eq!(f.failures, 0, "a success clears the backoff");
+        assert_eq!(f.status, FeedStatus::Ok);
+        assert!(f.error.is_none());
+    }
 
     /// A feed that failed to fetch must not look like a healthy empty feed.
     /// quick_xml reads an HTML login page to EOF and returns zero items, so the

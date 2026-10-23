@@ -206,7 +206,14 @@ impl App {
                     // a filter.
                     match &pick {
                         Some(p) if p.loading => {
-                            lbl(ui, "Listing files…", self.pal.dim, fs - 1.0);
+                            // The list comes from the torrent's metadata, which
+                            // can take list_files()'s full 30 s deadline. A bare
+                            // spinner in the dimmest tier read as a hang.
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.add_space(SP2);
+                                lbl(ui, "Listing files — up to 30 s", self.pal.sub, fs - 1.0);
+                            });
                         }
                         Some(p) if !p.files.is_empty() => {
                             let label = match p.sel.and_then(|i| p.files.get(i)) {

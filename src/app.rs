@@ -999,19 +999,9 @@ impl App {
             if idx >= self.rss.rss_feeds.len() {
                 continue;
             }
-            match result {
-                Ok(items) => {
-                    // Dedupe per release: guid when the feed provides one, else
-                    // the same content-marker key as the search results.
-                    self.rss.rss_feeds[idx].items = crate::rss::dedupe_items(items);
-                    self.rss.rss_feeds[idx].status = FeedStatus::Ok;
-                    self.rss.rss_feeds[idx].error = None;
-                }
-                Err(e) => {
-                    self.rss.rss_feeds[idx].status = FeedStatus::Error;
-                    self.rss.rss_feeds[idx].error = Some(e);
-                }
-            }
+            // Dedupe per release (guid, else the content-marker key), and let
+            // the state own the failure counter that drives the backoff.
+            self.rss.rss_feeds[idx].apply_result(result);
         }
     }
 
@@ -1089,13 +1079,15 @@ impl App {
                 wake_in = sooner(Duration::from_millis(500), wake_in);
                 continue;
             }
+            // A feed that keeps failing is retried with a growing delay.
+            let due = crate::rss::refresh_delay(interval, self.rss.rss_feeds[i].failures);
             let elapsed = self.rss.rss_last_refresh[i].elapsed();
-            if elapsed >= interval {
+            if elapsed >= due {
                 self.refresh_feed(i);
                 // The timestamp was just reset by refresh_feed.
-                wake_in = sooner(interval, wake_in);
+                wake_in = sooner(due, wake_in);
             } else {
-                wake_in = sooner(interval - elapsed, wake_in);
+                wake_in = sooner(due - elapsed, wake_in);
             }
         }
         wake_in
