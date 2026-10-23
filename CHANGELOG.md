@@ -4,6 +4,19 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.8] — 2026-10-23
+
+### Added
+- **Settings → At login** writes `~/.config/autostart/torrentx.desktop` so the app
+  starts with your session and RSS feeds keep polling (no daemon exists, so a
+  closed window never polls). The entry names the AppImage, not the temporary
+  mount path inside it, and quotes `Exec` for paths with spaces.
+
+### Changed
+- CI gains a "Lock convention" step: `if let Ok(..) = X.lock()` and
+  `.lock().map(..)` fail the build — both silently drop an update on a poisoned
+  mutex.
+
 ## [18.6.7] — 2026-10-23
 
 ### Fixed
