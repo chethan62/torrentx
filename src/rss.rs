@@ -90,6 +90,27 @@ pub(crate) fn build_rss_url(base: &str, key: &str, cfg: &RssFeedConfig) -> Strin
 
 // ─── RSS XML parser ────────────────────────────────────────────────────────
 
+/// Reject bodies that are not a Torznab/RSS feed before parsing them.
+///
+/// `quick_xml` is a pull parser: it happily reads an HTML login page or a
+/// truncated document to EOF and yields zero items, so a proxy error page used to
+/// look like a healthy feed with "0 items" (green pill, no error) — the user had
+/// no way to tell "nothing new" from "your API key is wrong".
+fn check_feed_body(body: &str) -> Result<(), String> {
+    let head = body.trim_start();
+    if !head.starts_with('<') || !(body.contains("<rss") || body.contains("<channel")) {
+        return Err(
+            "Jackett did not return an RSS feed — check the URL and API key in Settings".into(),
+        );
+    }
+    // Feed-shaped but not well-formed: an <item> we never closed (truncated
+    // response, cut-off connection) parses as zero items instead of failing.
+    if body.contains("<item") && !body.contains("</item>") {
+        return Err("RSS feed is malformed (truncated item) — try Refresh".into());
+    }
+    Ok(())
+}
+
 pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
     use quick_xml::Reader;
     use quick_xml::events::Event;
@@ -322,6 +343,7 @@ pub(crate) fn fetch_rss(url: &str, timeout: u64) -> Result<Vec<RssItem>, String>
     let body = resp
         .text()
         .map_err(|e| format!("Read error: {}", e.without_url()))?;
+    check_feed_body(&body)?;
     parse_torznab_xml(&body)
 }
 
@@ -363,6 +385,29 @@ mod tests {
     </item>
   </channel>
 </rss>"#;
+
+    /// A feed that failed to fetch must not look like a healthy empty feed.
+    /// quick_xml reads an HTML login page to EOF and returns zero items, so the
+    /// shape check is what separates "nothing new" from "your key is wrong".
+    #[test]
+    fn only_feed_shaped_bodies_are_accepted() {
+        use super::check_feed_body;
+
+        // A proxy / login wall.
+        assert!(check_feed_body("<html><body>login</body></html>").is_err());
+        assert!(check_feed_body("{\"error\":\"upstream\"}").is_err());
+        // Truncated mid-item (connection cut).
+        assert!(check_feed_body("<rss><channel><item><title>Half").is_err());
+        // A genuinely empty feed is NOT an error.
+        assert!(
+            check_feed_body("<rss version=\"2.0\"><channel><title>x</title></channel></rss>")
+                .is_ok()
+        );
+        // And a normal feed passes.
+        assert!(
+            check_feed_body("<rss><channel><item><title>t</title></item></channel></rss>").is_ok()
+        );
+    }
 
     #[test]
     fn parses_full_item() {
