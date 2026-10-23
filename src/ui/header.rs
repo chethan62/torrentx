@@ -419,6 +419,17 @@ impl App {
                     ui.add_space(SP2);
                     if ui
                         .add(egui::Button::selectable(
+                            crate::autostart_on(),
+                            RichText::new("At login").font(FontId::proportional(12.0)),
+                        ))
+                        .on_hover_text("Start TorrentX at login so RSS feeds keep polling")
+                        .clicked()
+                    {
+                        crate::set_autostart(!crate::autostart_on());
+                    }
+                    ui.add_space(SP2);
+                    if ui
+                        .add(egui::Button::selectable(
                             self.cfg.show_cat_bar,
                             RichText::new("Cat bar").font(FontId::proportional(12.0)),
                         ))

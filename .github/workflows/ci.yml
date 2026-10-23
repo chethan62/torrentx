@@ -65,6 +65,17 @@ jobs:
       - name: Format check
         run: cargo fmt --all --check
 
+      # Two spellings silently drop a state update when a mutex is poisoned
+      # (18.6.7): `if let Ok(..) = X.lock()` and `.lock().map(..)`. Neither is
+      # ever legitimate — tests only ever take a raw lock to poison one on
+      # purpose. Grep, not a lint: no tooling, and it names the line.
+      - name: Lock convention
+        run: |
+          hits=$(grep -rnE 'if let Ok\(.*\.lock\(\)|let Ok\(.*\.lock\(\)|\.lock\(\)\.map\(' src/ || true)
+          if [ -n "$hits" ]; then
+            echo "use crate::lock_or_recover() instead of a fallible lock:"; echo "$hits"; exit 1
+          fi
+          echo "lock-convention: ok"
       - name: Install cargo-deny
         uses: taiki-e/install-action@v2
         with:

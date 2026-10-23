@@ -151,6 +151,7 @@ open.
 | Page | 25 / 50 / 100 / All | results per page |
 | Dedupe | on/off | merge near-duplicate titles across trackers |
 | Updates | on/off | startup check for newer releases |
+| At login | on/off | writes `~/.config/autostart/torrentx.desktop` so RSS keeps polling |
 | Cat bar | on/off | category chips above results |
 | Columns | per-column toggles | Tracker…Date; the order is fixed (Tracker, Name, Size, Seeds, Leech, Ratio, Health, Date) |
 | Accent | color | overrides the theme's accent |
@@ -232,6 +233,9 @@ Deliberate, not bugs — each line says what to do instead.
 - **CSV exports the whole filtered view**, every page, ticks or no ticks
   ("Export CSV" next to the result count). Ticking rows only feeds *Copy
   magnets*; there is no "export selection only".
+- **RSS polls only while TorrentX runs** — there is no background daemon, so an
+  enabled feed refreshes only with the window open. **Settings → At login** starts
+  the app at login; closing the window stops the polling.
 - **Jackett only** — the app calls Jackett's `/api/v2.0/indexers/…` endpoints for
   the indexer list and searches, so Prowlarr (or a bare Torznab URL) will not
   connect. Point it at a Jackett instance.

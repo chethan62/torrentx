@@ -30,7 +30,56 @@ pub(crate) const CATS: &[&str] = &[
     "All", "Movies", "TV", "Music", "PC Games", "Software", "Anime", "Books", "XXX",
 ];
 
+// ─── Autostart ─────────────────────────────────────────────────────────────
+// TorrentX has no daemon, so RSS feeds only poll while the window is open.
+// Starting at login is the whole feature: one XDG autostart file, no service.
+
+fn autostart_file() -> Option<std::path::PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
+        .map(|d| d.join("autostart/torrentx.desktop"))
+}
+
+pub(crate) fn autostart_on() -> bool {
+    autostart_file().is_some_and(|p| p.exists())
+}
+
+/// The launcher line must be the AppImage, not the `/tmp/.mount_*/usr/bin`
+/// binary inside it: that path is gone after the process exits.
+fn autostart_exe() -> std::path::PathBuf {
+    std::env::var_os("APPIMAGE")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_exe().ok())
+        .unwrap_or_default()
+}
+
+fn desktop_entry(exe: &std::path::Path) -> String {
+    format!(
+        "[Desktop Entry]\nType=Application\nName=TorrentX\nComment=Search all your Jackett indexers\nExec=\"{}\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
+        exe.display()
+    )
+}
+
+pub(crate) fn set_autostart(on: bool) {
+    let Some(path) = autostart_file() else { return };
+    if !on {
+        let _ = std::fs::remove_file(&path);
+        return;
+    }
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&path, desktop_entry(&autostart_exe()));
+}
+
 /// CSV field escaping: wrap in quotes, double any embedded quotes.
+pub(crate) fn csv_esc(s: &str) -> String {
+    format!("\"{}\"", s.replace('"', "\"\""))
+}
+
+/// Open a URL/URI only if its scheme is safe. Indexer-supplied strings are
+/// untrusted — never hand file:// or arbitrary schemes to xdg-open.
 /// Lock a state mutex, recovering the data if a previous holder panicked.
 ///
 /// These locks are only ever held for a field read or write, so a poisoned lock
@@ -41,10 +90,6 @@ pub(crate) const CATS: &[&str] = &[
 /// instead. One convention: always go through here.
 pub(crate) fn lock_or_recover<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-pub(crate) fn csv_esc(s: &str) -> String {
-    format!("\"{}\"", s.replace('"', "\"\""))
 }
 
 /// Open a URL/URI only if its scheme is safe. Indexer-supplied strings are
@@ -1208,7 +1253,7 @@ fn main() -> eframe::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{csv_esc, csv_safe, safe_scheme};
+    use super::{csv_esc, csv_safe, desktop_entry, safe_scheme};
 
     #[test]
     fn csv_esc_quotes_and_doubles_embedded_quotes() {
@@ -1242,5 +1287,29 @@ mod tests {
         assert!(!safe_scheme("ftp://host/f"));
         assert!(!safe_scheme("javascript:alert(1)"));
         assert!(!safe_scheme(""));
+    }
+
+    /// The autostart entry is the whole feature: it must name the AppImage (the
+    /// binary inside the mount vanishes), carry Exec, and be a valid desktop
+    /// entry — a malformed one is silently ignored by every desktop.
+    #[test]
+    fn autostart_entry_names_the_appimage_and_is_a_desktop_entry() {
+        let e = desktop_entry(std::path::Path::new(
+            "/home/u/Applications/TorrentX.AppImage",
+        ));
+        assert!(e.starts_with("[Desktop Entry]\n"), "{e}");
+        // Quoted per the desktop-entry spec: an unquoted path with a space is
+        // split into argv words by every launcher.
+        assert!(
+            e.contains("\nExec=\"/home/u/Applications/TorrentX.AppImage\"\n"),
+            "{e}"
+        );
+        assert!(e.contains("\nType=Application\n"), "{e}");
+        assert!(e.ends_with('\n'), "desktop entries end with a newline");
+        let spaced = desktop_entry(std::path::Path::new("/home/u/My Apps/TorrentX.AppImage"));
+        assert!(
+            spaced.contains("\nExec=\"/home/u/My Apps/TorrentX.AppImage\"\n"),
+            "{spaced}"
+        );
     }
 }
