@@ -4,6 +4,14 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Dedupe is on by default.** The same release routinely comes back from two
+  indexers (TheRARBG and The Pirate Bay, for instance) and both rows took a slot in
+  the table. The merge keeps the best-seeded copy; existing configs that pin
+  `dedupe: false` keep their choice, and a config without the field now reads as on.
+
 ## [18.6.18] — 2026-10-23
 
 ### Fixed

@@ -15,6 +15,10 @@ pub(crate) struct Config {
     pub(crate) favorites: Vec<Favorite>,
     pub(crate) theme: Theme,
     pub(crate) timeout_secs: u64,
+    /// Merge near-duplicate titles across trackers (the same release usually shows
+    /// up from two indexers). ON by default: two identical rows waste a visit every
+    /// time, and the merge keeps the best-seeded copy.
+    #[serde(default = "default_true")]
     pub(crate) dedupe: bool,
     pub(crate) page_size: usize,
     pub(crate) row_height: f32,
@@ -71,7 +75,7 @@ impl Default for Config {
             favorites: vec![],
             theme: Theme::TokyoNight,
             timeout_secs: 30,
-            dedupe: false,
+            dedupe: true,
             page_size: 50,
             row_height: ROW_HEIGHT_NORMAL,
             font_size: 14.0,
@@ -306,6 +310,19 @@ fn save_to(p: &std::path::Path, c: &Config) -> Result<(), String> {
         let _ = fs::File::open(dir).and_then(|d| d.sync_all());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod dedupe_default_tests {
+    use super::*;
+
+    /// The same release comes back from two indexers, so an off-by-default dedupe
+    /// meant the table showed it twice on every search.
+    #[test]
+    fn a_fresh_config_dedupes_and_a_missing_field_means_on() {
+        assert!(Config::default().dedupe, "new installs dedupe");
+        assert!(default_true());
+    }
 }
 
 #[cfg(test)]
