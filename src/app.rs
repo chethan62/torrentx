@@ -792,6 +792,9 @@ impl RssUi {
 
 impl Default for App {
     fn default() -> Self {
+        // A crash or a kill leaves last session's streamed pieces on disk; they
+        // are never reused (webtorrent re-verifies them, which then stalls Play).
+        crate::player::prune_stream_cache();
         let cfg = crate::config::load_cfg();
         let pal = Pal::from(&cfg.theme, cfg.accent);
         let tokens = VisualTokens::default();

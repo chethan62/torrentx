@@ -213,6 +213,39 @@ pub(crate) fn torrent_file(magnet: &str, link: Option<&str>) -> Option<PathBuf> 
     Some(path)
 }
 
+/// Where webtorrent writes the pieces it streams.
+fn stream_dir() -> PathBuf {
+    dirs_next::cache_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("torrentx")
+        .join("stream")
+}
+
+/// Delete what a finished stream downloaded.
+///
+/// webtorrent keeps every piece it fetched in `--out`; the app only ever streams
+/// one thing at a time, so once a stream stops that data is garbage — and without
+/// this it stayed: one season-pack session left 3.1 GB behind.
+fn clear_stream_data(dir: &std::path::Path) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        let _ = if p.is_dir() {
+            std::fs::remove_dir_all(&p)
+        } else {
+            std::fs::remove_file(&p)
+        };
+    }
+}
+
+/// Clear the stream cache on a background thread — it can be gigabytes, and the
+/// UI thread must not wait for a recursive delete.
+pub(crate) fn prune_stream_cache() {
+    std::thread::spawn(|| clear_stream_data(&stream_dir()));
+}
+
 /// A free localhost port for webtorrent's streaming server.
 ///
 /// Its default is 8000, and a leftover webtorrent (or anything else) on that port
@@ -301,10 +334,7 @@ pub(crate) fn start_play(
     // so a season pack either filled RAM or stalled re-verifying gigabytes of
     // sparse files on the next attempt ("verifying existing torrent data…" and no
     // player). Stream into the cache partition instead.
-    let out_dir = dirs_next::cache_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("torrentx")
-        .join("stream");
+    let out_dir = stream_dir();
     let _ = std::fs::create_dir_all(&out_dir);
     let (out, err) = log_stdio();
     let mut child_cmd = Command::new("webtorrent");
@@ -345,9 +375,41 @@ pub(crate) fn is_playing() -> bool {
 /// nothing is playing.
 pub(crate) fn stop_play() {
     let mut p = lock_or_recover(&PLAYER);
-    if let Some(mut c) = p.take() {
+    let stopped = if let Some(mut c) = p.take() {
         let _ = c.kill();
         let _ = c.wait();
+        true
+    } else {
+        false
+    };
+    drop(p);
+    // The child is gone, so its data is garbage: a 1.5 GB episode left 3.1 GB of
+    // pieces behind and nothing ever removed them.
+    if stopped {
+        prune_stream_cache();
+    }
+}
+
+#[cfg(test)]
+mod stream_cache_tests {
+    use super::clear_stream_data;
+
+    /// Streamed pieces are garbage once the stream stops: one session left 3.1 GB
+    /// in the cache dir, and the next Play then stalled re-verifying it.
+    #[test]
+    fn pruning_empties_the_stream_dir_and_leaves_the_dirs_above_it() {
+        let root = std::env::temp_dir().join(format!("txstream{}", std::process::id()));
+        let dir = root.join("stream");
+        let nested = dir.join("Some.Torrent.Name");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("ep1.mkv"), b"pieces").unwrap();
+        std::fs::write(dir.join("loose.part"), b"x").unwrap();
+
+        clear_stream_data(&dir);
+
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "dir is empty");
+        assert!(dir.exists(), "the stream dir itself stays");
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }
 

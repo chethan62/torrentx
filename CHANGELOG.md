@@ -4,6 +4,16 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.17] — 2026-10-23
+
+### Fixed
+- **Streamed data no longer accumulates.** webtorrent keeps every piece it
+  downloads in `--out`, and nothing ever removed it: one season-pack session left
+  **3.1 GB** in `~/.cache/torrentx/stream`, and the next Play then stalled
+  re-verifying it. The directory belongs to the single stream the app runs, so it is
+  now cleared when a stream stops (off-thread — it can be gigabytes) and once at
+  startup, which also cleans up after a crash or a kill.
+
 ## [18.6.16] — 2026-10-23
 
 ### Fixed
