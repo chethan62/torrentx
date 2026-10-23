@@ -87,35 +87,9 @@ jobs:
       - name: Licences + advisories (cargo-deny)
         run: cargo deny --all-features check licenses advisories bans sources
 
-  # The app advertises itself as cross-platform and build_torrentx.py carries a
-  # Windows path, but nothing ever compiled it. This job builds the .exe so the
-  # claim is checked instead of assumed (it is not shipped: untested on Windows).
-  windows-build:
-    name: windows cross-compile
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: mingw toolchain + rust target
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64 nasm cmake
-          rustup target add x86_64-pc-windows-gnu
-
-      - name: Cache cargo (windows target)
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target/x86_64-pc-windows-gnu
-          key: ${{ runner.os }}-win-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-win-cargo-
-
-      - name: Build the Windows binary
-        run: cargo build --target x86_64-pc-windows-gnu
-
-      - name: Assert the .exe exists
-        run: test -s target/x86_64-pc-windows-gnu/debug/torrentx.exe
-
+  # The Windows claim is proven by .github/workflows/windows-native.yml, which
+  # builds natively on a Windows runner and asserts a window appears. The mingw
+  # cross-compile job that used to live here added no signal on top of that (it
+  # only proved the code links), and its apt step wedged for 18+ minutes
+  # repeatedly, so it is gone. Dispatch windows-native before a release or when
+  # platform-specific code changes.
