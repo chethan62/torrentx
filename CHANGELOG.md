@@ -12,7 +12,16 @@ versions follow [SemVer](https://semver.org/).
   right-click menu). egui_extras registers its resize handle *before* the cell
   content, so that layer covered the divider: the drag selected a row or re-sorted
   the column and the width never changed. The hit rect now stops at the handle band
-  (`cell_rect`), which gives the drag back to the table.
+  (`cell_rect`), which gives the drag back to the table. `Name` stays the column that
+  absorbs a resize (it is the table's only remainder), so widening any other column
+  makes it narrower by the same amount.
+
+### Changed
+- **egui 0.36 → 0.37** (eframe and egui_extras with it). One source change: `Id::new`
+  is now an alias for `Id::unique`. `clipboard-win`, pulled in by egui-winit, had to
+  move off a yanked release (5.4.1 → 5.4.3). Column resizing is unchanged: 0.37 still
+  builds the table without horizontal scrolling, and double-click-to-autosize already
+  existed.
 
 ## [18.6.17] — 2026-10-23
 
