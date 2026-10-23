@@ -4,6 +4,16 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.7] — 2026-10-23
+
+### Fixed
+- **A poisoned state lock no longer strands the UI.** 21 sites used `if let Ok(...)`
+  / `.map(..).unwrap_or(0)`, which silently dropped the update: the status stayed
+  "Searching" after an error, the result counter read 0 over a populated table,
+  and Stop Stream found no child. Every lock now goes through one crate-root
+  `lock_or_recover()`; no raw `lock()` remains outside tests.
+- Test poisons the search-state mutex and asserts the error still lands.
+
 ## [18.6.6] — 2026-10-23
 
 ### Fixed
