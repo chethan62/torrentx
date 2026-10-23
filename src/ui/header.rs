@@ -374,17 +374,33 @@ impl App {
                         }
                     }
                     ui.add_space(SP3);
-                    lbl(ui, "Font", self.pal.sub, 12.0);
-                    for (l, sz) in [("S", 12.0f32), ("M", 14.0), ("L", 16.0)] {
-                        let on = (self.cfg.font_size - sz).abs() < 0.5;
+                    // One control for "everything is too small": a font size only
+                    // moved body text, leaving the 10 px section labels, chips and
+                    // header at their fixed literals.
+                    // One control for "everything is too small". A segmented picker,
+                    // not a slider: it is the vocabulary Rows and Page already use,
+                    // and every step is one click away (Ctrl +/- still fine-tunes).
+                    // A `Slider` here was inert — 75 px of track that ignored both
+                    // clicks and drags while the buttons beside it worked.
+                    lbl(ui, "Scale", self.pal.sub, 12.0);
+                    for (l, v) in [
+                        ("80%", 0.8f32),
+                        ("90%", 0.9),
+                        ("100%", 1.0),
+                        ("110%", 1.1),
+                        ("125%", 1.25),
+                        ("150%", 1.5),
+                    ] {
+                        let on = (self.cfg.ui_scale - v).abs() < 0.01;
                         if ui
                             .add(egui::Button::selectable(
                                 on,
                                 RichText::new(l).font(FontId::proportional(12.0)),
                             ))
+                            .on_hover_text("Scales text, rows and icons together (Ctrl +/-)")
                             .clicked()
                         {
-                            self.cfg.font_size = sz;
+                            self.cfg.ui_scale = v;
                             let _ = save_cfg(&self.cfg);
                         }
                     }

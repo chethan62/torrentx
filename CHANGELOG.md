@@ -4,6 +4,25 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.13] — 2026-10-23
+
+### Added
+- **A Scale control, so the whole interface can be made bigger.** Settings › DISPLAY
+  gets 80 / 90 / 100 / 110 / 125 / 150 % presets, and **Ctrl +** / **Ctrl −** step by
+  5 % (Ctrl 0 resets). It is applied as pixels-per-point, so text, rows, icons and
+  spacing grow together — the old Font S/M/L buttons only moved body text and left
+  the 10 px section labels, chips and toolbar at their fixed sizes. Verified at 160 %
+  with results on screen: no clipped tracker names, badges or action icons, and the
+  search row still fits on one line.
+
+### Changed
+- The Font S/M/L buttons are gone (Scale supersedes them); a saved text size stays
+  as the base the scale multiplies.
+
+### Fixed
+- Zoom keys count key events rather than `key_pressed`, so several presses in one
+  frame (a fast double tap, a held key) no longer collapse into a single step.
+
 ## [18.6.12] — 2026-10-23
 
 ### Fixed

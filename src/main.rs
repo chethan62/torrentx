@@ -648,6 +648,26 @@ pub(crate) fn labeled_input(
 // ─── (logic methods moved to app.rs) ──────────────────────────────
 // ─── eframe::App main loop ─────────────────────────────────────────────────
 
+impl App {
+    /// Scale the whole interface by `cfg.ui_scale`.
+    ///
+    /// Everything is drawn in points, so one pixels-per-point change resizes text,
+    /// rows, icons and spacing together — the alternative (a font size that only
+    /// body text honours) left 10 px section labels and 12 px chips untouched.
+    /// ponytail: `base_ppp` is captured once, so moving the window to a monitor with
+    /// a different scale factor keeps the old base until restart.
+    pub(crate) fn apply_ui_scale(&mut self, ctx: &egui::Context) {
+        if self.base_ppp <= 0.0 {
+            self.base_ppp = ctx.pixels_per_point();
+        }
+        let want =
+            (self.base_ppp * crate::config::clamp_scale(self.cfg.ui_scale) * 100.0).round() / 100.0;
+        if (ctx.pixels_per_point() - want).abs() > 0.001 {
+            ctx.set_pixels_per_point(want);
+        }
+    }
+}
+
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
@@ -655,6 +675,7 @@ impl eframe::App for App {
         // tray item is activated (see `wake_ui`).
         let _ = UI_CTX.set(ctx.clone());
         self.apply_theme(&ctx);
+        self.apply_ui_scale(&ctx);
         let state = self.cur_state();
 
         // --minimized. `with_visible(false)` alone does not hold on X11 (winit
@@ -908,6 +929,44 @@ impl eframe::App for App {
                 &format!("Selected {} results", page_s.len()),
                 self.pal.green,
             );
+        }
+        // Ctrl +/- zoom the whole interface, Ctrl+0 resets — the same gesture as a
+        // browser, so the size control is reachable without opening Settings.
+        if !editing {
+            // Count the key events, not `key_pressed`: several presses can land in
+            // one frame (a fast double tap, or a held key), and a bool collapsed
+            // them into a single step.
+            let (up, down, reset) = ctx.input(|i| {
+                let (mut up, mut down, mut reset) = (0i32, 0i32, false);
+                for e in &i.events {
+                    if let egui::Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } = e
+                    {
+                        if !(modifiers.ctrl || modifiers.command) {
+                            continue;
+                        }
+                        match key {
+                            egui::Key::Equals | egui::Key::Plus => up += 1,
+                            egui::Key::Minus => down += 1,
+                            egui::Key::Num0 => reset = true,
+                            _ => {}
+                        }
+                    }
+                }
+                (up, down, reset)
+            });
+            if up != 0 || down != 0 {
+                self.cfg.ui_scale =
+                    crate::config::clamp_scale(self.cfg.ui_scale + 0.05 * (up - down) as f32);
+                let _ = save_cfg(&self.cfg);
+            } else if reset && self.cfg.ui_scale != 1.0 {
+                self.cfg.ui_scale = 1.0;
+                let _ = save_cfg(&self.cfg);
+            }
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             if self.ui.detail_open {

@@ -148,6 +148,10 @@ impl ViewCache {
 /// together so individual UI/logic modules can borrow only their slice.
 pub(crate) struct App {
     pub(crate) cfg: Config,
+    /// The window's own pixels-per-point, captured on the first frame. The UI
+    /// scale multiplies THIS, never the live value — feeding `pixels_per_point()`
+    /// back into `set_pixels_per_point` compounds every frame.
+    pub(crate) base_ppp: f32,
     pub(crate) pal: Pal,
     pub(crate) tokens: VisualTokens,
     pub(crate) search: SearchUi,
@@ -799,6 +803,7 @@ impl Default for App {
             cfg,
             pal,
             tokens,
+            base_ppp: 0.0,
             search: SearchUi::default(),
             view_cache: ViewCache::default(),
             net: NetState::default(),

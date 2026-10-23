@@ -45,6 +45,15 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="18.6.13" date="2026-10-23">
+      <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.13</url>
+      <description>
+        <ul>
+          <li>Settings › Display › Scale enlarges the whole interface (80-150%)</li>
+          <li>Ctrl + and Ctrl − zoom in 5% steps, Ctrl 0 resets</li>
+        </ul>
+      </description>
+    </release>
     <release version="18.6.12" date="2026-10-23">
       <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.12</url>
       <description>

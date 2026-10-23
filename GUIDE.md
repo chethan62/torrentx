@@ -147,7 +147,7 @@ open.
 | Timeout | 5–120 s | per search request |
 | RSS refresh | seconds | 0 = never auto-refresh |
 | Rows | Compact / Normal / Roomy | row height |
-| Font | S / M / L | 12 / 14 / 16 px base |
+| Scale | 80% / 90% / 100% / 110% / 125% / 150% | scales text, rows and icons together (Ctrl +/- steps 5%) |
 | Page | 25 / 50 / 100 / All | results per page |
 | Dedupe | on/off | merge near-duplicate titles across trackers |
 | Updates | on/off | startup check for newer releases |
@@ -174,6 +174,8 @@ Changes apply immediately; press **Save** to persist connection changes.
 | Ctrl+A | Select all visible results |
 | Ctrl+C | Copy magnet (detail panel open) |
 | Ctrl+R | Re-run last search |
+| Ctrl + / Ctrl − | Scale the interface up / down (5% steps) |
+| Ctrl+0 | Reset the interface scale to 100% |
 
 Shortcuts don't fire while you're typing in an input field.
 

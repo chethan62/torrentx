@@ -19,6 +19,12 @@ pub(crate) struct Config {
     pub(crate) page_size: usize,
     pub(crate) row_height: f32,
     pub(crate) font_size: f32,
+    /// Whole-interface scale (text, rows, icons) applied as pixels-per-point.
+    /// 1.0 = native. `font_size` alone left the chrome — tabs, chips, headers —
+    /// at its fixed literals, so raising it made the body text collide with a
+    /// toolbar that never grew.
+    #[serde(default = "default_ui_scale")]
+    pub(crate) ui_scale: f32,
     pub(crate) show_cat_bar: bool,
     pub(crate) col_tracker: bool,
     pub(crate) col_size: bool,
@@ -69,6 +75,7 @@ impl Default for Config {
             page_size: 50,
             row_height: ROW_HEIGHT_NORMAL,
             font_size: 14.0,
+            ui_scale: 1.0,
             show_cat_bar: true,
             col_tracker: true,
             col_size: true,
@@ -225,6 +232,22 @@ pub(crate) fn default_col_order() -> Vec<String> {
 }
 
 /// Default RSS auto-refresh interval (10 minutes, in seconds).
+pub(crate) const UI_SCALE_MIN: f32 = 0.8;
+pub(crate) const UI_SCALE_MAX: f32 = 1.6;
+
+/// Clamp + snap a scale to the 5% steps the slider and the shortcuts use.
+pub(crate) fn clamp_scale(v: f32) -> f32 {
+    if !v.is_finite() {
+        return 1.0;
+    }
+    let snapped = (v.clamp(UI_SCALE_MIN, UI_SCALE_MAX) * 20.0).round() / 20.0;
+    snapped.clamp(UI_SCALE_MIN, UI_SCALE_MAX)
+}
+
+fn default_ui_scale() -> f32 {
+    1.0
+}
+
 fn default_rss_refresh() -> u64 {
     600
 }
@@ -283,6 +306,22 @@ fn save_to(p: &std::path::Path, c: &Config) -> Result<(), String> {
         let _ = fs::File::open(dir).and_then(|d| d.sync_all());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod scale_tests {
+    use super::*;
+
+    /// The slider and the Ctrl +/- shortcuts both go through this, so an out-of-
+    /// range or NaN value can never reach pixels_per_point.
+    #[test]
+    fn ui_scale_clamps_and_snaps_to_five_percent() {
+        assert_eq!(clamp_scale(1.0), 1.0);
+        assert_eq!(clamp_scale(5.0), UI_SCALE_MAX);
+        assert_eq!(clamp_scale(0.1), UI_SCALE_MIN);
+        assert_eq!(clamp_scale(1.234), 1.25);
+        assert_eq!(clamp_scale(f32::NAN), 1.0);
+    }
 }
 
 #[cfg(test)]
