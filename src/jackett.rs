@@ -736,9 +736,16 @@ fn fetch_into(
     if !st.is_success() {
         return Err(status_error(st));
     }
-    let data = resp
-        .json::<JackettResponse>()
-        .map_err(|e| format!("Parse error: {e}"))?;
+    let data = resp.json::<JackettResponse>().map_err(|e| {
+        // reqwest's Display appends " for url (…?apikey=…)" — the Jackett API key
+        // must never reach the screen, a screenshot, or a pasted bug report.
+        // Without the URL the rest ("expected value at line 1 column 1") still
+        // says what happened, and the hint names the usual cause.
+        format!(
+            "Unexpected response from Jackett ({}) — check the URL in Settings",
+            e.without_url()
+        )
+    })?;
     let n = data.results.len();
     append_results(results, count, data.results);
     // Wake the parked UI loop so the rows paint now, not on the next input.
@@ -1358,6 +1365,50 @@ mod tests {
         assert_eq!(*lock_or_recover(&state), 9, "recovered value is readable");
         *lock_or_recover(&state) = 11;
         assert_eq!(*lock_or_recover(&state), 11, "and writable");
+    }
+
+    /// The error message must not carry the API key. reqwest's Display embeds the
+    /// full request URL (query string and all), which put `apikey=…` on screen in
+    /// the fault-injection pass whenever Jackett answered with HTML or bad JSON.
+    #[test]
+    fn a_parse_error_never_leaks_the_api_key() {
+        use super::{fetch_into, SearchCtx};
+        use std::io::Write;
+        use std::net::TcpListener;
+        use std::sync::{Arc, Mutex};
+
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            use std::io::Read;
+            if let Ok((mut s, _)) = l.accept() {
+                let mut req = [0u8; 1024];
+                let _ = s.read(&mut req);
+                let body = "<html>not json</html>";
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = s.write_all(head.as_bytes());
+                let _ = s.write_all(body.as_bytes());
+                let _ = s.flush();
+            }
+        });
+
+        let ctx = SearchCtx {
+            url: format!("http://127.0.0.1:{port}"),
+            key: "SECRETKEY123".into(),
+            query: "iso".into(),
+            cat: "All".into(),
+            timeout: 5,
+        };
+        let results = Arc::new(Mutex::new(Arc::new(vec![])));
+        let count = Arc::new(Mutex::new(0usize));
+        let err = fetch_into(&ctx, "alpha", &results, &count).unwrap_err();
+
+        assert!(err.contains("Unexpected response from Jackett"), "{err}");
+        assert!(!err.contains("SECRETKEY123"), "the API key leaked: {err}");
+        assert!(!err.contains("apikey"), "the query string leaked: {err}");
     }
 
     #[test]
