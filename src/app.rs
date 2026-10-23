@@ -912,6 +912,7 @@ impl App {
             Arc::clone(&self.search.count),
             Arc::clone(&self.search.epoch),
             Arc::clone(&self.search.answered),
+            self.cfg.dedupe,
             generation,
         );
     }

@@ -29,107 +29,145 @@ pub(crate) struct FileEntry {
     pub(crate) size: String,
 }
 
-/// Parse the listing `webtorrent <magnet> --select` prints:
+/// Read the file list out of `webtorrent info <torrent>`.
 ///
-/// ```text
-/// 0  Sintel.mkv (128 MB)
-/// 1  Sintel.srt (12 KB)
-/// ```
-///
-/// Names may contain " (", so the size is split off from the LAST one; header,
-/// hint and blank lines have no leading index and are skipped. Pure + tested.
-pub(crate) fn parse_file_list(out: &str) -> Vec<FileEntry> {
-    let mut files = Vec::new();
-    for line in out.lines() {
-        let line = line.trim();
-        let Some((idx, rest)) = line.split_once(char::is_whitespace) else {
-            continue;
-        };
-        let Ok(idx) = idx.parse::<usize>() else {
-            continue;
-        };
-        let rest = rest.trim_start();
-        if !rest.ends_with(')') {
-            continue;
-        }
-        let Some(open) = rest.rfind(" (") else {
-            continue;
-        };
-        let name = rest[..open].trim();
-        if name.is_empty() {
-            continue;
-        }
-        files.push(FileEntry {
-            idx,
-            name: name.to_string(),
-            size: rest[open + 2..rest.len() - 1].to_string(),
-        });
-    }
-    files
+/// `--select` with no index used to print the list and exit; webtorrent-cli 6
+/// ignores it and starts DOWNLOADING instead (measured: a local pack gave
+/// "torrent downloaded successfully", and a real 546-seeder magnet sat at
+/// "verifying existing torrent data" until the deadline — i.e. the picker was
+/// silently pulling the whole torrent). `info` prints JSON and exits.
+#[derive(serde::Deserialize)]
+struct InfoFile {
+    path: String,
+    length: u64,
 }
 
-/// Ask webtorrent for the torrent's file list (`--select` with no index lists
-/// and exits). Runs off the UI thread; needs peers for a magnet, so a dead
+pub(crate) fn parse_info_json(out: &str) -> Vec<FileEntry> {
+    #[derive(serde::Deserialize)]
+    struct Info {
+        #[serde(default)]
+        files: Vec<InfoFile>,
+    }
+    let Ok(info) = serde_json::from_str::<Info>(out) else {
+        return vec![];
+    };
+    info.files
+        .into_iter()
+        .enumerate()
+        .map(|(idx, f)| FileEntry {
+            idx,
+            name: f.path,
+            size: crate::jackett::fmt_size(f.length),
+        })
+        .collect()
+}
+
+/// The torrents cache directory (same one `torrent_file` writes to).
+fn torrents_dir() -> PathBuf {
+    dirs_next::cache_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("torrentx")
+        .join("torrents")
+}
+
+/// The lower-case hex infohash of a magnet, if it has a v1 `btih`.
+fn magnet_hash(magnet: &str) -> Option<String> {
+    let i = magnet.find("urn:btih:")? + "urn:btih:".len();
+    let hash: String = magnet[i..]
+        .chars()
+        .take_while(|c| c.is_ascii_hexdigit())
+        .collect();
+    (hash.len() == 40).then(|| hash.to_ascii_lowercase())
+}
+
+/// Fetch a magnet's metadata and return the `.torrent` webtorrent saved.
+///
+/// `webtorrent downloadmeta <magnet>` writes `<infohash>.torrent` into the
+/// working directory — pointing that at the torrents cache means the picker and
+/// the subsequent Play share one file (and Play stops paying the metadata round
+/// trip). Needs peers, so it runs under a budget.
+fn fetch_metadata(magnet: &str) -> Option<PathBuf> {
+    let dir = torrents_dir();
+    std::fs::create_dir_all(&dir).ok()?;
+    let mut child = Command::new("webtorrent")
+        .args(["downloadmeta", magnet])
+        .current_dir(&dir)
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(100))
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break;
+            }
+        }
+    }
+    // downloadmeta names the file after the infohash, so look for exactly that
+    // first — the cache holds other torrents and "newest wins" could hand back
+    // the previous pick.
+    if let Some(hash) = magnet_hash(magnet) {
+        let want = dir.join(format!("{hash}.torrent"));
+        if std::fs::metadata(&want).is_ok_and(|m| m.len() > 64) {
+            return Some(want);
+        }
+    }
+    std::fs::read_dir(&dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "torrent"))
+        .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+}
+
+/// The torrent's file list, from metadata only — no data is downloaded.
+///
+/// Runs off the UI thread. A magnet needs peers for its metadata, so a dead
 /// swarm reports that instead of an empty picker.
 pub(crate) fn list_files(
     magnet: String,
     link: Option<String>,
     tx: std::sync::mpsc::Sender<Result<Vec<FileEntry>, String>>,
 ) {
-    use std::io::Read;
     std::thread::spawn(move || {
-        // The .torrent from Jackett lists files without waiting on peers.
-        let source = link
-            .as_deref()
-            .and_then(|l| torrent_file(&magnet, l))
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or(magnet);
-        let mut child = match Command::new("webtorrent")
-            .args([source.as_str(), "--select"])
-            // chalk colours the index/size; NO_COLOR keeps the parser simple.
+        let source = torrent_file(&magnet, link.as_deref()).or_else(|| fetch_metadata(&magnet));
+        let Some(path) = source else {
+            let _ = tx.send(Err(
+                "No metadata — the torrent's peers are unreachable".to_string()
+            ));
+            // The UI loop parks when nothing is happening; without this the
+            // picker only appeared once the user moved the mouse.
+            crate::wake_ui();
+            return;
+        };
+        let out = Command::new("webtorrent")
+            .args(["info", &path.to_string_lossy()])
             .env("NO_COLOR", "1")
             .stdin(Stdio::null())
-            .stdout(Stdio::piped())
             .stderr(Stdio::null())
-            .spawn()
-        {
-            Ok(c) => c,
+            .output();
+        let files = match out {
+            Ok(o) => parse_info_json(&String::from_utf8_lossy(&o.stdout)),
             Err(e) => {
-                let _ = tx.send(Err(match e.kind() {
-                    std::io::ErrorKind::NotFound => {
-                        "Listing files needs webtorrent-cli — run: npm install -g webtorrent-cli"
-                            .to_string()
-                    }
-                    _ => format!("Could not start webtorrent: {e}"),
-                }));
+                let _ = tx.send(Err(format!("Could not read the torrent: {e}")));
                 return;
             }
         };
-        // Metadata comes from peers, so give it a budget and then stop waiting.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
-        loop {
-            match child.try_wait() {
-                Ok(Some(_)) => break,
-                Ok(None) if std::time::Instant::now() < deadline => {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                }
-                _ => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    break;
-                }
-            }
-        }
-        let mut out = String::new();
-        if let Some(mut s) = child.stdout.take() {
-            let _ = s.read_to_string(&mut out);
-        }
-        let files = parse_file_list(&out);
         let _ = tx.send(if files.is_empty() {
-            Err("No file list — the torrent's peers are unreachable".to_string())
+            Err("This torrent has no files to choose from".to_string())
         } else {
             Ok(files)
         });
+        crate::wake_ui();
     });
 }
 
@@ -137,23 +175,24 @@ pub(crate) fn list_files(
 /// Jackett serves it from its own cache, so this is a file fetch — no swarm
 /// metadata round trip — and webtorrent can name/list files immediately.
 /// None when there is no usable link; the caller falls back to the magnet.
-pub(crate) fn torrent_file(magnet: &str, link: &str) -> Option<PathBuf> {
-    use std::hash::{Hash, Hasher};
-    if !link.starts_with("http") {
-        return None;
-    }
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    magnet.hash(&mut h);
-    let path = dirs_next::cache_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("torrentx")
-        .join("torrents")
-        .join(format!("{:016x}.torrent", h.finish()));
-    // ponytail: no TTL — Jackett's file for one infohash never changes.
+pub(crate) fn torrent_file(magnet: &str, link: Option<&str>) -> Option<PathBuf> {
+    // The cache is consulted FIRST: a magnet-only result (no Jackett link) still
+    // has a .torrent here if the picker fetched the metadata.
+    // Key the cache on the INFOHASH: `fetch_metadata` writes `<btih>.torrent` when
+    // the picker pulls metadata for a magnet, so Play can reuse that file instead
+    // of paying the peer round trip again (it used to hash the magnet string, so
+    // the two paths never met).
+    let hash = magnet_hash(magnet)?;
+    let path = torrents_dir().join(format!("{hash}.torrent"));
+    // ponytail: no TTL — a torrent file for one infohash never changes.
     if let Ok(md) = std::fs::metadata(&path)
         && md.len() > 64
     {
         return Some(path);
+    }
+    let link = link?;
+    if !link.starts_with("http") {
+        return None;
     }
     // Local Jackett: keep the budget short so a hung server cannot stall Play.
     let client = reqwest::blocking::Client::builder()
@@ -172,6 +211,21 @@ pub(crate) fn torrent_file(magnet: &str, link: &str) -> Option<PathBuf> {
     std::fs::create_dir_all(path.parent()?).ok()?;
     std::fs::write(&path, &bytes).ok()?;
     Some(path)
+}
+
+/// A free localhost port for webtorrent's streaming server.
+///
+/// Its default is 8000, and a leftover webtorrent (or anything else) on that port
+/// makes it hang at "verifying existing torrent data…" with no player and no
+/// error — measured on this box, where another WebTorrent held 8000 for two
+/// hours. Bind-and-drop leaves a small race, which is fine: the failure is a
+/// missing player, not a wrong file.
+fn free_port() -> Option<u16> {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .ok()?
+        .local_addr()
+        .ok()
+        .map(|a| a.port())
 }
 
 /// magnet or a `.torrent` path — the two things webtorrent-cli streams from.
@@ -235,8 +289,7 @@ pub(crate) fn start_play(
 ) -> Result<(), String> {
     // Jackett's .torrent means webtorrent has names/sizes before any peer answers,
     // so mpv opens on the first connection instead of after the metadata round trip.
-    let source = link
-        .and_then(|l| torrent_file(magnet, l))
+    let source = torrent_file(magnet, link)
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|| magnet.to_string());
     let args = play_args(&source, player, file)
@@ -244,9 +297,22 @@ pub(crate) fn start_play(
     // One stream at a time: replacing the previous one avoids two players and
     // two torrents competing for bandwidth. webtorrent exits with its player.
     stop_play();
+    // webtorrent streams into /tmp by default; on this box /tmp is a 7.8 GB tmpfs,
+    // so a season pack either filled RAM or stalled re-verifying gigabytes of
+    // sparse files on the next attempt ("verifying existing torrent data…" and no
+    // player). Stream into the cache partition instead.
+    let out_dir = dirs_next::cache_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("torrentx")
+        .join("stream");
+    let _ = std::fs::create_dir_all(&out_dir);
     let (out, err) = log_stdio();
-    let child = Command::new("webtorrent")
-        .args(&args)
+    let mut child_cmd = Command::new("webtorrent");
+    child_cmd.args(&args).arg("--out").arg(&out_dir);
+    if let Some(port) = free_port() {
+        child_cmd.arg("--port").arg(port.to_string());
+    }
+    let child = child_cmd
         .stdin(Stdio::null())
         .stdout(out)
         .stderr(err)
@@ -288,7 +354,7 @@ pub(crate) fn stop_play() {
 #[cfg(test)]
 mod tests {
     use super::{
-        PLAYERS, is_playing, log_path, parse_file_list, play_args, player_flag, start_play,
+        PLAYERS, is_playing, log_path, parse_info_json, play_args, player_flag, start_play,
         stop_play, torrent_file,
     };
 
@@ -354,10 +420,18 @@ mod tests {
                 let mut buf = [0u8; 1024];
                 let n = s.read(&mut buf).unwrap_or(0);
                 let bad = String::from_utf8_lossy(&buf[..n]).contains("/bad");
+                // >64 bytes: the cache refuses a tiny/truncated file, so a real
+                // .torrent (which is tens of KB) is what the threshold targets.
                 let body: &[u8] = if bad {
                     b"<html>not a torrent</html>"
                 } else {
-                    b"d8:announce4:http4:infod4:name1:x6:lengthi1eee"
+                    concat!(
+                        "d8:announce4:http7:comment80:",
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        "4:infod4:name1:x6:lengthi1eee"
+                    )
+                    .as_bytes()
                 };
                 let head = format!(
                     "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -369,39 +443,50 @@ mod tests {
         });
 
         let m = format!("magnet:?xt=urn:btih:{}&dn=stub", "c".repeat(40));
-        let p = torrent_file(&m, &format!("http://{addr}/ok")).expect("bencoded body is cached");
+        let p =
+            torrent_file(&m, Some(&format!("http://{addr}/ok"))).expect("bencoded body is cached");
         assert_eq!(std::fs::read(&p).unwrap().first(), Some(&b'd'));
         // Second call is served from the cache (the server only had two answers).
-        assert_eq!(torrent_file(&m, &format!("http://{addr}/ok")), Some(p));
+        assert_eq!(
+            torrent_file(&m, Some(&format!("http://{addr}/ok"))),
+            Some(p.clone())
+        );
 
         let other = format!("magnet:?xt=urn:btih:{}&dn=other", "d".repeat(40));
-        assert!(torrent_file(&other, &format!("http://{addr}/bad")).is_none());
+        assert!(torrent_file(&other, Some(&format!("http://{addr}/bad"))).is_none());
         // Non-HTTP links never reach the network.
-        assert!(torrent_file(&other, "file:///tmp/x.torrent").is_none());
+        assert!(torrent_file(&other, Some("file:///tmp/x.torrent")).is_none());
+        // A magnet-only result (no Jackett link) still finds the .torrent the
+        // picker's metadata fetch cached under its infohash.
+        assert_eq!(
+            torrent_file(&m, None),
+            Some(p.clone()),
+            "cached file reused"
+        );
     }
 
     #[test]
-    fn parses_the_select_listing() {
-        // Shape printed by webtorrent-cli with NO_COLOR set.
-        let out = "Select a file to download:\n0  Sintel.mkv (128 MB)\n1  Sintel.srt (12 KB)\n10  Episode (with parens) (1.2 GB)\n\nTo select a specific file, re-run `webtorrent` with \"--select [index]\"\n";
-        let f = parse_file_list(out);
-        assert_eq!(f.len(), 3);
-        assert_eq!(
-            (f[0].idx, f[0].name.as_str(), f[0].size.as_str()),
-            (0, "Sintel.mkv", "128 MB")
-        );
-        assert_eq!(f[1].size, "12 KB");
-        // A name containing " (" must not truncate at the first one.
-        assert_eq!(f[2].idx, 10);
-        assert_eq!(f[2].name, "Episode (with parens)");
-        assert_eq!(f[2].size, "1.2 GB");
-        // Indented output (some terminals) still parses.
-        assert_eq!(parse_file_list("  2  a.mkv (1 MB)").len(), 1);
-        // Junk lines are skipped, not guessed at.
-        assert!(parse_file_list("").is_empty());
-        assert!(parse_file_list("Magnet: magnet:?xt=urn:btih:aa").is_empty());
+    fn info_json_becomes_the_picker_entries() {
+        // Real shape of `webtorrent info <torrent>`; sizes come from bytes.
+        let json = r#"{
+          "name": "Lanterns.2026.S01.MULTi",
+          "files": [
+            {"path": "Lanterns.2026.S01E01.1080p.WEB.H264-FRQC.mkv", "name": "E01.mkv", "length": 2115271393},
+            {"path": "Lanterns.2026.S01E02.1080p.WEB.H264-FRQC.mkv", "name": "E02.mkv", "length": 1707249500}
+          ],
+          "pieceLength": 16384
+        }"#;
+        let f = parse_info_json(json);
+        assert_eq!(f.len(), 2);
+        assert_eq!(f[0].idx, 0);
+        assert!(f[0].name.ends_with("S01E01.1080p.WEB.H264-FRQC.mkv"));
+        assert_eq!(f[0].size, crate::jackett::fmt_size(2115271393));
+        assert_eq!(f[1].idx, 1);
+        // Anything that is not the info JSON is an empty list, not a panic.
+        assert!(parse_info_json("fetching torrent metadata from 2 peers").is_empty());
+        assert!(parse_info_json("").is_empty());
+        assert!(parse_info_json(r#"{"name":"x"}"#).is_empty());
     }
-
     /// End-to-end over the process boundary: a stub `webtorrent` on PATH records
     /// its argv and pid. Nothing else in this test binary spawns `webtorrent`.
     #[cfg(unix)]
@@ -460,9 +545,26 @@ mod tests {
             recorded(),
             std::env::var("PATH").unwrap_or_default()
         );
+        let rec: Vec<String> = recorded().lines().map(str::to_string).collect();
         assert_eq!(
-            recorded().lines().collect::<Vec<_>>(),
-            vec![m.as_str(), "--mpv", "--not-on-top"]
+            &rec[..3],
+            [m.as_str(), "--mpv", "--not-on-top"],
+            "got {rec:?}"
+        );
+        // Streams land in the cache partition, not webtorrent's /tmp default.
+        assert_eq!(rec[3], "--out", "got {rec:?}");
+        assert!(
+            rec[4].ends_with("torrentx/stream"),
+            "unexpected --out {}",
+            rec[4]
+        );
+        // A free streaming port: 8000 is webtorrent's default and a squatter there
+        // hangs the stream with no player and no error.
+        assert_eq!(rec[5], "--port", "got {rec:?}");
+        assert!(
+            rec[6].parse::<u16>().is_ok_and(|p| p > 1024),
+            "unexpected port {}",
+            rec[6]
         );
 
         // The streamer's own output must land in the log: that peer count is the

@@ -1061,9 +1061,23 @@ impl eframe::App for App {
                                 .map(|e| format!("  ({:.1}s)", e))
                                 .unwrap_or_default();
                             svg_icon(ui, SvgIcon::Check, ICON_SM, self.pal.green);
+                            // The search settles on the rows it has; a straggler may
+                            // still be appending, so keep counting it out loud.
+                            let (done, asked) = (
+                                self.search.answered.load(Ordering::Relaxed),
+                                self.search.targets.load(Ordering::Relaxed),
+                            );
+                            let idx_note = if asked > 1 && done < asked {
+                                format!("  ·  {}/{asked} indexers", done)
+                            } else {
+                                String::new()
+                            };
                             lbl(
                                 ui,
-                                &format!("{n} results for \"{}\"{}", self.search.last_query, e),
+                                &format!(
+                                    "{n} results for \"{}\"{}{idx_note}",
+                                    self.search.last_query, e
+                                ),
                                 self.pal.green,
                                 12.0,
                             );

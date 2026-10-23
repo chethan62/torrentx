@@ -696,11 +696,15 @@ fn append_results(
     results: &Arc<Mutex<Arc<Vec<TorrentResult>>>>,
     count: &Arc<Mutex<usize>>,
     mut add: Vec<TorrentResult>,
+    dedupe: bool,
 ) {
     let total = {
         let mut r = lock_or_recover(results);
         let mut v = (**r).clone();
         v.append(&mut add);
+        if dedupe {
+            v = dedupe_best_seeded(v);
+        }
         let n = v.len();
         *r = Arc::new(v);
         n
@@ -718,6 +722,10 @@ fn append_results(
 /// 120 s) was the worst case. A single-indexer search still honours the setting.
 const INDEXER_DEADLINE_SECS: u64 = 20;
 
+/// How long the fan-out waits before reporting Done on the rows it already has.
+/// The quick indexers answer in ~1-2 s; this is the grace for a merely slow one.
+const EARLY_DONE_SECS: u64 = 3;
+
 /// The per-indexer deadline used by the "All" fan-out.
 pub(crate) fn indexer_timeout(base: u64) -> u64 {
     base.min(INDEXER_DEADLINE_SECS)
@@ -730,6 +738,10 @@ struct SearchCtx {
     query: String,
     cat: String,
     timeout: u64,
+    /// Keep the stored set deduped as rows arrive. With the early-Done watchdog a
+    /// straggler can append AFTER the settle pass, and an undeduped late row would
+    /// make the badge disagree with the table.
+    dedupe: bool,
 }
 
 /// Fetch one indexer and append its rows. Err is a message for the UI.
@@ -760,7 +772,7 @@ fn fetch_into(
         )
     })?;
     let n = data.results.len();
-    append_results(results, count, data.results);
+    append_results(results, count, data.results, ctx.dedupe);
     // Wake the parked UI loop so the rows paint now, not on the next input.
     crate::wake_ui();
     Ok(n)
@@ -779,6 +791,7 @@ pub(crate) fn start_search(
     count: Arc<Mutex<usize>>,
     epoch: Arc<AtomicU64>,
     answered: Arc<AtomicUsize>,
+    dedupe: bool,
     generation: u64,
 ) {
     thread::spawn(move || {
@@ -796,6 +809,7 @@ pub(crate) fn start_search(
             query: query.clone(),
             cat: cat.clone(),
             timeout,
+            dedupe,
         };
 
         // One indexer: the plain request, same as before.
@@ -821,6 +835,26 @@ pub(crate) fn start_search(
             timeout: indexer_timeout(ctx.timeout),
             ..ctx
         };
+        // Early Done. Every worker wakes the UI as it appends, so the table is
+        // usable as soon as the quick indexers answer; waiting for the slowest one
+        // only kept the Search button disabled and the timer running (measured:
+        // 8/9 in 2.5 s, the last at 12.65 s).
+        {
+            let state = Arc::clone(&state);
+            let count = Arc::clone(&count);
+            let epoch = Arc::clone(&epoch);
+            thread::spawn(move || {
+                thread::sleep(Duration::from_secs(EARLY_DONE_SECS));
+                if epoch.load(Ordering::Relaxed) == generation
+                    && *lock_or_recover(&count) > 0
+                    && matches!(*lock_or_recover(&state), SearchState::Searching)
+                {
+                    *lock_or_recover(&state) = SearchState::Done;
+                    crate::wake_ui();
+                }
+            });
+        }
+
         let mut handles = Vec::new();
         for idx in targets {
             let ctx = ctx.clone();
@@ -1100,6 +1134,30 @@ mod deadline_tests {
         assert_eq!(indexer_timeout(120), 20);
         assert_eq!(indexer_timeout(45), 20);
         assert_eq!(indexer_timeout(5), 5, "a smaller timeout is still honoured");
+    }
+}
+
+#[cfg(test)]
+mod append_tests {
+    use super::*;
+
+    /// The early-Done watchdog lets a straggler append AFTER the settle pass, so
+    /// the stored set has to dedupe as it grows — otherwise the badge and the
+    /// table disagree, and the best-seeded copy can be the one that is dropped.
+    #[test]
+    fn appending_with_dedupe_keeps_the_best_seeded_and_the_count_in_step() {
+        let results: Arc<Mutex<Arc<Vec<TorrentResult>>>> =
+            Arc::new(Mutex::new(Arc::new(Vec::new())));
+        let count = Arc::new(Mutex::new(0usize));
+        let row = |seeds: u32| TorrentResult {
+            title: "Slow Horses S06E06 1080p".into(),
+            seeders: Some(seeds),
+            ..Default::default()
+        };
+        append_results(&results, &count, vec![row(5), row(900)], true);
+        assert_eq!(lock_or_recover(&results).len(), 1, "one release, one row");
+        assert_eq!(*lock_or_recover(&count), 1, "count follows the rows");
+        assert_eq!(lock_or_recover(&results)[0].seeders, Some(900));
     }
 }
 
@@ -1439,6 +1497,7 @@ mod tests {
             query: "iso".into(),
             cat: "All".into(),
             timeout: 5,
+            dedupe: false,
         };
         let results = Arc::new(Mutex::new(Arc::new(vec![])));
         let count = Arc::new(Mutex::new(0usize));
@@ -1499,6 +1558,7 @@ mod tests {
             Arc::clone(&count),
             Arc::clone(&epoch),
             Arc::clone(&answered),
+            false,
             1,
         );
 

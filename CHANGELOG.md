@@ -4,6 +4,34 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.16] — 2026-10-23
+
+### Fixed
+- **The episode/file picker actually lists files.** `webtorrent <src> --select` with no
+  index used to print the list and exit; webtorrent-cli 6 ignores it and starts
+  DOWNLOADING (measured: a local pack printed "torrent downloaded successfully", and a
+  real 546-seeder magnet sat at "verifying existing torrent data" until the 30 s
+  deadline — the picker was silently pulling the whole torrent). The list now comes from
+  `webtorrent info <torrent>`, which prints JSON and exits.
+- **Magnet-only results can be listed at all.** With no Jackett `.torrent` (most
+  private/public indexers redirect to a magnet) the app now runs
+  `webtorrent downloadmeta` into its own cache and reads that — 14 s on the first
+  request, instant afterwards.
+- **The picker appears on its own.** The listing thread never woke the UI loop, which
+  parks when idle, so the picker only opened once the mouse moved.
+- **Play streams into the cache partition, not `/tmp`.** `/tmp` here is a 7.8 GB tmpfs;
+  a season pack either filled RAM or stalled re-verifying gigabytes of sparse files.
+- **Play passes a free `--port`.** webtorrent's default 8000 was held by a leftover
+  WebTorrent, and a squatter there hangs the stream with no player and no error.
+- **The cached `.torrent` is keyed on the infohash everywhere**, so Play reuses the file
+  the picker fetched instead of paying the metadata round trip again.
+
+### Measured (real swarm, 411-seed season pack, 8 files)
+- picker: 8 entries with real names and sizes (cold 14 s, warm 6 s); picking
+  "S01E01 - Pilot" showed `…Silence).mkv (1.56 GB)` in the panel; Play opened **mpv in
+  0.66 s** from the cached `.torrent` over a free port, and webtorrent reported data
+  arriving from 7/10 peers.
+
 ## [18.6.15] — 2026-10-23
 
 ### Changed
