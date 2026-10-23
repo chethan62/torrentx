@@ -239,9 +239,11 @@ Deliberate, not bugs — each line says what to do instead.
 - **Jackett only** — the app calls Jackett's `/api/v2.0/indexers/…` endpoints for
   the indexer list and searches, so Prowlarr (or a bare Torznab URL) will not
   connect. Point it at a Jackett instance.
-- **One request per indexer, no paging** — a search asks each indexer once and
-  Jackett returns what it has (often ≤100 per indexer, newest first). The page
-  buttons slice that set; they do not fetch more from the tracker.
+- **No deeper paging exists** — a search asks each indexer once and Jackett returns
+  what it has (≤100 per indexer, newest first). Jackett ignores `Limit`/`Offset` on
+  its results API (measured: identical rows with and without them) and its Torznab
+  endpoint honours `limit` but returns nothing for any `offset`, so the page buttons
+  can only slice the set that came back.
 - **One stream at a time** — starting a second play stops the first
   (`start_play` calls `stop_play`), so two players never fight for bandwidth.
 - **Column order is fixed** — Settings toggles which columns are shown, not
