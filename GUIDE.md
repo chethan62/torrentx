@@ -151,7 +151,7 @@ open.
 | Page | 25 / 50 / 100 / All | results per page |
 | Dedupe | on/off | merge near-duplicate titles across trackers |
 | Updates | on/off | startup check for newer releases |
-| At login | on/off | writes `~/.config/autostart/torrentx.desktop` so RSS keeps polling |
+| At login | on/off | Linux only: writes `~/.config/autostart/torrentx.desktop` so RSS keeps polling |
 | Cat bar | on/off | category chips above results |
 | Columns | per-column toggles | Tracker…Date; the order is fixed (Tracker, Name, Size, Seeds, Leech, Ratio, Health, Date) |
 | Accent | color | overrides the theme's accent |

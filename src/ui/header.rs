@@ -416,16 +416,23 @@ impl App {
                         self.cfg.check_updates = !self.cfg.check_updates;
                         let _ = save_cfg(&self.cfg);
                     }
-                    ui.add_space(SP2);
-                    if ui
-                        .add(egui::Button::selectable(
-                            crate::autostart_on(),
-                            RichText::new("At login").font(FontId::proportional(12.0)),
-                        ))
-                        .on_hover_text("Start TorrentX at login so RSS feeds keep polling")
-                        .clicked()
+                    // XDG autostart is a Linux mechanism. Elsewhere the pill
+                    // would be a control that silently does nothing (macOS needs a
+                    // LaunchAgent, Windows a Startup-folder link), so it is absent
+                    // rather than lying — and neither platform ships a build.
+                    #[cfg(target_os = "linux")]
                     {
-                        crate::set_autostart(!crate::autostart_on());
+                        ui.add_space(SP2);
+                        if ui
+                            .add(egui::Button::selectable(
+                                crate::autostart_on(),
+                                RichText::new("At login").font(FontId::proportional(12.0)),
+                            ))
+                            .on_hover_text("Start TorrentX at login so RSS feeds keep polling")
+                            .clicked()
+                        {
+                            crate::set_autostart(!crate::autostart_on());
+                        }
                     }
                     ui.add_space(SP2);
                     if ui

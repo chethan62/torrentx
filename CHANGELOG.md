@@ -4,6 +4,13 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **The "At login" pill is Linux-only now.** It was compiled on every target but
+  writes an XDG autostart file, so on Windows/macOS it was a control that silently
+  did nothing. Hidden there rather than left lying (no build ships for either).
+
 ## [18.6.8] — 2026-10-23
 
 ### Added

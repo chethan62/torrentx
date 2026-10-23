@@ -30,10 +30,14 @@ pub(crate) const CATS: &[&str] = &[
     "All", "Movies", "TV", "Music", "PC Games", "Software", "Anime", "Books", "XXX",
 ];
 
-// ─── Autostart ─────────────────────────────────────────────────────────────
+// ─── Autostart (Linux) ─────────────────────────────────────────────────────
 // TorrentX has no daemon, so RSS feeds only poll while the window is open.
 // Starting at login is the whole feature: one XDG autostart file, no service.
+// Everything here is Linux-only, pill and helpers alike: on another target the
+// file would be written where nothing reads it, and an unused-code warning is the
+// honest signal that the feature does not exist there.
 
+#[cfg(target_os = "linux")]
 fn autostart_file() -> Option<std::path::PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(std::path::PathBuf::from)
@@ -41,12 +45,14 @@ fn autostart_file() -> Option<std::path::PathBuf> {
         .map(|d| d.join("autostart/torrentx.desktop"))
 }
 
+#[cfg(target_os = "linux")]
 pub(crate) fn autostart_on() -> bool {
     autostart_file().is_some_and(|p| p.exists())
 }
 
 /// The launcher line must be the AppImage, not the `/tmp/.mount_*/usr/bin`
 /// binary inside it: that path is gone after the process exits.
+#[cfg(target_os = "linux")]
 fn autostart_exe() -> std::path::PathBuf {
     std::env::var_os("APPIMAGE")
         .map(std::path::PathBuf::from)
@@ -54,6 +60,7 @@ fn autostart_exe() -> std::path::PathBuf {
         .unwrap_or_default()
 }
 
+#[cfg(target_os = "linux")]
 fn desktop_entry(exe: &std::path::Path) -> String {
     format!(
         "[Desktop Entry]\nType=Application\nName=TorrentX\nComment=Search all your Jackett indexers\nExec=\"{}\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
@@ -61,6 +68,7 @@ fn desktop_entry(exe: &std::path::Path) -> String {
     )
 }
 
+#[cfg(target_os = "linux")]
 pub(crate) fn set_autostart(on: bool) {
     let Some(path) = autostart_file() else { return };
     if !on {
@@ -1293,6 +1301,7 @@ mod tests {
     /// binary inside the mount vanishes), carry Exec, and be a valid desktop
     /// entry — a malformed one is silently ignored by every desktop.
     #[test]
+    #[cfg(target_os = "linux")]
     fn autostart_entry_names_the_appimage_and_is_a_desktop_entry() {
         let e = desktop_entry(std::path::Path::new(
             "/home/u/Applications/TorrentX.AppImage",
