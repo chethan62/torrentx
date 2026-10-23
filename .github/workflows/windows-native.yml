@@ -1,0 +1,92 @@
+name: windows-native
+
+# The point of this workflow: TorrentX has only ever been CROSS-compiled to
+# Windows from Linux (ci.yml's `windows cross-compile`). An .exe that links is
+# not an .exe that starts — wgpu needs a real adapter, fonts need to load, the
+# config file needs %APPDATA%. This runs the thing on a GitHub-hosted Windows VM
+# and asserts a window titled TorrentX actually appears.
+#
+# Dispatch-only: it costs ~8 minutes and proves a claim, it does not gate every
+# push. Run it before a release or after touching platform-specific code.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-native:
+    name: windows build + launch
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        run: |
+          rustup show
+          cargo --version
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-native-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-native-cargo-
+
+      - name: Build (native MSVC)
+        run: cargo build --release
+
+      - name: --version answers
+        shell: pwsh
+        run: |
+          $v = & .\target\release\torrentx.exe --version
+          "version output: $v"
+          if ($LASTEXITCODE -ne 0) { throw "torrentx.exe --version exited $LASTEXITCODE" }
+          if ($v -notmatch 'TorrentX 18\.') { throw "unexpected --version output: $v" }
+
+      - name: Launch smoke — a window must appear
+        shell: pwsh
+        run: |
+          # No --config: the app writes its own defaults into %APPDATA%. Nothing
+          # has to answer on the network for the window to paint.
+          $err = Join-Path $PWD 'launch.err.txt'
+          $p = Start-Process -FilePath .\target\release\torrentx.exe -PassThru `
+                -RedirectStandardError $err -RedirectStandardOutput (Join-Path $PWD 'launch.out.txt')
+          # wgpu initialises the adapter and egui paints the first frame well
+          # inside this; 20 s also covers a cold font parse.
+          Start-Sleep -Seconds 20
+          $p.Refresh()
+          if ($p.HasExited) {
+            "--- stderr ---"; Get-Content $err -ErrorAction SilentlyContinue
+            "--- stdout ---"; Get-Content (Join-Path $PWD 'launch.out.txt') -ErrorAction SilentlyContinue
+            throw "torrentx.exe exited early with code $($p.ExitCode)"
+          }
+          $title = $p.MainWindowTitle
+          "window title: '$title'"
+          $title = "$title"
+          if ($title -notmatch 'TorrentX') {
+            "--- stderr ---"; Get-Content $err -ErrorAction SilentlyContinue
+            throw "no main window (title '$title') — the process runs but paints nothing"
+          }
+          # Prove the config file it created is where Windows expects it.
+          $cfg = Join-Path $env:APPDATA 'torrentx\config.json'
+          if (-not (Test-Path $cfg)) { throw "no config written at $cfg" }
+          "config written: $cfg ($((Get-Item $cfg).Length) bytes)"
+          Stop-Process -Id $p.Id -Force
+          "launch smoke: ok"
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-launch-logs
+          path: |
+            launch.err.txt
+            launch.out.txt
+          if-no-files-found: ignore
