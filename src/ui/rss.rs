@@ -17,25 +17,23 @@ impl App {
             return;
         }
         // Cache the item so fade-out still has content after rss_detail clears.
-        if open {
-            if let Some(di) = self.rss.rss_detail {
-                if let Some(feed) = self.rss.rss_feeds.get(self.rss.rss_selected) {
-                    if let Some(item) = feed.items.get(di).cloned() {
-                        self.ui.detail_row = Some(TorrentResult {
-                            title: item.title.clone(),
-                            magnet_uri: item.magnet.clone(),
-                            link: item.link.clone(),
-                            tracker: item.tracker.clone(),
-                            size: item.size,
-                            seeders: item.seeders,
-                            peers: item.leechers,
-                            category_desc: item.category.clone(),
-                            publish_date: item.pub_date.clone(),
-                            details: None,
-                        });
-                    }
-                }
-            }
+        if open
+            && let Some(di) = self.rss.rss_detail
+            && let Some(feed) = self.rss.rss_feeds.get(self.rss.rss_selected)
+            && let Some(item) = feed.items.get(di).cloned()
+        {
+            self.ui.detail_row = Some(TorrentResult {
+                title: item.title.clone(),
+                magnet_uri: item.magnet.clone(),
+                link: item.link.clone(),
+                tracker: item.tracker.clone(),
+                size: item.size,
+                seeders: item.seeders,
+                peers: item.leechers,
+                category_desc: item.category.clone(),
+                publish_date: item.pub_date.clone(),
+                details: None,
+            });
         }
         let Some(_row) = self.ui.detail_row.clone() else {
             return;
@@ -478,12 +476,12 @@ impl App {
             return;
         }
 
-        if let Some(di) = self.rss.rss_detail {
-            if let Some(item) = items.get(di).cloned() {
-                // NOTE: rendering moved to draw_rss_detail_panel() (frame
-                // level, before CentralPanel) so it appears BESIDE the table.
-                let _ = (di, item);
-            }
+        if let Some(di) = self.rss.rss_detail
+            && let Some(item) = items.get(di).cloned()
+        {
+            // NOTE: rendering moved to draw_rss_detail_panel() (frame
+            // level, before CentralPanel) so it appears BESIDE the table.
+            let _ = (di, item);
         }
 
         use egui_extras::{Column, TableBuilder};
@@ -795,25 +793,25 @@ impl App {
                     });
                 ui.add_space(SP4);
                 if item.magnet.is_some() {
-                    if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", pal.accent) {
-                        if let Some(m) = &item.magnet {
-                            let _ = safe_open(m);
-                        }
+                    if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", pal.accent)
+                        && let Some(m) = &item.magnet
+                    {
+                        let _ = safe_open(m);
                     }
                     ui.add_space(SP2);
-                    if wide_icon_btn(ui, SvgIcon::Copy, "Copy Magnet", pal.sub) {
-                        if let Some(m) = &item.magnet {
-                            ui.ctx().copy_text(m.clone());
-                            self.toast("Copied", pal.green);
-                        }
+                    if wide_icon_btn(ui, SvgIcon::Copy, "Copy Magnet", pal.sub)
+                        && let Some(m) = &item.magnet
+                    {
+                        ui.ctx().copy_text(m.clone());
+                        self.toast("Copied", pal.green);
                     }
                     ui.add_space(SP2);
                 }
                 if item.link.is_some() {
-                    if wide_icon_btn(ui, SvgIcon::Download, "Download .torrent", pal.green) {
-                        if let Some(l) = &item.link {
-                            let _ = safe_open(l);
-                        }
+                    if wide_icon_btn(ui, SvgIcon::Download, "Download .torrent", pal.green)
+                        && let Some(l) = &item.link
+                    {
+                        let _ = safe_open(l);
                     }
                     ui.add_space(SP2);
                 }
@@ -829,12 +827,12 @@ impl App {
         let fs = self.cfg.font_size;
         let is_edit = edit_idx.is_some();
 
-        if is_edit && self.rss.rss_new_cfg.name.is_empty() {
-            if let Some(idx) = edit_idx {
-                if let Some(feed) = self.rss.rss_feeds.get(idx) {
-                    self.rss.rss_new_cfg = feed.config.clone();
-                }
-            }
+        if is_edit
+            && self.rss.rss_new_cfg.name.is_empty()
+            && let Some(idx) = edit_idx
+            && let Some(feed) = self.rss.rss_feeds.get(idx)
+        {
+            self.rss.rss_new_cfg = feed.config.clone();
         }
 
         let title = if is_edit {

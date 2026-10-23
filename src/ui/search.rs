@@ -353,18 +353,17 @@ impl App {
                     self.ui.selected = Some(self.ui.selected.map_or(0, |s| s.saturating_sub(1)));
                     self.ui.detail_open = true;
                 }
-                if !typing && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    if let Some(i) = self.ui.selected {
-                        if let Some(r) = page_s.get(i) {
-                            if let Some(m) = &r.magnet_uri {
-                                if is_magnet(m) {
-                                    let _ = safe_open(m);
-                                    self.toast("Opening magnet…", self.pal.accent);
-                                } else {
-                                    self.toast("No valid magnet link", self.pal.yellow);
-                                }
-                            }
-                        }
+                if !typing
+                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    && let Some(i) = self.ui.selected
+                    && let Some(r) = page_s.get(i)
+                    && let Some(m) = &r.magnet_uri
+                {
+                    if is_magnet(m) {
+                        let _ = safe_open(m);
+                        self.toast("Opening magnet…", self.pal.accent);
+                    } else {
+                        self.toast("No valid magnet link", self.pal.yellow);
                     }
                 }
                 if !typing
@@ -373,42 +372,40 @@ impl App {
                 {
                     self.ui.detail_open = !self.ui.detail_open;
                 }
-                if !typing && ui.input(|i| i.key_pressed(egui::Key::F)) {
-                    if let Some(i) = self.ui.selected {
-                        if let Some(r) = page_s.get(i).cloned() {
-                            self.add_fav(&r);
-                        }
+                if !typing
+                    && ui.input(|i| i.key_pressed(egui::Key::F))
+                    && let Some(i) = self.ui.selected
+                    && let Some(r) = page_s.get(i).cloned()
+                {
+                    self.add_fav(&r);
+                }
+                if !typing
+                    && ui.input(|i| i.key_pressed(egui::Key::M))
+                    && let Some(i) = self.ui.selected
+                    && let Some(r) = page_s.get(i)
+                    && let Some(m) = &r.magnet_uri
+                {
+                    if is_magnet(m) {
+                        let _ = safe_open(m);
+                        self.toast("Opening magnet…", self.pal.accent);
+                    } else {
+                        self.toast("No valid magnet link", self.pal.yellow);
                     }
                 }
-                if !typing && ui.input(|i| i.key_pressed(egui::Key::M)) {
-                    if let Some(i) = self.ui.selected {
-                        if let Some(r) = page_s.get(i) {
-                            if let Some(m) = &r.magnet_uri {
-                                if is_magnet(m) {
-                                    let _ = safe_open(m);
-                                    self.toast("Opening magnet…", self.pal.accent);
-                                } else {
-                                    self.toast("No valid magnet link", self.pal.yellow);
-                                }
-                            }
-                        }
-                    }
-                }
-                if !typing && ui.input(|i| i.key_pressed(egui::Key::P)) {
-                    if let Some(i) = self.ui.selected {
-                        if let Some(r) = page_s.get(i) {
-                            if let Some(m) = &r.magnet_uri {
-                                match crate::player::start_play(
-                                    m,
-                                    r.link.as_deref(),
-                                    &self.cfg.player,
-                                    self.picked_file(&r.title),
-                                ) {
-                                    Ok(()) => self.toast("Starting stream…", self.pal.accent),
-                                    Err(e) => self.toast(&e, self.pal.red),
-                                }
-                            }
-                        }
+                if !typing
+                    && ui.input(|i| i.key_pressed(egui::Key::P))
+                    && let Some(i) = self.ui.selected
+                    && let Some(r) = page_s.get(i)
+                    && let Some(m) = &r.magnet_uri
+                {
+                    match crate::player::start_play(
+                        m,
+                        r.link.as_deref(),
+                        &self.cfg.player,
+                        self.picked_file(&r.title),
+                    ) {
+                        Ok(()) => self.toast("Starting stream…", self.pal.accent),
+                        Err(e) => self.toast(&e, self.pal.red),
                     }
                 }
 
@@ -447,12 +444,11 @@ impl App {
         let page_s = self.page_slice(&view.sorted);
         // Cache the selected row so the fade-out animation still has content
         // after `selected` is cleared on close.
-        if self.ui.detail_open {
-            if let Some(idx) = self.ui.selected {
-                if let Some(r) = page_s.get(idx).cloned() {
-                    self.ui.detail_row = Some(r.clone());
-                }
-            }
+        if self.ui.detail_open
+            && let Some(idx) = self.ui.selected
+            && let Some(r) = page_s.get(idx).cloned()
+        {
+            self.ui.detail_row = Some(r.clone());
         }
         let Some(r) = self.ui.detail_row.clone() else {
             return;

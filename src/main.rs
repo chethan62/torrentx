@@ -13,13 +13,13 @@ use app::App;
 use config::save_cfg;
 
 use jackett::{SearchState, Tab};
-use themes::{tint, Pal};
+use themes::{Pal, tint};
 
 use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 use std::time::{Duration, Instant};
 
 use crate::ui::{
-    margin, ICON_LG, ICON_MD, ICON_SM, ICON_XS, MOTION_MS, R_LG, R_MD, R_SM, SP1, SP2, SP3, SP4,
+    ICON_LG, ICON_MD, ICON_SM, ICON_XS, MOTION_MS, R_LG, R_MD, R_SM, SP1, SP2, SP3, SP4, margin,
 };
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -731,21 +731,21 @@ impl eframe::App for App {
             });
         }
         // Drain indexer fetch result
-        if self.net.indexers_loading {
-            if let Ok(list) = self.net.indexers_rx.try_recv() {
-                self.net.jackett_ok = Some(list.is_some()); // None = Jackett unreachable
-                match list {
-                    Some(l) => {
-                        self.net.indexers = l;
-                        self.net.indexers_retry_at = None;
-                    }
-                    None => {
-                        // Unreachable — back off before retrying.
-                        self.net.indexers_retry_at = Some(Instant::now() + Duration::from_secs(60));
-                    }
+        if self.net.indexers_loading
+            && let Ok(list) = self.net.indexers_rx.try_recv()
+        {
+            self.net.jackett_ok = Some(list.is_some()); // None = Jackett unreachable
+            match list {
+                Some(l) => {
+                    self.net.indexers = l;
+                    self.net.indexers_retry_at = None;
                 }
-                self.net.indexers_loading = false;
+                None => {
+                    // Unreachable — back off before retrying.
+                    self.net.indexers_retry_at = Some(Instant::now() + Duration::from_secs(60));
+                }
             }
+            self.net.indexers_loading = false;
         }
 
         // Check for updates once at startup (background); show a toast when
@@ -895,19 +895,19 @@ impl eframe::App for App {
         // Skipped while a TextEdit owns the keyboard, so select-all still
         // works inside the query/filters/settings inputs.
         let editing = ctx.memory(|m| m.focused().is_some());
-        if !editing && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::A)) {
-            if let Some(v) = &view {
-                if !v.sorted.is_empty() {
-                    self.ui.sel_mode = true;
-                    let page_s = self.page_slice(&v.sorted);
-                    let base = self.search.page * self.cfg.page_size;
-                    self.ui.sel_set = (0..page_s.len()).map(|i| base + i).collect();
-                    self.toast(
-                        &format!("Selected {} results", page_s.len()),
-                        self.pal.green,
-                    );
-                }
-            }
+        if !editing
+            && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::A))
+            && let Some(v) = &view
+            && !v.sorted.is_empty()
+        {
+            self.ui.sel_mode = true;
+            let page_s = self.page_slice(&v.sorted);
+            let base = self.search.page * self.cfg.page_size;
+            self.ui.sel_set = (0..page_s.len()).map(|i| base + i).collect();
+            self.toast(
+                &format!("Selected {} results", page_s.len()),
+                self.pal.green,
+            );
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             if self.ui.detail_open {
@@ -928,15 +928,14 @@ impl eframe::App for App {
         if self.ui.detail_open
             && !editing
             && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C))
+            && let (Some(idx), Some(v)) = (self.ui.selected, &view)
         {
-            if let (Some(idx), Some(v)) = (self.ui.selected, &view) {
-                let page_s = self.page_slice(&v.sorted);
-                if let Some(r) = page_s.get(idx) {
-                    if let Some(m) = &r.magnet_uri {
-                        ui.ctx().copy_text(m.clone());
-                        self.toast("Magnet copied", self.pal.green);
-                    }
-                }
+            let page_s = self.page_slice(&v.sorted);
+            if let Some(r) = page_s.get(idx)
+                && let Some(m) = &r.magnet_uri
+            {
+                ui.ctx().copy_text(m.clone());
+                self.toast("Magnet copied", self.pal.green);
             }
         }
 
@@ -1138,10 +1137,11 @@ fn viewport_for(minimized: bool, saved: Option<[f32; 2]>) -> egui::ViewportBuild
     }
     // Restore the last window size (persisted in the config; see the throttled
     // save in App::ui). Falls back to the 1300x800 default.
-    if let Some([w, h]) = saved {
-        if w >= 820.0 && h >= 560.0 {
-            viewport = viewport.with_inner_size([w, h]);
-        }
+    if let Some([w, h]) = saved
+        && w >= 820.0
+        && h >= 560.0
+    {
+        viewport = viewport.with_inner_size([w, h]);
     }
     viewport
 }
@@ -1238,8 +1238,8 @@ fn setup_tray() -> bool {
         let (tx, rx) = std::sync::mpsc::channel::<bool>();
         std::thread::spawn(move || {
             use tray_icon::{
-                menu::{Menu, MenuEvent, MenuItem},
                 Icon, TrayIconBuilder,
+                menu::{Menu, MenuEvent, MenuItem},
             };
 
             // A 32x32 TorrentX glyph — a bold blue "T", transparent background —
@@ -1411,10 +1411,10 @@ fn main() -> eframe::Result<()> {
     );
 
     // Optional --config <path> override (before any config is loaded).
-    if let Some(i) = args.iter().position(|a| a == "--config") {
-        if let Some(p) = args.get(i + 1) {
-            config::set_config_override(std::path::PathBuf::from(p));
-        }
+    if let Some(i) = args.iter().position(|a| a == "--config")
+        && let Some(p) = args.get(i + 1)
+    {
+        config::set_config_override(std::path::PathBuf::from(p));
     }
 
     // One copy per profile: a second launch tells the running one to show its
@@ -1447,10 +1447,22 @@ fn main() -> eframe::Result<()> {
             // WGPU_BACKEND=opengl + LIBGL_ALWAYS_SOFTWARE steer wgpu onto Mesa's
             // software GL (llvmpipe), fixing black windows on machines where
             // hardware Vulkan/GL can't initialize (VMs, NVIDIA+Wayland quirks).
-            std::env::set_var("WGPU_BACKEND", "opengl");
-            std::env::set_var("WGPU_POWER_PREF", "low");
-            std::env::set_var("LIBGL_ALWAYS_SOFTWARE", "1");
-            std::env::set_var("GALLIUM_DRIVER", "llvmpipe");
+            // Edition 2024 marks `set_var` unsafe because a concurrent getenv in
+            // another thread is UB. This runs before the eframe event loop starts
+            // and only the tray thread exists; it reads no environment. The
+            // supported alternative is `WgpuConfiguration::supported_backends`,
+            // but the *software* adapter on Mesa is still chosen by these same
+            // variables, so the fallback keeps them.
+            //
+            // SAFETY: single set of writes, no other thread reads the environment
+            // (the tray thread does not), and it happens during startup before any
+            // library call can observe a partially updated environment.
+            unsafe {
+                std::env::set_var("WGPU_BACKEND", "opengl");
+                std::env::set_var("WGPU_POWER_PREF", "low");
+                std::env::set_var("LIBGL_ALWAYS_SOFTWARE", "1");
+                std::env::set_var("GALLIUM_DRIVER", "llvmpipe");
+            }
             eframe::run_native("TorrentX", native_options(), app_creator())
         }
     };
@@ -1526,7 +1538,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_second_launch_is_refused_and_told_to_show() {
-        use super::{claim_instance_at, serve_show_requests, SHOW_REQ};
+        use super::{SHOW_REQ, claim_instance_at, serve_show_requests};
         use std::sync::atomic::Ordering;
 
         let dir = std::env::temp_dir().join(format!("tx-oneinst-{}", std::process::id()));

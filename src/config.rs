@@ -287,13 +287,13 @@ fn save_to(p: &std::path::Path, c: &Config) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_col_order, heal_col_order, Config};
+    use super::{Config, default_col_order, heal_col_order};
 
     /// The config holds the API key and the user's favourites: a save must be
     /// all-or-nothing (temp + fsync + rename), private, and leave no debris.
     #[test]
     fn save_is_atomic_private_and_round_trips() {
-        use super::{save_to, Config};
+        use super::{Config, save_to};
 
         let dir = std::env::temp_dir().join(format!("tx-cfg-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

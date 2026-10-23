@@ -213,10 +213,10 @@ impl App {
                                 Some(f) => format!("{} ({})", short_name(&f.name), f.size),
                                 None => format!("Largest file (of {})", p.files.len()),
                             };
-                            if wide_icon_btn(ui, SvgIcon::Search, &label, self.pal.sub) {
-                                if let Some(st) = self.ui.pick.as_mut() {
-                                    st.window = true;
-                                }
+                            if wide_icon_btn(ui, SvgIcon::Search, &label, self.pal.sub)
+                                && let Some(st) = self.ui.pick.as_mut()
+                            {
+                                st.window = true;
                             }
                         }
                         Some(p) => {
@@ -272,57 +272,56 @@ impl App {
 
         // File chooser: drawn as a top-level window, but the list lives in
         // `ui.pick` so the choice survives closing it and the panel scrolling.
-        if let Some(mut p) = self.ui.pick.clone() {
-            if p.window && !p.files.is_empty() {
-                let mut open = true;
-                egui::Window::new(format!("Files — {}", short_name(&p.key)))
-                    .id(egui::Id::new(("pick_win", p.key.clone())))
-                    .open(&mut open)
-                    .resizable(true)
-                    .collapsible(false)
-                    .default_width(560.0)
-                    .show(ui.ctx(), |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut p.filter)
-                                .hint_text("filter files…")
-                                .desired_width(f32::INFINITY),
-                        );
-                        ui.add_space(SP2);
-                        let needle = p.filter.to_lowercase();
-                        egui::ScrollArea::vertical()
-                            .max_height(340.0)
-                            .show(ui, |ui| {
+        if let Some(mut p) = self.ui.pick.clone()
+            && p.window
+            && !p.files.is_empty()
+        {
+            let mut open = true;
+            egui::Window::new(format!("Files — {}", short_name(&p.key)))
+                .id(egui::Id::new(("pick_win", p.key.clone())))
+                .open(&mut open)
+                .resizable(true)
+                .collapsible(false)
+                .default_width(560.0)
+                .show(ui.ctx(), |ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut p.filter)
+                            .hint_text("filter files…")
+                            .desired_width(f32::INFINITY),
+                    );
+                    ui.add_space(SP2);
+                    let needle = p.filter.to_lowercase();
+                    egui::ScrollArea::vertical()
+                        .max_height(340.0)
+                        .show(ui, |ui| {
+                            if ui
+                                .selectable_label(p.sel.is_none(), "Largest file (default)")
+                                .clicked()
+                            {
+                                p.sel = None;
+                                p.window = false;
+                            }
+                            for (i, f) in p.files.iter().enumerate() {
+                                if !needle.is_empty() && !f.name.to_lowercase().contains(&needle) {
+                                    continue;
+                                }
                                 if ui
-                                    .selectable_label(p.sel.is_none(), "Largest file (default)")
+                                    .selectable_label(
+                                        p.sel == Some(i),
+                                        format!("{:>3}  {}  ({})", f.idx, f.name, f.size),
+                                    )
                                     .clicked()
                                 {
-                                    p.sel = None;
+                                    p.sel = Some(i);
                                     p.window = false;
                                 }
-                                for (i, f) in p.files.iter().enumerate() {
-                                    if !needle.is_empty()
-                                        && !f.name.to_lowercase().contains(&needle)
-                                    {
-                                        continue;
-                                    }
-                                    if ui
-                                        .selectable_label(
-                                            p.sel == Some(i),
-                                            format!("{:>3}  {}  ({})", f.idx, f.name, f.size),
-                                        )
-                                        .clicked()
-                                    {
-                                        p.sel = Some(i);
-                                        p.window = false;
-                                    }
-                                }
-                            });
-                    });
-                if !open {
-                    p.window = false;
-                }
-                self.ui.pick = Some(p);
+                            }
+                        });
+                });
+            if !open {
+                p.window = false;
             }
+            self.ui.pick = Some(p);
         }
     }
 }

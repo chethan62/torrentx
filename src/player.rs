@@ -150,10 +150,10 @@ pub(crate) fn torrent_file(magnet: &str, link: &str) -> Option<PathBuf> {
         .join("torrents")
         .join(format!("{:016x}.torrent", h.finish()));
     // ponytail: no TTL — Jackett's file for one infohash never changes.
-    if let Ok(md) = std::fs::metadata(&path) {
-        if md.len() > 64 {
-            return Some(path);
-        }
+    if let Ok(md) = std::fs::metadata(&path)
+        && md.len() > 64
+    {
+        return Some(path);
     }
     // Local Jackett: keep the budget short so a hung server cannot stall Play.
     let client = reqwest::blocking::Client::builder()
@@ -288,8 +288,8 @@ pub(crate) fn stop_play() {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_playing, log_path, parse_file_list, play_args, player_flag, start_play, stop_play,
-        torrent_file, PLAYERS,
+        PLAYERS, is_playing, log_path, parse_file_list, play_args, player_flag, start_play,
+        stop_play, torrent_file,
     };
 
     fn magnet() -> String {
@@ -331,10 +331,12 @@ mod tests {
         let args = play_args(&m, "mpv", Some(3)).unwrap();
         assert_eq!(&args[args.len() - 2..], ["--select", "3"]);
         // No index → no --select, webtorrent keeps its largest-file default.
-        assert!(!play_args(&m, "mpv", None)
-            .unwrap()
-            .iter()
-            .any(|a| a == "--select"));
+        assert!(
+            !play_args(&m, "mpv", None)
+                .unwrap()
+                .iter()
+                .any(|a| a == "--select")
+        );
     }
 
     /// Jackett's own .torrent is fetched once, cached by magnet, and an HTML
@@ -442,7 +444,9 @@ mod tests {
         }
 
         let old_path = std::env::var("PATH").unwrap_or_default();
-        std::env::set_var("PATH", format!("{}:{old_path}", dir.display()));
+        // SAFETY: test-only; the helper threads it starts read PATH after
+        // this write, and no other test touches PATH concurrently.
+        unsafe { std::env::set_var("PATH", format!("{}:{old_path}", dir.display())) };
 
         let m = magnet();
         assert!(start_play(&m, None, "mpv", None).is_ok());
@@ -487,7 +491,8 @@ mod tests {
             "stop_play must end the streamer (pid {pid} still alive)"
         );
 
-        std::env::set_var("PATH", old_path);
+        // SAFETY: restores the value written above, same single-threaded test.
+        unsafe { std::env::set_var("PATH", old_path) };
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

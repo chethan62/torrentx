@@ -164,10 +164,9 @@ impl App {
                                         self.pal.green,
                                         true,
                                     )
+                                    && let Some(v) = view
                                 {
-                                    if let Some(v) = view {
-                                        self.copy_selected_magnets(ui, &v.sorted);
-                                    }
+                                    self.copy_selected_magnets(ui, &v.sorted);
                                 }
                                 ui.add_space(SP2);
                                 // Select all visible / clear (no glyphs)
@@ -175,16 +174,14 @@ impl App {
                                 if v_checkbox(ui, all_checked, "All", self.pal.accent)
                                     .on_hover_text("Select all results on this page")
                                     .clicked()
+                                    && let Some(v) = view
                                 {
-                                    if let Some(v) = view {
-                                        if self.cfg.page_size == 0 {
-                                            self.ui.sel_set = (0..v.sorted.len()).collect();
-                                        } else {
-                                            let base = self.search.page * self.cfg.page_size;
-                                            let end =
-                                                (base + self.cfg.page_size).min(v.sorted.len());
-                                            self.ui.sel_set = (base..end).collect();
-                                        }
+                                    if self.cfg.page_size == 0 {
+                                        self.ui.sel_set = (0..v.sorted.len()).collect();
+                                    } else {
+                                        let base = self.search.page * self.cfg.page_size;
+                                        let end = (base + self.cfg.page_size).min(v.sorted.len());
+                                        self.ui.sel_set = (base..end).collect();
                                     }
                                 }
                                 if !self.ui.sel_set.is_empty()

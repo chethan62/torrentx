@@ -91,8 +91,8 @@ pub(crate) fn build_rss_url(base: &str, key: &str, cfg: &RssFeedConfig) -> Strin
 // ─── RSS XML parser ────────────────────────────────────────────────────────
 
 pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
-    use quick_xml::events::Event;
     use quick_xml::Reader;
+    use quick_xml::events::Event;
 
     let mut reader = Reader::from_str(xml);
     // NOTE: no trim_text here — it would trim each Text chunk independently
@@ -119,16 +119,13 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                     if tag == "enclosure" {
                         for attr in e.attributes().flatten() {
                             let k = tag_name(attr.key.as_ref());
-                            if k == "url" {
-                                if let Ok(v) =
+                            if k == "url"
+                                && let Ok(v) =
                                     attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                                {
-                                    if let Some(ref mut item) = cur {
-                                        if item.link.is_none() {
-                                            item.link = Some(v.to_string());
-                                        }
-                                    }
-                                }
+                                && let Some(ref mut item) = cur
+                                && item.link.is_none()
+                            {
+                                item.link = Some(v.to_string());
                             }
                         }
                     }
@@ -145,23 +142,18 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                             if k == "url" {
                                 if let Ok(v) =
                                     attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                    && let Some(ref mut item) = cur
+                                    && item.link.is_none()
                                 {
-                                    if let Some(ref mut item) = cur {
-                                        if item.link.is_none() {
-                                            item.link = Some(v.to_string());
-                                        }
-                                    }
+                                    item.link = Some(v.to_string());
                                 }
-                            } else if k == "length" {
-                                if let Ok(v) =
+                            } else if k == "length"
+                                && let Ok(v) =
                                     attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                                {
-                                    if let Some(ref mut item) = cur {
-                                        if item.size.is_none() {
-                                            item.size = v.parse().ok();
-                                        }
-                                    }
-                                }
+                                && let Some(ref mut item) = cur
+                                && item.size.is_none()
+                            {
+                                item.size = v.parse().ok();
                             }
                         }
                     }
@@ -239,30 +231,30 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                 if tag == "item" {
                     in_item = false;
                     cur_tag = String::new();
-                    if let Some(item) = cur.take() {
-                        if !item.title.is_empty() {
-                            items.push(item);
-                        }
+                    if let Some(item) = cur.take()
+                        && !item.title.is_empty()
+                    {
+                        items.push(item);
                     }
                 } else if in_item {
                     // Apply the accumulated text of the element that just closed.
                     let t = text_acc.trim().to_string();
-                    if !t.is_empty() {
-                        if let Some(ref mut item) = cur {
-                            match cur_tag.as_str() {
-                                "title" => item.title = t,
-                                "link" if item.link.is_none() => {
-                                    item.link = Some(t);
-                                }
-                                "pubdate" | "pubDate" => item.pub_date = Some(t),
-                                "size" if item.size.is_none() => {
-                                    item.size = t.parse().ok();
-                                }
-                                "jackettindexer" => item.tracker = Some(t),
-                                "guid" if item.guid.is_none() => item.guid = Some(t),
-                                "category" => item.category = Some(t),
-                                _ => {}
+                    if !t.is_empty()
+                        && let Some(ref mut item) = cur
+                    {
+                        match cur_tag.as_str() {
+                            "title" => item.title = t,
+                            "link" if item.link.is_none() => {
+                                item.link = Some(t);
                             }
+                            "pubdate" | "pubDate" => item.pub_date = Some(t),
+                            "size" if item.size.is_none() => {
+                                item.size = t.parse().ok();
+                            }
+                            "jackettindexer" => item.tracker = Some(t),
+                            "guid" if item.guid.is_none() => item.guid = Some(t),
+                            "category" => item.category = Some(t),
+                            _ => {}
                         }
                     }
                     cur_tag = String::new();
@@ -274,7 +266,7 @@ pub(crate) fn parse_torznab_xml(xml: &str) -> Result<Vec<RssItem>, String> {
                 return Err(format!(
                     "XML error at byte {}: {e}",
                     reader.buffer_position()
-                ))
+                ));
             }
             _ => {}
         }
@@ -350,7 +342,7 @@ pub(crate) fn start_rss_fetch(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_rss_url, parse_torznab_xml, RssFeedConfig};
+    use super::{RssFeedConfig, build_rss_url, parse_torznab_xml};
 
     const SAMPLE: &str = r#"<?xml version="1.0"?>
 <rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
@@ -420,7 +412,7 @@ mod tests {
 
     #[test]
     fn dedupe_keeps_episodes_apart_and_best_seeded_copy() {
-        use super::{dedupe_items, RssItem};
+        use super::{RssItem, dedupe_items};
         let it = |t: &str, s: u32, g: Option<&str>| RssItem {
             title: t.into(),
             seeders: Some(s),
@@ -482,9 +474,11 @@ mod tests {
     fn truncated_xml_returns_empty_not_error() {
         // Quick-xml streams; an unclosed doc parses as "no complete items",
         // which the feed UI treats as an empty feed — not a hard error.
-        assert!(parse_torznab_xml("<rss><channel><item>")
-            .unwrap()
-            .is_empty());
+        assert!(
+            parse_torznab_xml("<rss><channel><item>")
+                .unwrap()
+                .is_empty()
+        );
         assert!(parse_torznab_xml("").unwrap().is_empty());
     }
 

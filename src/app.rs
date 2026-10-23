@@ -4,14 +4,14 @@
 // RSS refresh, theme). UI drawing lives in `ui.rs`; the eframe entry point
 // lives in `main.rs`.
 
-use crate::config::{save_cfg, Config, Favorite};
+use crate::config::{Config, Favorite, save_cfg};
 use crate::jackett::{
-    cat_col, dedupe_best_seeded, fmt_size, is_magnet, now_str, pub_date_key, pub_year, set_err,
-    start_search, time_ago, Hlth, SearchState, SortCol, SortDir, TorrentResult,
+    Hlth, SearchState, SortCol, SortDir, TorrentResult, cat_col, dedupe_best_seeded, fmt_size,
+    is_magnet, now_str, pub_date_key, pub_year, set_err, start_search, time_ago,
 };
 use crate::lock_or_recover;
-use crate::rss::{start_rss_fetch, FeedStatus, RssFeedConfig, RssItem};
-use crate::themes::{tint, Pal, Theme, VisualTokens};
+use crate::rss::{FeedStatus, RssFeedConfig, RssItem, start_rss_fetch};
+use crate::themes::{Pal, Theme, VisualTokens, tint};
 use crate::{csv_esc, csv_safe, jackett::Tab};
 
 use eframe::egui::{self, Color32, Stroke, Visuals};
@@ -246,11 +246,7 @@ pub(crate) fn sort_rows(rows: &mut [TorrentResult], col: &SortCol, dir: &SortDir
                 let r = |x: &TorrentResult| {
                     let s = x.seeders.unwrap_or(0) as f64;
                     let l = x.peers.unwrap_or(0) as f64;
-                    if l > 0.0 {
-                        s / l
-                    } else {
-                        f64::INFINITY
-                    }
+                    if l > 0.0 { s / l } else { f64::INFINITY }
                 };
                 r(b).partial_cmp(&r(a)).unwrap_or(std::cmp::Ordering::Equal)
             }
@@ -265,11 +261,7 @@ pub(crate) fn sort_rows(rows: &mut [TorrentResult], col: &SortCol, dir: &SortDir
             SortCol::Date => pub_date_key(b.publish_date.as_deref().unwrap_or(""))
                 .cmp(&pub_date_key(a.publish_date.as_deref().unwrap_or(""))),
         };
-        if *dir == SortDir::Asc {
-            c.reverse()
-        } else {
-            c
-        }
+        if *dir == SortDir::Asc { c.reverse() } else { c }
     });
 }
 
@@ -858,7 +850,7 @@ impl App {
         self.ui.notified = false;
         *lock_or_recover(&self.search.results) = Arc::new(vec![]);
         *lock_or_recover(&self.search.count) = 0;
-        let gen = self.search.epoch.fetch_add(1, Ordering::Relaxed) + 1;
+        let generation = self.search.epoch.fetch_add(1, Ordering::Relaxed) + 1;
         // Fan out per indexer so results land as each tracker answers.
         let targets = crate::jackett::search_targets(&self.net.indexer, &self.net.indexers);
         start_search(
@@ -872,7 +864,7 @@ impl App {
             Arc::clone(&self.search.state),
             Arc::clone(&self.search.count),
             Arc::clone(&self.search.epoch),
-            gen,
+            generation,
         );
     }
 

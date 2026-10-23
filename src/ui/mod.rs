@@ -16,17 +16,17 @@ mod search;
 mod tokens;
 mod widgets;
 
-pub(crate) use crate::config::{save_cfg, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_ROOMY};
+pub(crate) use crate::config::{ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_ROOMY, save_cfg};
 pub(crate) use crate::jackett::{
-    cat_col, fmt_size, hlth_lbl, is_magnet, seed_col, time_ago, Hlth, SearchState, SortCol,
-    SortDir, Tab, TableCol, TorrentResult,
+    Hlth, SearchState, SortCol, SortDir, Tab, TableCol, TorrentResult, cat_col, fmt_size, hlth_lbl,
+    is_magnet, seed_col, time_ago,
 };
 pub(crate) use crate::rss::{FeedStatus, RssFeedConfig, RssFeedState, RssItem};
-pub(crate) use crate::themes::{rgb, rgba, tint, Pal, Theme};
+pub(crate) use crate::themes::{Pal, Theme, rgb, rgba, tint};
 pub(crate) use crate::{
-    act_btn, grid_row, icon_text_btn, icon_text_tab, labeled_input, lbl, outline_btn,
-    outline_icon_btn, safe_open, status_icon_pill, svg_btn, svg_icon, svg_image, v_checkbox,
-    wide_btn, wide_icon_btn, SvgIcon, CATS, MARGIN_DEFAULT,
+    CATS, MARGIN_DEFAULT, SvgIcon, act_btn, grid_row, icon_text_btn, icon_text_tab, labeled_input,
+    lbl, outline_btn, outline_icon_btn, safe_open, status_icon_pill, svg_btn, svg_icon, svg_image,
+    v_checkbox, wide_btn, wide_icon_btn,
 };
 pub(crate) use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 pub(crate) use egui_extras::{Column, TableBuilder};

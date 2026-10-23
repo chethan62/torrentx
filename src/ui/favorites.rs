@@ -121,12 +121,11 @@ impl App {
                     egui::Sense::click(),
                 );
                 ui.painter().rect_filled(band, 0.0, bg);
-                if row_resp.clicked() {
-                    if let Some(m) = &fav.magnet {
-                        if is_magnet(m) {
-                            open_mag = Some(m.clone());
-                        }
-                    }
+                if row_resp.clicked()
+                    && let Some(m) = &fav.magnet
+                    && is_magnet(m)
+                {
+                    open_mag = Some(m.clone());
                 }
                 if row_resp.hovered() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);

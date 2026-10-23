@@ -476,11 +476,11 @@ pub(crate) fn pub_date_key(s: &str) -> (u32, u32, u32, u32, u32, u32) {
     let (mut hh, mut mm, mut ss) = (0u32, 0u32, 0u32);
     for tok in s.split([' ', ',']).filter(|t| !t.is_empty()) {
         let low = tok.to_ascii_lowercase();
-        if low.len() >= 3 {
-            if let Some(i) = MONTHS.iter().position(|m| low.starts_with(m)) {
-                mon = i as u32 + 1;
-                continue;
-            }
+        if low.len() >= 3
+            && let Some(i) = MONTHS.iter().position(|m| low.starts_with(m))
+        {
+            mon = i as u32 + 1;
+            continue;
         }
         if let Some((h, rest)) = tok.split_once(':') {
             let (m, sec) = rest.split_once(':').unwrap_or((rest, "0"));
@@ -592,8 +592,8 @@ pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<Vec<String>> {
 /// Pull configured indexer ids out of a Jackett `t=indexers` Torznab XML body.
 /// Pure and unit-testable without a live server.
 fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
-    use quick_xml::events::Event;
     use quick_xml::Reader;
+    use quick_xml::events::Event;
     let mut reader = Reader::from_str(body);
     reader.config_mut().trim_text(true);
     let mut out = vec![];
@@ -618,12 +618,11 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
                         }
                     }
                 }
-                if configured {
-                    if let Some(id) = id {
-                        if !id.is_empty() {
-                            out.push(id);
-                        }
-                    }
+                if configured
+                    && let Some(id) = id
+                    && !id.is_empty()
+                {
+                    out.push(id);
                 }
             }
             Ok(Event::Eof) => break,
@@ -660,10 +659,10 @@ fn search_url(url: &str, key: &str, query: &str, cat: &str, idx: &str) -> String
         urlenc(key),
         urlenc(query)
     );
-    if cat != "All" {
-        if let Some(id) = category_id(cat) {
-            ep.push_str(&format!("&Category[]={}", id));
-        }
+    if cat != "All"
+        && let Some(id) = category_id(cat)
+    {
+        ep.push_str(&format!("&Category[]={}", id));
     }
     ep
 }
@@ -765,15 +764,15 @@ pub(crate) fn start_search(
     state: Arc<Mutex<SearchState>>,
     count: Arc<Mutex<usize>>,
     epoch: Arc<AtomicU64>,
-    gen: u64,
+    generation: u64,
 ) {
     thread::spawn(move || {
         // Epoch guard: a newer search invalidates this one — never touch state,
         // so a slow old response can't overwrite fresh results (search race).
-        if epoch.load(Ordering::Relaxed) != gen {
+        if epoch.load(Ordering::Relaxed) != generation {
             return;
         }
-        let live = || epoch.load(Ordering::Relaxed) == gen;
+        let live = || epoch.load(Ordering::Relaxed) == generation;
         *lock_or_recover(&state) = SearchState::Searching;
 
         let ctx = SearchCtx {
@@ -1068,11 +1067,11 @@ pub(crate) fn stop_local() {
 #[cfg(test)]
 mod tests {
     use super::{
-        asset_prefix, category_id, dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port,
-        hlth_lbl, is_magnet, managed_config, managed_root, normalize, parse_indexers_xml,
-        parse_latest_tag, port_open, pub_date_key, pub_year, read_server_config, search_targets,
-        set_err, start_local, stop_local, time_ago, truncate_magnet, urlenc, user_config,
-        validate_jackett_url, Hlth, SearchState, Tab, TorrentResult,
+        Hlth, SearchState, Tab, TorrentResult, asset_prefix, category_id, dedupe_best_seeded,
+        dedupe_key, find_bin, fmt_size, free_port, hlth_lbl, is_magnet, managed_config,
+        managed_root, normalize, parse_indexers_xml, parse_latest_tag, port_open, pub_date_key,
+        pub_year, read_server_config, search_targets, set_err, start_local, stop_local, time_ago,
+        truncate_magnet, urlenc, user_config, validate_jackett_url,
     };
     use crate::lock_or_recover;
     use std::thread;
@@ -1372,7 +1371,7 @@ mod tests {
     /// the fault-injection pass whenever Jackett answered with HTML or bad JSON.
     #[test]
     fn a_parse_error_never_leaks_the_api_key() {
-        use super::{fetch_into, SearchCtx};
+        use super::{SearchCtx, fetch_into};
         use std::io::Write;
         use std::net::TcpListener;
         use std::sync::{Arc, Mutex};
@@ -1413,7 +1412,7 @@ mod tests {
 
     #[test]
     fn fan_out_publishes_the_fast_indexer_before_the_slow_one() {
-        use super::{start_search, SearchState};
+        use super::{SearchState, start_search};
         use std::io::{Read, Write};
         use std::net::TcpListener;
         use std::sync::atomic::AtomicU64;
@@ -1503,8 +1502,12 @@ mod tests {
     fn dedupe_key_keeps_different_episodes_apart() {
         let k = dedupe_key;
         // Three different films whose first four words match ("one piece episode of").
-        let east_blue = k("One Piece Episode of East Blue Luffy to 4-nin no Nakama no Daiboken (2017) 1080p BRRip 5.1 x264 -YTS");
-        let sabo = k("One Piece Episode of Sabo Bond of Three Brothers, A Miraculous Reunion and an Inherited Will (2015) 1080p BRRip 5.1 x264 -YTS");
+        let east_blue = k(
+            "One Piece Episode of East Blue Luffy to 4-nin no Nakama no Daiboken (2017) 1080p BRRip 5.1 x264 -YTS",
+        );
+        let sabo = k(
+            "One Piece Episode of Sabo Bond of Three Brothers, A Miraculous Reunion and an Inherited Will (2015) 1080p BRRip 5.1 x264 -YTS",
+        );
         let skypiea = k("One Piece Episode of Skypiea (2018) 1080p BRRip x264 -YTS");
         assert_ne!(east_blue, sabo);
         assert_ne!(sabo, skypiea);
@@ -1567,7 +1570,8 @@ mod tests {
         let xdg = std::env::temp_dir().join("tx_jackett_e2e_xdg");
         let _ = std::fs::remove_dir_all(&xdg);
         std::fs::create_dir_all(&xdg).unwrap();
-        std::env::set_var("XDG_CONFIG_HOME", &xdg);
+        // SAFETY: test-only, set before the managed-Jackett code under test reads it.
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", &xdg) };
         // Leave the machine as found: only clean up a managed dir this test created.
         let pre_existing = managed_root().exists();
         assert!(

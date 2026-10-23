@@ -270,7 +270,7 @@ impl App {
             // Fade out during last 0.4s, slide in during first 0.15s
             let fade_a = ((toast.ttl.min(0.4) / 0.4) * 230.0) as u8;
             let slide_progress = (1.0 - toast.anim_progress.min(1.0)) * 30.0; // slide from right
-                                                                              // Clamp to viewport so toasts never go off-screen at narrow widths
+            // Clamp to viewport so toasts never go off-screen at narrow widths
             let x_pos = (scr.max.x - 310.0 + slide_progress).max(8.0);
 
             egui::Area::new(egui::Id::new(format!("toast_{}", toast.msg)))
