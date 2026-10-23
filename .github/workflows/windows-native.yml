@@ -44,7 +44,7 @@ jobs:
           cargo build --release
           cargo build
 
-      - name: --version answers (debug build: console subsystem)
+      - name: --version answers (debug build — console subsystem)
         shell: pwsh
         run: |
           $v = & .\target\debug\torrentx.exe --version
