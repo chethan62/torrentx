@@ -253,9 +253,11 @@ Deliberate, not bugs — each line says what to do instead.
 - **Direct play needs `webtorrent-cli` on `PATH`** and outbound BitTorrent. On a
   network that blocks tracker/DHT ports the picker reports
   "the torrent's peers are unreachable" instead of hanging.
-- **Windows**: the `.exe` compiles in CI (`cargo build --target
-  x86_64-pc-windows-gnu`) but is not published and has never been run on
-  Windows; releases ship Linux only.
+- **Windows**: the `.exe` cross-compiles in CI and also builds *and launches* on a
+  real Windows runner (`.github/workflows/windows-native.yml` — a window titled
+  TorrentX appears, the config lands in `%APPDATA%`), but nothing is published for
+  it and no interactive pass (menus, playback, pickers) has been done. Releases
+  ship Linux only.
 
 ## Troubleshooting
 

@@ -11,6 +11,23 @@ versions follow [SemVer](https://semver.org/).
   writes an XDG autostart file, so on Windows/macOS it was a control that silently
   did nothing. Hidden there rather than left lying (no build ships for either).
 
+## [Unreleased]
+
+### Fixed
+- **`--version` no longer panics on a Windows release build.** Those binaries are
+  GUI-subsystem, so they start with no console and `println!` aborted with
+  "failed printing to stdout: The pipe is being closed" (os error 232, exit 101)
+  whenever a shell captured the output. `print_cli()` attaches to the parent
+  console (kernel32 `AttachConsole`, declared inline — no new dependency) and
+  ignores the write error: the version prints in a terminal and exits 0 when
+  nothing is listening.
+
+### Added
+- **`windows-native` workflow** — builds the `.exe` natively on a GitHub-hosted
+  Windows VM, checks `--version`, and asserts a window titled TorrentX actually
+  appears (wgpu adapter, embedded fonts, `%APPDATA%` config). Dispatch-only,
+  because it costs ~8 minutes and proves a claim rather than gating every push.
+
 ## [18.6.9] — 2026-10-23
 
 ### Fixed

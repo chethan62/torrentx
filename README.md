@@ -55,6 +55,10 @@ Grab the latest build from the [releases page](https://github.com/chethan62/torr
 | Linux (AppImage) | `TorrentX-<version>-x86_64.AppImage` | ~17 MB |
 | Linux (binary) | `torrentx` | ~36 MB (stripped, thin LTO) |
 
+Windows builds and **launches** on a real Windows runner in CI
+(`.github/workflows/windows-native.yml`) but is not published — no interactive
+pass has been done there, so releases ship Linux only.
+
 ## Build from source
 
 ```bash
