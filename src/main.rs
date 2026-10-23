@@ -919,8 +919,7 @@ impl eframe::App for App {
                 self.ui.detail_row = None;
             } else if ctx.memory(|m| m.focused()).is_none() {
                 // Only clear the query when no text field owns the keyboard.
-                self.search.query.clear();
-                self.ui.show_hist = false;
+                self.clear_search();
             }
         }
         // Copy magnet from detail panel with Ctrl+C — only when no TextEdit

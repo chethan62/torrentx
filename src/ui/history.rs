@@ -24,7 +24,7 @@ impl App {
             let mut deleted: Option<String> = None;
             let mut clear_all = false;
 
-            egui::Area::new(egui::Id::new("hist_dd"))
+            let area = egui::Area::new(egui::Id::new("hist_dd"))
                 .fixed_pos(pos)
                 .order(egui::Order::Foreground)
                 .show(ctx, |ui| {
@@ -72,7 +72,14 @@ impl App {
                                 .max_height(320.0)
                                 .show(ui, |ui| {
                                     for h in hist.iter() {
-                                        ui.horizontal_wrapped(|ui| {
+                                        // One row: the entry fills the width, the
+                                        // remove × sits at its right edge. The
+                                        // wrapping row + right-to-left layout pushed
+                                        // the × onto its own line, so every entry
+                                        // was twice as tall and misaligned.
+                                        ui.horizontal(|ui| {
+                                            let gap = ui.spacing().item_spacing.x;
+                                            let bw = (ui.available_width() - 18.0 - gap).max(80.0);
                                             if ui
                                                 .add(
                                                     egui::Button::new(
@@ -82,41 +89,34 @@ impl App {
                                                     )
                                                     .fill(Color32::TRANSPARENT)
                                                     .frame(false)
-                                                    .min_size(egui::vec2(
-                                                        (w - 50.0).max(120.0),
-                                                        26.0,
-                                                    )),
+                                                    .min_size(egui::vec2(bw, 24.0)),
                                                 )
                                                 .clicked()
                                             {
                                                 clicked = Some(h.clone());
                                             }
-                                            ui.with_layout(
-                                                egui::Layout::right_to_left(egui::Align::Center),
-                                                |ui| {
-                                                    if ui
-                                                        .add(
-                                                            egui::Button::new(svg_image(
-                                                                SvgIcon::Close,
-                                                                10.0,
-                                                                self.pal.dim,
-                                                            ))
-                                                            .fill(Color32::TRANSPARENT)
-                                                            .frame(false)
-                                                            .min_size(egui::vec2(18.0, 18.0)),
-                                                        )
-                                                        .on_hover_text("Remove")
-                                                        .clicked()
-                                                    {
-                                                        deleted = Some(h.clone());
-                                                    }
-                                                },
-                                            );
+                                            if ui
+                                                .add(
+                                                    egui::Button::new(svg_image(
+                                                        SvgIcon::Close,
+                                                        10.0,
+                                                        self.pal.dim,
+                                                    ))
+                                                    .fill(Color32::TRANSPARENT)
+                                                    .frame(false)
+                                                    .min_size(egui::vec2(18.0, 18.0)),
+                                                )
+                                                .on_hover_text("Remove")
+                                                .clicked()
+                                            {
+                                                deleted = Some(h.clone());
+                                            }
                                         });
                                     }
                                 }); // end history ScrollArea
                         });
                 });
+            self.ui.hist_rect = Some(area.response.rect);
             if let Some(h) = clicked {
                 self.search.query = h;
                 self.ui.show_hist = false;
@@ -131,6 +131,8 @@ impl App {
                 let _ = save_cfg(&self.cfg);
                 self.ui.show_hist = false;
             }
+        } else {
+            self.ui.hist_rect = None;
         }
     }
 }

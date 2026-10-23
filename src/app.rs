@@ -640,6 +640,11 @@ pub(crate) struct UiState {
     pub(crate) detail_open: bool,
     pub(crate) detail_width: f32,
     pub(crate) show_hist: bool,
+    /// Screen rect of the recent-searches dropdown from the last frame. The
+    /// field asks it before hiding the popup on focus loss: a click ON the popup
+    /// is itself a focus loss, and hiding it in that same frame swallowed the
+    /// click (nothing happened when a past search was picked).
+    pub(crate) hist_rect: Option<egui::Rect>,
     pub(crate) toasts: Vec<Toast>,
     pub(crate) hovered: Option<usize>,
     pub(crate) fav_search: String,
@@ -708,6 +713,7 @@ impl Default for UiState {
             detail_open: false,
             detail_width: 295.0,
             show_hist: false,
+            hist_rect: None,
             toasts: vec![],
             hovered: None,
             fav_search: String::new(),
@@ -816,6 +822,33 @@ impl App {
         self.cfg.last_tab = Some(tab.key().to_string());
         self.ui.tab = tab;
         let _ = save_cfg(&self.cfg);
+    }
+
+    /// Empty the search box and put the results back to the welcome screen.
+    ///
+    /// Clearing only the text left the table and the status line still describing
+    /// the previous query ("12 results for \"iso\"") under an empty field, and an
+    /// in-flight fan-out could land its rows afterwards. The epoch bump is what
+    /// stops that: a worker whose epoch is stale drops its batch.
+    pub(crate) fn clear_search(&mut self) {
+        self.search.query.clear();
+        self.ui.show_hist = false;
+        self.ui.hist_rect = None;
+        self.ui.selected = None;
+        self.ui.detail_open = false;
+        self.ui.detail_row = None;
+        self.ui.sel_set.clear();
+        self.ui.sel_mode = false;
+        self.ui.hovered = None;
+        self.search.last_query.clear();
+        self.search.f_text.clear();
+        self.search.page = 0;
+        self.ui.t_start = None;
+        self.ui.t_done = None;
+        self.search.epoch.fetch_add(1, Ordering::Relaxed);
+        *lock_or_recover(&self.search.results) = Arc::new(vec![]);
+        *lock_or_recover(&self.search.count) = 0;
+        *lock_or_recover(&self.search.state) = SearchState::Idle;
     }
 
     pub(crate) fn do_search(&mut self) {
@@ -1352,5 +1385,38 @@ mod font_tests {
         // overlap, a broken glyph in one face could silently mask the other.
         assert_eq!(jp.glyph_id('한').0, 0, "Hangul must come from the KR face");
         assert_eq!(kr.glyph_id('日').0, 0, "Han must come from the JP face");
+    }
+}
+
+#[cfg(test)]
+mod clear_tests {
+    use super::*;
+
+    /// Clearing must undo the whole search, not just the text: the table and the
+    /// status line used to keep describing the old query, and a fan-out still in
+    /// flight could publish its rows afterwards.
+    #[test]
+    fn clearing_drops_the_results_and_invalidates_in_flight_workers() {
+        let mut app = App::default();
+        app.search.query = "iso".into();
+        app.search.last_query = "iso".into();
+        *lock_or_recover(&app.search.count) = 7;
+        *lock_or_recover(&app.search.state) = SearchState::Searching;
+        let epoch = app.search.epoch.load(Ordering::Relaxed);
+
+        app.clear_search();
+
+        assert!(app.search.query.is_empty());
+        assert!(app.search.last_query.is_empty());
+        assert_eq!(*lock_or_recover(&app.search.count), 0);
+        assert!(lock_or_recover(&app.search.results).is_empty());
+        assert!(matches!(
+            *lock_or_recover(&app.search.state),
+            SearchState::Idle
+        ));
+        assert!(
+            app.search.epoch.load(Ordering::Relaxed) > epoch,
+            "a worker from before the clear must be stale now"
+        );
     }
 }

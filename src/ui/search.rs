@@ -26,14 +26,24 @@ impl App {
             // the cluster ends at the window edge instead of stranding it mid-row.
             // Measured widths: Category label+combo ~165, Indexer label+combo
             // ~162, Search button ~130, gaps ~24 -> 480 plus slack, so the row
-            // keeps one line and the button ends at the window edge.
-            let field_w = (ui.available_width() - 505.0).max(140.0);
+            // keeps one line and the button ends at the window edge. The 520 is
+            // 505 - the 15 px the row used to leave after the clear button moved
+            // inside the field (measured: button right edge 1477 -> 1492 of 1500, so the field grows by 15).
+            let field_w = (ui.available_width() - 490.0).max(140.0);
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.search.query)
                     .id(egui::Id::new("q"))
                     .desired_width(field_w)
                     .hint_text("Search torrents — movies, shows, games, software, anime…")
-                    .font(FontId::proportional(fs + 2.0)),
+                    .font(FontId::proportional(fs + 2.0))
+                    // Room for the in-field clear button (always reserved, or the
+                    // field would change height the moment text appears).
+                    .margin(egui::Margin {
+                        left: SP3 as i8,
+                        right: (ICON_MD + SP3) as i8,
+                        top: SP2 as i8,
+                        bottom: SP2 as i8,
+                    }),
             );
             bar_rect = resp.rect;
             if resp.gained_focus() && !self.cfg.history.is_empty() {
@@ -43,13 +53,47 @@ impl App {
                 self.ui.show_hist = false;
             }
             if resp.lost_focus() {
-                // Dismiss the recent-searches popup when the field loses focus:
-                // otherwise it stays on screen over the filter bar, and its entry
-                // rows are topmost there — so a click meant for a filter silently
-                // re-runs that history entry instead.
-                self.ui.show_hist = false;
+                // Dismiss the popup when the field loses focus — otherwise it stays
+                // over the filter bar, where its rows are topmost and a click meant
+                // for a filter silently re-runs a history entry. The exception is a
+                // click INSIDE the popup: focusing away is what that click does, and
+                // hiding here in the same frame ate it (picking a past search did
+                // nothing). The popup reports its own rect one frame ahead.
+                let over_popup = ui
+                    .input(|i| i.pointer.interact_pos())
+                    .zip(self.ui.hist_rect)
+                    .is_some_and(|(p, r)| r.contains(p));
+                if !over_popup {
+                    self.ui.show_hist = false;
+                }
                 if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     self.do_search();
+                }
+            }
+
+            // Clear sits INSIDE the field's right edge, the way every search box
+            // does it. After the Search button it overflowed the row (field width
+            // is `available - 505`) and wrapped onto a second line.
+            if !self.search.query.is_empty() {
+                let box_side = ICON_MD + SP2;
+                let clear_rect = egui::Rect::from_center_size(
+                    egui::pos2(
+                        resp.rect.right() - SP3 - box_side * 0.5,
+                        resp.rect.center().y,
+                    ),
+                    Vec2::splat(box_side),
+                );
+                let hit = ui
+                    .put(
+                        clear_rect,
+                        egui::Button::new(svg_image(SvgIcon::Close, ICON_XS, self.pal.sub))
+                            .fill(Color32::TRANSPARENT)
+                            .frame(false)
+                            .min_size(Vec2::splat(box_side)),
+                    )
+                    .on_hover_text("Clear search (Esc)");
+                if hit.clicked() {
+                    self.clear_search();
                 }
             }
 
@@ -118,22 +162,6 @@ impl App {
                 .clicked()
             {
                 self.do_search();
-            }
-
-            if !self.search.query.is_empty()
-                && ui
-                    .add(
-                        egui::Button::new(svg_image(SvgIcon::Close, ICON_MD, self.pal.sub))
-                            .fill(tint(self.pal.sub, 12))
-                            .stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .corner_radius(R_MD)
-                            .min_size(Vec2::new(0.0, 36.0)),
-                    )
-                    .on_hover_text("Clear search")
-                    .clicked()
-            {
-                self.search.query.clear();
-                self.ui.show_hist = false;
             }
         });
 
