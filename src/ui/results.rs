@@ -306,7 +306,11 @@ impl App {
                                         ui.add(
                                             egui::Label::new(
                                                 RichText::new(cat)
-                                                    .font(FontId::proportional(fsz - 2.5))
+                                                    // Category sub-label: fs - 2.5 put it
+                                                    // at 11.5 px at the default size, the
+                                                    // smallest text on the screen for a
+                                                    // value people actually read.
+                                                    .font(FontId::proportional(fsz - 1.5))
                                                     .color(cat_col(cat)),
                                             )
                                             .truncate(),

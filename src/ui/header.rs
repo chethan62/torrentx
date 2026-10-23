@@ -41,7 +41,7 @@ impl App {
                             .show(ui, |ui| {
                                 ui.label(
                                     RichText::new(env!("CARGO_PKG_VERSION"))
-                                        .size(10.0)
+                                        .size(11.0)
                                         .color(self.pal.accent),
                                 );
                             });
@@ -154,7 +154,7 @@ impl App {
                             )
                             .width(theme_w)
                             .show_ui(ui, |ui| {
-                                ui.label(RichText::new("─ Dark ─").size(10.0).color(self.pal.dim));
+                                ui.label(RichText::new("─ Dark ─").size(11.0).color(self.pal.dim));
                                 for t in Theme::all().iter().filter(|t| !t.is_light()) {
                                     let col = t.accent_color();
                                     let on = &self.cfg.theme == t;
@@ -171,7 +171,7 @@ impl App {
                                     }
                                 }
                                 ui.add_space(SP1);
-                                ui.label(RichText::new("─ Light ─").size(10.0).color(self.pal.dim));
+                                ui.label(RichText::new("─ Light ─").size(11.0).color(self.pal.dim));
                                 for t in Theme::all().iter().filter(|t| t.is_light()) {
                                     let col = t.accent_color();
                                     let on = &self.cfg.theme == t;
@@ -204,7 +204,7 @@ impl App {
             ui.vertical(|ui| {
                 // Sections read as headings over their controls (an inline
                 // heading made every row start at a different x).
-                lbl(ui, "CONNECTION", self.pal.dim, 10.0);
+                lbl(ui, "CONNECTION", self.pal.sub, 12.0);
                 ui.add_space(SP2);
                 ui.horizontal_wrapped(|ui| {
                     ui.add_space(SP1);
@@ -333,7 +333,7 @@ impl App {
                             "RSS auto-refresh interval (seconds). 0 disables auto-refresh.",
                         );
                     ui.add_space(SP3);
-                    lbl(ui, "PLAY WITH", self.pal.dim, 10.0);
+                    lbl(ui, "PLAY WITH", self.pal.dim, 11.0);
                     egui::ComboBox::from_id_salt("player_cb")
                         .selected_text(self.cfg.player.clone())
                         .width(64.0)
@@ -351,7 +351,7 @@ impl App {
                 ui.add_space(SP2);
 
                 // Row 2 — Display
-                lbl(ui, "DISPLAY", self.pal.dim, 10.0);
+                lbl(ui, "DISPLAY", self.pal.sub, 12.0);
                 ui.add_space(SP2);
                 ui.horizontal_wrapped(|ui| {
                     ui.add_space(SP1);
@@ -374,9 +374,6 @@ impl App {
                         }
                     }
                     ui.add_space(SP3);
-                    // One control for "everything is too small": a font size only
-                    // moved body text, leaving the 10 px section labels, chips and
-                    // header at their fixed literals.
                     // One control for "everything is too small". A segmented picker,
                     // not a slider: it is the vocabulary Rows and Page already use,
                     // and every step is one click away (Ctrl +/- still fine-tunes).
@@ -420,7 +417,11 @@ impl App {
                             let _ = save_cfg(&self.cfg);
                         }
                     }
-                    ui.add_space(SP3);
+                });
+                // The toggles get their own line: seven groups on one row read as a
+                // dense wall at any width and wrapped unpredictably.
+                ui.horizontal_wrapped(|ui| {
+                    ui.add_space(SP1);
                     if ui
                         .add(egui::Button::selectable(
                             self.cfg.check_updates,
@@ -545,7 +546,7 @@ impl App {
                 ui.add_space(SP2);
 
                 // Row 3 — Columns (toggle which columns are shown)
-                lbl(ui, "COLUMNS", self.pal.dim, 10.0);
+                lbl(ui, "COLUMNS", self.pal.sub, 12.0);
                 ui.add_space(SP2);
                 ui.horizontal_wrapped(|ui| {
                     ui.add_space(SP1);

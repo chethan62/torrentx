@@ -1062,9 +1062,12 @@ impl eframe::App for App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         lbl(
                             ui,
-                            "Keys: Arrows · Enter · D · F · M · Esc · Ctrl+F · Ctrl+R",
+                            // The list is a hint, but it has to be a true one:
+                            // every shortcut named here is bound, and Ctrl +/-/0
+                            // is the one people reach for when text looks small.
+                            "Keys: Arrows · Enter · D · F · M · Esc · Ctrl+F · Ctrl+R · Ctrl +/-",
                             self.pal.dim,
-                            10.5,
+                            11.5,
                         );
                     });
                 });

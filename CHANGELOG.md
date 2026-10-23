@@ -4,6 +4,27 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.14] — 2026-10-23
+
+### Changed
+- **The smallest text grew a step.** Settings section headings (CONNECTION /
+  DISPLAY / COLUMNS / PLAY WITH), the Category and Indexer labels, the version
+  badge and the status-bar key hints were 10–10.5 px — the last tier that still read
+  as fine print. They are 11–11.5 px now, and the headings moved out of the dimmest
+  colour tier.
+- **Settings › DISPLAY is two lines.** Seven groups (Rows, Scale, Page, Updates, At
+  login, Cat bar, Accent) on one row read as a dense wall; the toggles now sit on
+  their own line.
+- The category sub-label under a result name went from `fs − 2.5` to `fs − 1.5` —
+  11.5 px at the default size, for a value people actually read.
+
+### Fixed
+- **The Search button wrapped onto a second line.** The row's field is
+  `available − 505`, and the constants had drifted: after the labels grew, the total
+  (`field + chrome`) overflowed by a few pixels, which is all egui needs to wrap the
+  button. Re-measured; verified one line with the button ending 15 px inside the
+  right padding.
+
 ## [18.6.13] — 2026-10-23
 
 ### Added

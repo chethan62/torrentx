@@ -22,14 +22,14 @@ impl App {
             ui.add_space(SP4);
             // Field shrinks with the window; floor at 120 so the combos +
             // Search button can wrap onto a second row instead of clipping.
-            // Combos + labels + button take ~470px; the field takes the rest so
-            // the cluster ends at the window edge instead of stranding it mid-row.
             // Measured widths: Category label+combo ~165, Indexer label+combo
-            // ~162, Search button ~130, gaps ~24 -> 480 plus slack, so the row
-            // keeps one line and the button ends at the window edge. The 520 is
-            // 505 - the 15 px the row used to leave after the clear button moved
-            // inside the field (measured: button right edge 1477 -> 1492 of 1500, so the field grows by 15).
-            let field_w = (ui.available_width() - 490.0).max(140.0);
+            // ~162, Search button ~130, gaps ~24. The row only stays on ONE line
+            // while this constant is at least the real chrome width: the total is
+            // `field + chrome`, so every pixel of overflow wraps the Search button
+            // onto its own line (hit at 490 once the micro-labels grew to 11 px).
+            // 505 leaves ~13 px of slack — the price of never wrapping at any
+            // window width. Re-measure when a control in this row changes size.
+            let field_w = (ui.available_width() - 505.0).max(140.0);
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.search.query)
                     .id(egui::Id::new("q"))
@@ -98,7 +98,7 @@ impl App {
             }
 
             ui.add_space(SP3);
-            lbl(ui, "Category", self.pal.dim, 10.0);
+            lbl(ui, "Category", self.pal.dim, 11.0);
             ui.add_space(SP1);
             egui::ComboBox::from_id_salt("cat_cb")
                 .selected_text(RichText::new(&self.search.cat).font(FontId::proportional(fs)))
@@ -115,7 +115,7 @@ impl App {
 
             // Indexer picker (from Jackett's configured indexers)
             ui.add_space(SP3);
-            lbl(ui, "Indexer", self.pal.dim, 10.0);
+            lbl(ui, "Indexer", self.pal.dim, 11.0);
             ui.add_space(SP1);
             egui::ComboBox::from_id_salt("idx_cb")
                 .selected_text(RichText::new(&self.net.indexer).font(FontId::proportional(fs)))

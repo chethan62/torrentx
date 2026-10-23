@@ -1,6 +1,6 @@
 [package]
 name = "torrentx"
-version = "18.6.13"
+version = "18.6.14"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Native Rust desktop app for searching torrents through Jackett"
