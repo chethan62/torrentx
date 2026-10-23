@@ -4,7 +4,39 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [18.6.11] — 2026-10-23
+
+### Fixed
+- **A failed RSS fetch no longer passes for a healthy, empty feed.** The Torznab body
+  is now checked before parsing: an HTML login wall or a truncated `<item>` used to
+  read to EOF as zero items, so the pill showed a green "ok · 0 items" — indistinguishable
+  from a feed that is simply empty. Non-feed bodies report "Jackett did not return an
+  RSS feed" (or "malformed"), while a genuinely empty `<channel>` stays a success.
+- **A failing feed backs off instead of being retried on every tick.** Each consecutive
+  failure doubles the wait before the next attempt (×1, ×2, ×4, ×8, ceiling 30 minutes)
+  and a success resets it, so a dead indexer costs a handful of requests a day instead
+  of one per interval. At a 2 s interval the pill also oscillated Loading→Error on
+  every tick; it now settles on the error.
+- **"Choose episode / file…" looked like it did nothing.** The listing can take the
+  full 30 s deadline and its only progress line lives in the detail panel, which the
+  context-menu item did not open. It now opens the panel, and the line reads
+  "Listing files — up to 30 s" beside a spinner instead of "Listing files…" in the
+  dimmest text tier.
+- **`--version` no longer panics on a Windows release build.** Those binaries are
+  GUI-subsystem, so they start with no console and `println!` aborted with
+  "failed printing to stdout: The pipe is being closed" (os error 232, exit 101)
+  whenever a shell captured the output. `print_cli()` attaches to the parent
+  console (kernel32 `AttachConsole`, declared inline — no new dependency) and
+  ignores the write error: the version prints in a terminal and exits 0 when
+  nothing is listening.
+- **A config save cannot come back empty after a crash.** The temp file is written
+  through a `File` and `sync_all()`ed, then renamed, then the directory is synced —
+  temp+rename alone stops a torn file but not a zero-byte one on ext4
+  `data=writeback`.
+- **`--minimized` is a round trip, not a one-way door.** The tray's Show/Hide read
+  focus as the visibility source, and a hidden window keeps its last focus state, so
+  "Show" hid it again. Visibility is tracked explicitly, and the flag is ignored
+  entirely when the tray could not be created.
 
 ### Added
 - **One instance per profile.** Two copies shared `config.json` and each save
@@ -17,12 +49,16 @@ versions follow [SemVer](https://semver.org/).
   At login entry now uses it, so logging in no longer opens a window over
   whatever you were doing. On Wayland it starts minimised, since hiding a window
   is impossible there.
-- **`--minimized` is now a round trip.** The tray's Show/Hide read focus as the
-  visibility source, and a hidden window keeps its last focus state, so "Show"
-  hid it again — a one-way door. Visibility is tracked explicitly, and the flag
-  is ignored entirely when the tray could not be created.
+- **`windows-native` workflow** — builds the `.exe` natively on a GitHub-hosted
+  Windows VM, checks `--version`, and asserts a window titled TorrentX actually
+  appears (wgpu adapter, embedded fonts, `%APPDATA%` config). Dispatch-only,
+  because it costs ~8 minutes and proves a claim rather than gating every push.
 - `tests/cli.rs` spawns the binary and pins `--version` (exact string) and
   `--help` (every flag listed) — the CLI had no automated check on Linux.
+
+### Changed
+- **Edition 2024** (rustc 1.97), with the let-chains it unlocks. `gen` is a reserved
+  keyword now (the search epoch guard uses `generation`), and `env::set_var` is unsafe.
 
 ## [18.6.10] — 2026-10-23
 
@@ -30,23 +66,6 @@ versions follow [SemVer](https://semver.org/).
 - **The "At login" pill is Linux-only now.** It was compiled on every target but
   writes an XDG autostart file, so on Windows/macOS it was a control that silently
   did nothing. Hidden there rather than left lying (no build ships for either).
-
-## [Unreleased]
-
-### Fixed
-- **`--version` no longer panics on a Windows release build.** Those binaries are
-  GUI-subsystem, so they start with no console and `println!` aborted with
-  "failed printing to stdout: The pipe is being closed" (os error 232, exit 101)
-  whenever a shell captured the output. `print_cli()` attaches to the parent
-  console (kernel32 `AttachConsole`, declared inline — no new dependency) and
-  ignores the write error: the version prints in a terminal and exits 0 when
-  nothing is listening.
-
-### Added
-- **`windows-native` workflow** — builds the `.exe` natively on a GitHub-hosted
-  Windows VM, checks `--version`, and asserts a window titled TorrentX actually
-  appears (wgpu adapter, embedded fonts, `%APPDATA%` config). Dispatch-only,
-  because it costs ~8 minutes and proves a claim rather than gating every push.
 
 ## [18.6.9] — 2026-10-23
 
