@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use crate::ui::{
     ICON_LG, ICON_MD, ICON_SM, ICON_XS, MOTION_MS, R_LG, R_MD, R_SM, SP1, SP2, SP3, SP4, margin,
 };
+use std::sync::atomic::Ordering;
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -1029,11 +1030,24 @@ impl eframe::App for App {
                             // consistent with the Check/Close status icons.
                             svg_icon(ui, SvgIcon::Refresh, ICON_SM, self.pal.accent);
                             let n = self.total_count();
+                            // Rows can all be on screen while one slow tracker
+                            // still holds the search open; say which, or the wait
+                            // reads as a hang (measured: 8 indexers in ≤1.2 s, 1 in
+                            // 12-18 s).
+                            let (done, asked) = (
+                                self.search.answered.load(Ordering::Relaxed),
+                                self.search.targets.load(Ordering::Relaxed),
+                            );
+                            let idx_note = if asked > 1 && done < asked {
+                                format!("  ·  {done}/{asked} indexers")
+                            } else {
+                                String::new()
+                            };
                             lbl(
                                 ui,
                                 &format!(
-                                    "Searching \"{}\" — {} so far{}",
-                                    self.search.last_query, n, el
+                                    "Searching \"{}\" — {} so far{}{}",
+                                    self.search.last_query, n, el, idx_note
                                 ),
                                 self.pal.accent,
                                 12.0,

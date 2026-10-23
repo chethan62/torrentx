@@ -4,6 +4,23 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [18.6.15] — 2026-10-23
+
+### Changed
+- **One slow tracker no longer defines the search.** The "All" fan-out joins every
+  indexer before reporting Done, so a laggard *is* the search duration — and with a
+  raised timeout the worst case was two minutes. Each indexer now gets at most 20 s
+  in an All search (a single-indexer search still honours the Timeout setting). The
+  status line also names the wait: `Searching "x" — 36 so far  2.5s · 8/9 indexers`.
+- Default **Timeout** is 30 s (was 45); the field is still 5–120 and now says the
+  All-search cap in its tooltip.
+
+### Measured
+- Live Jackett, 9 configured indexers, cold queries: 8 answer in ≤1.2 s, `anisource`
+  takes 12.3–17.6 s and returns nothing for TV/movie queries. A fresh query showed
+  `8/9 indexers` at 2.5 s and finished at 12.65 s with 36 rows — previously that wait
+  read as an unexplained `Scanning…`.
+
 ## [18.6.14] — 2026-10-23
 
 ### Changed

@@ -4,7 +4,7 @@ use crate::themes::rgb;
 use eframe::egui::Color32;
 use reqwest::blocking::Client;
 use serde::Deserialize;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -709,6 +709,20 @@ fn append_results(
 }
 
 /// One search's connection parameters, cloned per fan-out worker.
+/// Ceiling for one indexer in an "All" search.
+///
+/// Measured against a live Jackett: 8 of 9 configured indexers answer in ≤1.2 s
+/// and one (anisource) takes 12–18 s while returning nothing for TV/movie queries.
+/// The fan-out joins every worker before reporting Done, so without a cap the
+/// slowest tracker IS the search duration — and the user's own timeout (up to
+/// 120 s) was the worst case. A single-indexer search still honours the setting.
+const INDEXER_DEADLINE_SECS: u64 = 20;
+
+/// The per-indexer deadline used by the "All" fan-out.
+pub(crate) fn indexer_timeout(base: u64) -> u64 {
+    base.min(INDEXER_DEADLINE_SECS)
+}
+
 #[derive(Clone)]
 struct SearchCtx {
     url: String,
@@ -764,6 +778,7 @@ pub(crate) fn start_search(
     state: Arc<Mutex<SearchState>>,
     count: Arc<Mutex<usize>>,
     epoch: Arc<AtomicU64>,
+    answered: Arc<AtomicUsize>,
     generation: u64,
 ) {
     thread::spawn(move || {
@@ -794,19 +809,29 @@ pub(crate) fn start_search(
                 Err(e) if live() => set_err(&state, e),
                 Err(_) => {}
             }
+            answered.fetch_add(1, Ordering::Relaxed);
             crate::wake_ui();
             return;
         }
 
         // Fan out: every indexer on its own thread. Each appends its rows and
         // wakes the UI, so page 1 appears while slower trackers are still going.
+        // Breadth search: one slow tracker must not become the search duration.
+        let ctx = SearchCtx {
+            timeout: indexer_timeout(ctx.timeout),
+            ..ctx
+        };
         let mut handles = Vec::new();
         for idx in targets {
             let ctx = ctx.clone();
             let results = Arc::clone(&results);
             let count = Arc::clone(&count);
+            let answered = Arc::clone(&answered);
             handles.push(thread::spawn(move || {
-                fetch_into(&ctx, &idx, &results, &count)
+                let r = fetch_into(&ctx, &idx, &results, &count);
+                answered.fetch_add(1, Ordering::Relaxed);
+                crate::wake_ui();
+                r
             }));
         }
         let (mut ok_count, mut first_err) = (0usize, None::<String>);
@@ -1061,6 +1086,20 @@ pub(crate) fn stop_local() {
     if let Some(mut c) = lock_or_recover(&JACKETT_CHILD).take() {
         let _ = c.kill();
         let _ = c.wait();
+    }
+}
+
+#[cfg(test)]
+mod deadline_tests {
+    use super::indexer_timeout;
+
+    /// Measured: one indexer took 12-18 s while the rest answered in <=1.2 s, and
+    /// the fan-out waits for all of them. The cap is what bounds the search.
+    #[test]
+    fn the_all_search_caps_each_indexer_and_keeps_a_smaller_setting() {
+        assert_eq!(indexer_timeout(120), 20);
+        assert_eq!(indexer_timeout(45), 20);
+        assert_eq!(indexer_timeout(5), 5, "a smaller timeout is still honoured");
     }
 }
 
@@ -1447,6 +1486,7 @@ mod tests {
         let state = Arc::new(Mutex::new(SearchState::Idle));
         let count = Arc::new(Mutex::new(0usize));
         let epoch = Arc::new(AtomicU64::new(1));
+        let answered = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         start_search(
             format!("http://{addr}"),
             "key".to_string(),
@@ -1458,6 +1498,7 @@ mod tests {
             Arc::clone(&state),
             Arc::clone(&count),
             Arc::clone(&epoch),
+            Arc::clone(&answered),
             1,
         );
 
@@ -1472,6 +1513,11 @@ mod tests {
             false
         };
         assert!(wait(1), "the fast indexer's rows must arrive first");
+        assert_eq!(
+            answered.load(std::sync::atomic::Ordering::Relaxed),
+            1,
+            "only the fast indexer has answered while the slow one is in flight"
+        );
         // One row, not both, and still Searching: the slow indexer is in flight.
         // This PAIR is the ordering proof — a batched implementation would
         // publish both rows together, so the first observation would already be

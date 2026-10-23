@@ -144,7 +144,7 @@ open.
 |---------|--------|-------|
 | Jackett URL | URL | must start with http:// or https:// |
 | API Key | string | from the Jackett dashboard |
-| Timeout | 5–120 s | per search request |
+| Timeout | 5–120 s | per request; an **All** search caps each indexer at 20 s |
 | RSS refresh | seconds | 0 = never auto-refresh |
 | Rows | Compact / Normal / Roomy | row height |
 | Scale | 80% / 90% / 100% / 110% / 125% / 150% | scales text, rows and icons together (Ctrl +/- steps 5%) |
@@ -284,7 +284,10 @@ systemd: `sudo systemctl start jackett`.
 Re-copy the key from the Jackett dashboard into Settings.
 
 **Search times out**
-Some indexers are slow. Raise **Timeout** in Settings (up to 120 s).
+Some indexers are slow. In an **All** search each indexer gets at most 20 s (the status
+line shows `3/9 indexers` while the stragglers are still out), and raising **Timeout**
+in Settings to 120 s only affects a single-indexer search. If one tracker is always
+last and never returns rows, disable it in Jackett instead.
 
 **Black / blank window** (VMs, some NVIDIA+Wayland setups)
 TorrentX automatically retries with Mesa software GL if GPU init fails. You

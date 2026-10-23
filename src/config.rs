@@ -70,7 +70,7 @@ impl Default for Config {
             history: vec![],
             favorites: vec![],
             theme: Theme::TokyoNight,
-            timeout_secs: 45,
+            timeout_secs: 30,
             dedupe: false,
             page_size: 50,
             row_height: ROW_HEIGHT_NORMAL,

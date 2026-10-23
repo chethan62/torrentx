@@ -16,7 +16,7 @@ use crate::{csv_esc, csv_safe, jackett::Tab};
 
 use eframe::egui::{self, Color32, Stroke, Visuals};
 use std::fs;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -568,6 +568,11 @@ pub(crate) struct SearchUi {
     /// Monotonic search counter; bumped per search so stale threads can
     /// detect they were superseded and discard their response.
     pub(crate) epoch: Arc<AtomicU64>,
+    /// Indexers answered / asked in the current fan-out. Drives the
+    /// "3/9 indexers" part of the status line: the rows can all be on screen
+    /// while one slow tracker still holds the search open.
+    pub(crate) answered: Arc<AtomicUsize>,
+    pub(crate) targets: Arc<AtomicUsize>,
     pub(crate) last_query: String,
     pub(crate) page: usize,
 }
@@ -590,6 +595,8 @@ impl Default for SearchUi {
             state: Arc::new(Mutex::new(SearchState::Idle)),
             count: Arc::new(Mutex::new(0)),
             epoch: Arc::new(AtomicU64::new(0)),
+            answered: Arc::new(AtomicUsize::new(0)),
+            targets: Arc::new(AtomicUsize::new(0)),
             last_query: String::new(),
             page: 0,
         }
@@ -889,8 +896,10 @@ impl App {
         *lock_or_recover(&self.search.results) = Arc::new(vec![]);
         *lock_or_recover(&self.search.count) = 0;
         let generation = self.search.epoch.fetch_add(1, Ordering::Relaxed) + 1;
+        self.search.answered.store(0, Ordering::Relaxed);
         // Fan out per indexer so results land as each tracker answers.
         let targets = crate::jackett::search_targets(&self.net.indexer, &self.net.indexers);
+        self.search.targets.store(targets.len(), Ordering::Relaxed);
         start_search(
             self.cfg.jackett_url.clone(),
             self.cfg.api_key.clone(),
@@ -902,6 +911,7 @@ impl App {
             Arc::clone(&self.search.state),
             Arc::clone(&self.search.count),
             Arc::clone(&self.search.epoch),
+            Arc::clone(&self.search.answered),
             generation,
         );
     }

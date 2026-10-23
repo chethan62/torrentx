@@ -297,11 +297,16 @@ impl App {
                     }
                     ui.add_space(SP3);
                     lbl(ui, "Timeout", self.pal.sub, 12.0);
-                    let te = ui.add(
-                        egui::TextEdit::singleline(&mut self.ui.timeout_buf)
-                            .desired_width(30.0)
-                            .font(FontId::monospace(12.0)),
-                    );
+                    let te = ui
+                        .add(
+                            egui::TextEdit::singleline(&mut self.ui.timeout_buf)
+                                .desired_width(30.0)
+                                .font(FontId::monospace(12.0)),
+                        )
+                        .on_hover_text(
+                            "Per request, 5-120 s. An All search gives each indexer at most \
+                             20 s — one slow tracker must not become the search duration.",
+                        );
                     if te.lost_focus() {
                         // Commit once, on focus loss: clamping every keystroke and
                         // writing the result back into the buffer made "10"
