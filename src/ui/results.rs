@@ -636,6 +636,7 @@ impl App {
         } else {
             1.0
         };
+        let mut guide: Option<f32> = None;
         for (i, w) in widths.iter().enumerate() {
             // Right edge of the column as drawn; the stored sum is only a fallback
             // for the frame before the header reports its rects.
@@ -653,16 +654,27 @@ impl App {
                 egui::Sense::click_and_drag(),
             );
             // egui_extras only paints its separators when the table is resizable,
-            // and this table is not — so draw the divider here.
-            ui.painter()
-                .vline(x, table_rect.y_range(), egui::Stroke::new(1.0, pal.border));
-            if resp.hovered() || resp.dragged() {
+            // and this table is not — so draw the divider here. It lights up when
+            // grabbed, so you can tell which of several lines you took hold of.
+            let live = resp.hovered() || resp.dragged();
+            ui.painter().vline(
+                x,
+                table_rect.y_range(),
+                egui::Stroke::new(
+                    if live { 2.0 } else { 1.0 },
+                    if live { pal.accent } else { pal.border },
+                ),
+            );
+            if live {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
             }
             if resp.drag_started()
-                && let Some(pos) = ui.ctx().pointer_latest_pos()
+                && let Some(start) = ui.input(|i| i.pointer.press_origin())
             {
-                self.ui.col_drag = Some((i, pos.x, *w));
+                // Measure from the press point, not from where the pointer had
+                // already travelled by the first drag frame: otherwise the edge
+                // lands a few px behind the rubber band for the whole drag.
+                self.ui.col_drag = Some((i, start.x, *w));
             }
             if resp.dragged()
                 && let (Some(pos), Some((ci, start_x, start_w))) =
@@ -673,6 +685,10 @@ impl App {
                 if let Some(slot) = self.ui.col_w.get_mut(i) {
                     *slot = w;
                 }
+                // The dragged edge is the rubber band: it follows the pointer,
+                // and the guide below makes the grab legible when the live edge
+                // sits under the cursor.
+                guide = Some(pos.x);
             }
             if resp.drag_stopped() {
                 self.ui.col_drag = None;
@@ -688,6 +704,28 @@ impl App {
                     eprintln!("save column widths: {e}");
                 }
             }
+        }
+
+        // Rubber band: a full-height accent line at the pointer, plus a grip tab
+        // at the header, drawn after every divider on the foreground layer.
+        if let Some(gx) = guide {
+            let painter = ui.ctx().layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("col_drag_guide"),
+            ));
+            painter.vline(
+                gx,
+                table_rect.y_range(),
+                egui::Stroke::new(2.0_f32, pal.accent),
+            );
+            painter.rect_filled(
+                egui::Rect::from_center_size(
+                    egui::pos2(gx, header_top + 15.0),
+                    egui::vec2(26.0, 5.0),
+                ),
+                R_SM,
+                pal.accent,
+            );
         }
 
         // Clear hover when mouse leaves the table area

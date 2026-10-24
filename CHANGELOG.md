@@ -6,6 +6,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Rubber-band guide while dragging a column divider.** The grabbed divider now lights up in
+  the accent colour and a full-height guide line with a grip tab follows the pointer, so it
+  is obvious which of several dividers you took hold of. The drag is measured from the press
+  point (`press_origin`) instead of the first drag frame, so the guide and the live column
+  edge coincide instead of trailing by a few pixels. Verified mid-drag from a screenshot:
+  accent run at the pointer x, divider moved, widths persisted on release.
+
 ### Fixed
 - **Column dividers are draggable along their whole line.** The grab band was the 30 px
   header strip only, while the divider was painted top to bottom — so every line below the
