@@ -21,8 +21,9 @@ impl App {
                 ui.horizontal_wrapped(|ui| {
                     if icon_text_btn(ui, SvgIcon::ChevronLeft, "Prev", self.pal.sub, pg > 0) {
                         self.search.page -= 1;
-                        self.ui.selected = None;
-                        self.ui.detail_open = false; // page content changed; drop stale detail
+                        // Page content changed: a listing for the old row has no
+                        // reader left, so it is abandoned with the pane.
+                        self.close_detail();
                         self.ui.detail_row = None;
                     }
                     ui.add_space(SP3);
@@ -45,8 +46,7 @@ impl App {
                             .clicked()
                         {
                             self.search.page = p;
-                            self.ui.selected = None;
-                            self.ui.detail_open = false;
+                            self.close_detail();
                             self.ui.detail_row = None;
                         }
                     }
@@ -59,8 +59,7 @@ impl App {
                         pg + 1 < max_p,
                     ) {
                         self.search.page += 1;
-                        self.ui.selected = None;
-                        self.ui.detail_open = false;
+                        self.close_detail();
                         self.ui.detail_row = None;
                     }
                     lbl(

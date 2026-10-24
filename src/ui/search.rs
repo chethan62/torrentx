@@ -498,7 +498,8 @@ impl App {
                 let page_n = self.page_slice(sorted).len();
                 self.ui.selected = self.ui.selected.filter(|&i| i < page_n);
                 if self.ui.selected.is_none() {
-                    self.ui.detail_open = false;
+                    // The filter dropped the selected row: abandon its listing too.
+                    self.close_detail();
                 }
 
                 if total == 0 {

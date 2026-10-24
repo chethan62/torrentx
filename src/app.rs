@@ -933,8 +933,7 @@ impl App {
         self.search.query.clear();
         self.ui.show_hist = false;
         self.ui.hist_rect = None;
-        self.ui.selected = None;
-        self.ui.detail_open = false;
+        self.close_detail();
         self.ui.detail_row = None;
         self.ui.sel_set.clear();
         self.ui.sel_mode = false;
@@ -967,8 +966,7 @@ impl App {
         self.cfg.history.insert(0, q.clone());
         self.cfg.history.truncate(20);
         let _ = save_cfg(&self.cfg);
-        self.ui.selected = None;
-        self.ui.detail_open = false;
+        self.close_detail();
         self.ui.detail_row = None; // drop cached detail from previous search
         self.ui.show_hist = false;
         self.search.page = 0;
@@ -1380,8 +1378,7 @@ impl App {
     /// a different torrent — the highlight moves, F/Enter/M act on the wrong item,
     /// and a batch copy would export torrents the user never ticked.
     pub(crate) fn clear_row_selection(&mut self) {
-        self.ui.selected = None;
-        self.ui.detail_open = false;
+        self.close_detail();
         self.ui.detail_row = None;
         self.ui.sel_set.clear();
         self.ui.hovered = None;

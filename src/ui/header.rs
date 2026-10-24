@@ -91,8 +91,7 @@ impl App {
                                     self.ui.fav_search.clear();
                                 }
                                 self.set_tab(tab);
-                                self.ui.detail_open = false;
-                                self.ui.selected = None;
+                                self.close_detail();
                                 // Clear cross-tab hover/selection state so a
                                 // stale row highlight never bleeds into the
                                 // newly shown tab's table.

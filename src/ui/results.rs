@@ -531,8 +531,7 @@ impl App {
                 match action {
                     "select" => {
                         if self.ui.selected == Some(i) && self.ui.detail_open {
-                            self.ui.selected = None;
-                            self.ui.detail_open = false;
+                            self.close_detail();
                         } else {
                             self.ui.selected = Some(i);
                             self.ui.detail_open = true;

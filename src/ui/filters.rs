@@ -150,7 +150,7 @@ impl App {
                             {
                                 self.ui.sel_mode = !self.ui.sel_mode;
                                 self.ui.sel_set.clear();
-                                self.ui.detail_open = false;
+                                self.close_detail();
                             }
                             if self.ui.sel_mode {
                                 let n = self.ui.sel_set.len();
