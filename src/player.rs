@@ -235,36 +235,27 @@ fn fetch_metadata(magnet: &str) -> Option<PathBuf> {
 /// next, hung on a third. One retry inside the same 30 s budget turns that into a
 /// listing instead of an error.
 fn fetch_metadata_once(magnet: &str, cancel: &Cancel) -> Option<PathBuf> {
-    // The budget covers both attempts, but each attempt gets its own cap: a
-    // peerless magnet HANGS on "fetching torrent metadata from 0 peers" rather
-    // than exiting, so a single 30 s attempt would spend the whole budget and make
-    // the retry unreachable. 12 s + 12 s + 0.7 s stays inside the 30 s.
+    // One 30 s budget, and a retry only for a run that ENDED EARLY without metadata:
+    // that is the "0 peers, exit 1" failure, and a fresh attempt inside the remaining
+    // budget fixes it. A run that used the budget was a hang on a dead swarm — a
+    // second attempt would just hang again, so capping the first attempt to make room
+    // for it only throws away time a slow-but-live swarm needs (measured: 15.9 s).
     let overall = std::time::Instant::now() + std::time::Duration::from_secs(30);
     let mut attempt = 0;
     loop {
         attempt += 1;
-        // Attempt 1 is short so a fast failure retries quickly; attempt 2 gets
-        // whatever is left, so a slow-but-live swarm still finishes instead of
-        // being cut at 12 s twice. (A 1-seed magnet was measured at 11.08 s —
-        // inside the first cap, but only just.)
-        let cap = if attempt == 1 {
-            std::time::Duration::from_secs(12)
-        } else {
-            std::time::Duration::from_secs(30)
-        };
-        let deadline = (std::time::Instant::now() + cap).min(overall);
-        if let Some(path) = download_metadata(magnet, cancel, deadline) {
+        let started = std::time::Instant::now();
+        if let Some(path) = download_metadata(magnet, cancel, overall) {
             return Some(path);
         }
-        // Cancelled work is never retried, and the second attempt cannot run past
-        // the budget.
+        // Cancelled work is never retried, and neither is work that used the budget.
         if cancel.load(std::sync::atomic::Ordering::Relaxed)
             || attempt >= 2
-            || std::time::Instant::now() >= overall
+            || started.elapsed() >= std::time::Duration::from_secs(29)
         {
             return None;
         }
-        // A beat before the second try: peers that answered "0 peers" need a moment
+        // A beat before the retry: the peers that answered "0 peers" need a moment
         // to answer differently, and it costs nothing on a healthy swarm.
         std::thread::sleep(std::time::Duration::from_millis(700));
     }
