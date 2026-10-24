@@ -45,6 +45,15 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="18.6.24" date="2026-10-24">
+      <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.24</url>
+      <description>
+        <ul>
+          <li>Export CSV writes the rows you ticked (all of the filtered view when nothing is ticked)</li>
+          <li>Columns can be reordered from Settings</li>
+        </ul>
+      </description>
+    </release>
     <release version="18.6.23" date="2026-10-24">
       <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.23</url>
       <description>

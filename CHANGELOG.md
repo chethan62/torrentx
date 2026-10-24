@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.6.24] — 2026-10-24
+
 ### Added
 - **Columns can be reordered.** `Config::col_order` already drove the table, but nothing
   could edit it — the GUIDE listed a fixed order. The Settings → Columns chips now carry
