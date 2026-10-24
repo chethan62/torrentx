@@ -6,6 +6,13 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Two callers asking for the same torrent's metadata now share **one** fetch
+  (per-infohash single flight): the detail pane's listing and a picker click used to
+  run `downloadmeta` twice on one magnet, cost 10.2 s instead of 5.2 s and throw the
+  first result away. Different torrents still fetch in parallel.
+
+
 ## [18.6.23] — 2026-10-24
 
 ### Changed

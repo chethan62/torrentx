@@ -80,13 +80,78 @@ fn magnet_hash(magnet: &str) -> Option<String> {
     (hash.len() == 40).then(|| hash.to_ascii_lowercase())
 }
 
-/// Fetch a magnet's metadata and return the `.torrent` webtorrent saved.
+/// State of one infohash's metadata fetch, shared by every caller that wants it.
+#[derive(Default)]
+enum FetchSlot {
+    #[default]
+    Idle,
+    Running,
+    Done(Option<PathBuf>),
+}
+
+type Slot = std::sync::Arc<(std::sync::Mutex<FetchSlot>, std::sync::Condvar)>;
+
+static FETCHING: std::sync::Mutex<Option<std::collections::HashMap<String, Slot>>> =
+    std::sync::Mutex::new(None);
+
+fn slot_for(key: &str) -> Slot {
+    let mut map = crate::lock_or_recover(&FETCHING);
+    std::sync::Arc::clone(
+        map.get_or_insert_with(Default::default)
+            .entry(key.to_string())
+            .or_insert_with(|| std::sync::Arc::new(Default::default())),
+    )
+}
+
+/// Run `fetch` once per `key`, however many callers arrive at once.
+///
+/// The detail pane starts a listing when a row is selected and the picker click
+/// starts another for the same magnet: two `downloadmeta` runs on one infohash
+/// cost 10.2 s instead of 5.2 s, and the second threw the first's work away.
+/// Different magnets still fetch in parallel — the lock is per infohash.
+fn single_flight(key: &str, fetch: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+    let gate = slot_for(key);
+    let (state, cv) = &*gate;
+    let mut slot = crate::lock_or_recover(state);
+    loop {
+        match &*slot {
+            FetchSlot::Done(v) => return v.clone(),
+            // Nobody owns it: take it, and drop the lock for the slow part.
+            FetchSlot::Idle => break,
+            FetchSlot::Running => {
+                slot = cv.wait(slot).unwrap_or_else(|e| e.into_inner());
+            }
+        }
+    }
+    *slot = FetchSlot::Running;
+    drop(slot);
+
+    let answer = fetch();
+
+    *crate::lock_or_recover(state) = FetchSlot::Done(answer.clone());
+    cv.notify_all();
+    // Later callers find the .torrent on disk; the slot would only grow the map.
+    if let Some(map) = crate::lock_or_recover(&FETCHING).as_mut() {
+        map.remove(key);
+    }
+    answer
+}
+
+/// Fetch a magnet's metadata and return the `.torrent` webtorrent saved./// Fetch a magnet's metadata and return the `.torrent` webtorrent saved.
 ///
 /// `webtorrent downloadmeta <magnet>` writes `<infohash>.torrent` into the
 /// working directory — pointing that at the torrents cache means the picker and
 /// the subsequent Play share one file (and Play stops paying the metadata round
 /// trip). Needs peers, so it runs under a budget.
 fn fetch_metadata(magnet: &str) -> Option<PathBuf> {
+    match magnet_hash(magnet) {
+        Some(hash) => single_flight(&hash, || fetch_metadata_once(magnet)),
+        None => fetch_metadata_once(magnet),
+    }
+}
+
+/// The uncached body: one `webtorrent downloadmeta` under a 30 s budget.
+fn fetch_metadata_once(magnet: &str) -> Option<PathBuf> {
     let dir = torrents_dir();
     std::fs::create_dir_all(&dir).ok()?;
     let mut child = Command::new("webtorrent")
@@ -692,6 +757,48 @@ mod tests {
         // SAFETY: restores the value written above, same single-threaded test.
         unsafe { std::env::set_var("PATH", old_path) };
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Two callers for the same infohash must share ONE fetch (and both get its
+    /// answer); two different infohashes must not block each other.
+    #[test]
+    fn single_flight_runs_one_fetch_per_key() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::time::Duration;
+
+        let runs = Arc::new(AtomicUsize::new(0));
+        let mut hs = Vec::new();
+        for _ in 0..4 {
+            let runs = Arc::clone(&runs);
+            hs.push(std::thread::spawn(move || {
+                super::single_flight("hash-a", || {
+                    runs.fetch_add(1, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(120));
+                    Some(std::path::PathBuf::from("/tmp/a.torrent"))
+                })
+            }));
+        }
+        let answers: Vec<_> = hs.into_iter().map(|h| h.join().unwrap()).collect();
+        assert_eq!(
+            runs.load(Ordering::SeqCst),
+            1,
+            "the fetch ran more than once"
+        );
+        assert!(
+            answers
+                .iter()
+                .all(|a| a.as_deref() == Some(std::path::Path::new("/tmp/a.torrent"))),
+            "a waiter got a different answer: {answers:?}"
+        );
+
+        // A second key is independent: it runs while the first is finished.
+        let other = super::single_flight("hash-b", || {
+            runs.fetch_add(1, Ordering::SeqCst);
+            None
+        });
+        assert_eq!(other, None);
+        assert_eq!(runs.load(Ordering::SeqCst), 2);
     }
 
     /// The "newest .torrent" fallback used to accept a file from a previous pick
