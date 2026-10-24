@@ -6,6 +6,15 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **A Windows artefact is built and published from the tag.** `release.yml` gained a
+  `windows-latest` job that builds the MSVC binary with a static CRT (so the zip needs
+  no VC++ redistributable), asserts `--version` answers, and packages
+  `TorrentX-<ver>-windows-x64.zip` (exe, both licences, a README stating the tray and
+  `Play` are Linux-only) plus its own `sha256sums-windows.txt`
+  (`scripts/package-windows.ps1`). `windows-native.yml` runs the same packaging step
+  on a dispatch, so the zip is provable without cutting a release.
+
 ## [18.6.20] — 2026-10-24
 
 ### Fixed

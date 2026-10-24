@@ -95,6 +95,21 @@ jobs:
           Stop-Process -Id $p.Id -Force
           "launch smoke: ok"
 
+      # The same packaging step release.yml runs, so a dispatch proves the zip as
+      # well as the launch — the release job itself cannot be dry-run (tag-gated).
+      - name: Package the zip (release packaging step, dry run)
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -Version (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches.Groups[1].Value
+
+      - name: Upload the packaged zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: TorrentX-windows-x64
+          path: |
+            dist/TorrentX-*-windows-x64.zip
+            dist/sha256sums-windows.txt
+          if-no-files-found: error
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
