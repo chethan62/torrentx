@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.6.20] — 2026-10-24
+
 ### Fixed
 - **The search bar is on one grid.** Row 1: the field and the Search button are the
   same box (y=64–99, 36 px). Row 2: Category, its 120 px dropdown, Indexer, its 120 px

@@ -184,10 +184,7 @@ impl App {
             // every click, which made the checkboxes and the filter field unusable.
             let all_idx = self.net.indexers.clone();
             if !all_idx.is_empty() {
-                // A hair more than the label→group gap: the button's border starts
-                // at its edge while a label's ink starts after its advance width, so
-                // equal geometry read as "closer" (12 px looked like 9).
-                ui.add_space(SP5);
+                ui.add_space(SP4);
                 let on = all_idx
                     .iter()
                     .filter(|i| !self.cfg.disabled_indexers.iter().any(|d| d == *i))

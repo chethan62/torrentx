@@ -45,6 +45,16 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="18.6.20" date="2026-10-24">
+      <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.20</url>
+      <description>
+        <ul>
+          <li>Search bar split into two aligned rows: query + Search, then Category/Indexer/Indexers</li>
+          <li>The indexer control is a labelled "Indexers 9/9" button</li>
+          <li>Jackett's indexer list is cached on disk for a day</li>
+        </ul>
+      </description>
+    </release>
     <release version="18.6.19" date="2026-10-24">
       <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.19</url>
       <description>
