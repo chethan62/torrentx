@@ -649,18 +649,33 @@ pub(crate) fn labeled_input(
 // ─── (logic methods moved to app.rs) ──────────────────────────────
 // ─── eframe::App main loop ─────────────────────────────────────────────────
 
+/// Which pixels-per-point base to use this frame.
+///
+/// `native` is the OS scale (`None` on platforms that do not report one), `base` the
+/// value in use and `current` what we have applied. A native change re-bases (the window
+/// moved to another monitor); `current` is only ever used as a first-frame fallback,
+/// because it already contains the user's zoom — using it as the base compounds.
+pub(crate) fn next_base(native: Option<f32>, base: f32, current: f32) -> f32 {
+    match native {
+        Some(n) if (n - base).abs() > 0.001 => n,
+        None if base <= 0.0 => current,
+        _ => base,
+    }
+}
+
 impl App {
     /// Scale the whole interface by `cfg.ui_scale`.
     ///
     /// Everything is drawn in points, so one pixels-per-point change resizes text,
     /// rows, icons and spacing together — the alternative (a font size that only
     /// body text honours) left 10 px section labels and 12 px chips untouched.
-    /// ponytail: `base_ppp` is captured once, so moving the window to a monitor with
-    /// a different scale factor keeps the old base until restart.
+    /// The base follows the monitor: `native_pixels_per_point` is the OS scale, so a
+    /// window moved to a different-DPI screen re-bases instead of keeping the first
+    /// screen's. (`pixels_per_point()` is what WE set — reading that back fed the zoom
+    /// into its own base and made the interface creep larger every frame.)
     pub(crate) fn apply_ui_scale(&mut self, ctx: &egui::Context) {
-        if self.base_ppp <= 0.0 {
-            self.base_ppp = ctx.pixels_per_point();
-        }
+        let native = ctx.input(|i| i.viewport().native_pixels_per_point);
+        self.base_ppp = next_base(native, self.base_ppp, ctx.pixels_per_point());
         let want =
             (self.base_ppp * crate::config::clamp_scale(self.cfg.ui_scale) * 100.0).round() / 100.0;
         if (ctx.pixels_per_point() - want).abs() > 0.001 {
@@ -1758,5 +1773,22 @@ mod tests {
             spaced.contains("\nExec=\"/home/u/My Apps/TorrentX.AppImage\" --minimized\n"),
             "{spaced}"
         );
+    }
+}
+
+#[cfg(test)]
+mod ui_scale_tests {
+    use super::next_base;
+
+    #[test]
+    fn the_base_follows_the_monitor_and_never_the_applied_zoom() {
+        // Window moved to a 2x monitor: re-base.
+        assert_eq!(next_base(Some(2.0), 1.0, 1.5), 2.0);
+        // Our own applied zoom (1.2 = base 1.0 * scale 1.2) must NOT become the base,
+        // or the interface would grow again every frame.
+        assert_eq!(next_base(Some(1.0), 1.0, 1.2), 1.0);
+        // Platform without a native value: capture once.
+        assert_eq!(next_base(None, 0.0, 1.5), 1.5);
+        assert_eq!(next_base(None, 1.5, 1.8), 1.5);
     }
 }

@@ -7,6 +7,15 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **The UI-scale base follows the monitor.** It was captured once, so moving the window to
+  a screen with a different DPI kept the first screen's base. The base now tracks
+  `native_pixels_per_point` (measured `Some(1.0)` on this box) and never the value the app
+  itself applied — reading that back would fold the user's zoom into its own base and creep
+  larger every frame. Test pins both halves; live check: two Ctrl+= presses took the title
+  text 12 → 30 px and nothing changed over the next 3 s.
+
+
+### Fixed
 - **A `downloadmeta` that dies without metadata is retried once.** The same magnet
   measured 4 s → file, 1 s → "0 peers", and a 40 s hang within minutes, so a transient
   failure used to surface as "No metadata — the peers are unreachable". The retry runs
