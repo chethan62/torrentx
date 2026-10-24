@@ -573,6 +573,10 @@ pub(crate) struct SearchUi {
     /// while one slow tracker still holds the search open.
     pub(crate) answered: Arc<AtomicUsize>,
     pub(crate) targets: Arc<AtomicUsize>,
+    /// Indexers that answered with an error in the current fan-out, by id. Shown
+    /// in the status line: a tracker that cannot be reached used to vanish into
+    /// the answered/targets count and look like "no results".
+    pub(crate) failed: Arc<std::sync::Mutex<Vec<String>>>,
     pub(crate) last_query: String,
     pub(crate) page: usize,
 }
@@ -597,6 +601,7 @@ impl Default for SearchUi {
             epoch: Arc::new(AtomicU64::new(0)),
             answered: Arc::new(AtomicUsize::new(0)),
             targets: Arc::new(AtomicUsize::new(0)),
+            failed: Arc::new(std::sync::Mutex::new(Vec::new())),
             last_query: String::new(),
             page: 0,
         }
@@ -956,6 +961,7 @@ impl App {
             &self.cfg.disabled_indexers,
         );
         self.search.targets.store(targets.len(), Ordering::Relaxed);
+        lock_or_recover(&self.search.failed).clear();
         start_search(
             self.cfg.jackett_url.clone(),
             self.cfg.api_key.clone(),
@@ -968,6 +974,7 @@ impl App {
             Arc::clone(&self.search.count),
             Arc::clone(&self.search.epoch),
             Arc::clone(&self.search.answered),
+            Arc::clone(&self.search.failed),
             self.cfg.dedupe,
             generation,
         );

@@ -6,6 +6,24 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **A failed indexer is named, not counted as "no results".** Jackett's aggregate
+  `results?Query=` route answers **200** and reports per-indexer failures inside the
+  body (`Indexers[].Error`), which the app never read — so a Cloudflare-blocked tracker
+  looked exactly like a tracker with nothing for the query. Those bodies are parsed
+  now, the error text is scrubbed of the API key, and the status line ends with
+  `· 1 failed: 1337x`. Measured live with 1337x re-enabled: `26 results for "RRR 2022"
+  (3.0s) · 1 failed: 1337x`.
+- **`"Error": null` no longer breaks a search.** Jackett sends null for a healthy
+  indexer; typing the field as `String` made serde reject the whole body, so every
+  working indexer came back as an error (caught by the new test before it shipped).
+
+### Added
+- `fan_out_records_which_indexer_failed` and `a_null_indexer_error_still_parses` pin
+  both behaviours; `scrub_indexer_error` keeps the .NET message to one line and strips
+  `apikey=…`.
+
+
 ### Added
 - **Catalogue groups in the indexer window.** With 635 unconfigured entries the real
   question is "which one is worth adding", so the catalogue now opens with group chips

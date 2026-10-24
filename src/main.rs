@@ -1048,10 +1048,12 @@ impl eframe::App for App {
                             } else {
                                 String::new()
                             };
+                            let failed =
+                                crate::jackett::failed_note(&lock_or_recover(&self.search.failed));
                             lbl(
                                 ui,
                                 &format!(
-                                    "Searching \"{}\" — {} so far{}{}",
+                                    "Searching \"{}\" — {} so far{}{}{failed}",
                                     self.search.last_query, n, el, idx_note
                                 ),
                                 self.pal.accent,
@@ -1077,10 +1079,12 @@ impl eframe::App for App {
                             } else {
                                 String::new()
                             };
+                            let failed =
+                                crate::jackett::failed_note(&lock_or_recover(&self.search.failed));
                             lbl(
                                 ui,
                                 &format!(
-                                    "{n} results for \"{}\"{}{idx_note}",
+                                    "{n} results for \"{}\"{}{idx_note}{failed}",
                                     self.search.last_query, e
                                 ),
                                 self.pal.green,

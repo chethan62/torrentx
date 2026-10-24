@@ -13,6 +13,23 @@ use std::time::Duration;
 pub(crate) struct JackettResponse {
     #[serde(default)]
     pub(crate) results: Vec<TorrentResult>,
+    /// The aggregate `results?Query=` route answers 200 even when an indexer
+    /// failed; the failure is only visible here. Ignoring it made a Cloudflare
+    /// block look exactly like "no results" (this is how 1337x stayed silent).
+    #[serde(default)]
+    pub(crate) indexers: Vec<JackettIndexerStatus>,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct JackettIndexerStatus {
+    // Jackett sends `"Error": null` for a healthy indexer; `#[serde(default)]`
+    // only covers a MISSING field, so a plain String failed the whole parse and
+    // every successful indexer came back as an error.
+    #[serde(rename = "ID", default)]
+    pub(crate) id: Option<String>,
+    #[serde(default)]
+    pub(crate) error: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -851,6 +868,23 @@ fn request_error(e: reqwest::Error, timeout: u64, url: &str) -> String {
     }
 }
 
+/// Jackett's per-indexer error text is a .NET exception, and its inner message can
+/// carry the request URL — which includes `apikey=`. Keep one short line, no key.
+pub(crate) fn scrub_indexer_error(raw: &str) -> String {
+    let first = raw.lines().next().unwrap_or("").trim();
+    let cleaned = match first.find(" for url") {
+        Some(i) => &first[..i],
+        None => first,
+    };
+    let mut s = cleaned.replace("\r", " ");
+    if let Some(i) = s.find("apikey=") {
+        let mut end = s[i..].find(['&', ')', ' ']).unwrap_or(s.len() - i);
+        end += i;
+        s.replace_range(i..end, "apikey=***");
+    }
+    s.chars().take(140).collect()
+}
+
 fn status_error(st: reqwest::StatusCode) -> String {
     match st.as_u16() {
         401 => "Invalid API key — open Settings to update it.".into(),
@@ -914,6 +948,24 @@ struct SearchCtx {
     dedupe: bool,
 }
 
+/// Status-line suffix naming the indexers that failed this search, capped so a
+/// total outage cannot fill the status bar with 600 names.
+pub(crate) fn failed_note(failed: &[String]) -> String {
+    if failed.is_empty() {
+        return String::new();
+    }
+    let mut sorted: Vec<&str> = failed.iter().map(String::as_str).collect();
+    sorted.sort_unstable();
+    let n = sorted.len();
+    let shown: Vec<&str> = sorted.iter().take(3).copied().collect();
+    let more = if n > shown.len() {
+        format!(" +{}", n - shown.len())
+    } else {
+        String::new()
+    };
+    format!("  ·  {n} failed: {}{more}", shown.join(", "))
+}
+
 /// Fetch one indexer and append its rows. Err is a message for the UI.
 fn fetch_into(
     ctx: &SearchCtx,
@@ -942,6 +994,20 @@ fn fetch_into(
         )
     })?;
     let n = data.results.len();
+    if n == 0
+        && let Some(bad) = data
+            .indexers
+            .iter()
+            .find(|i| i.error.as_deref().is_some_and(|e| !e.trim().is_empty()))
+    {
+        let msg = scrub_indexer_error(bad.error.as_deref().unwrap_or(""));
+        let id = bad.id.as_deref().unwrap_or("");
+        return Err(if id.is_empty() || id == idx {
+            msg
+        } else {
+            format!("{id}: {msg}")
+        });
+    }
     append_results(results, count, data.results, ctx.dedupe);
     // Wake the parked UI loop so the rows paint now, not on the next input.
     crate::wake_ui();
@@ -961,6 +1027,7 @@ pub(crate) fn start_search(
     count: Arc<Mutex<usize>>,
     epoch: Arc<AtomicU64>,
     answered: Arc<AtomicUsize>,
+    failed: Arc<Mutex<Vec<String>>>,
     dedupe: bool,
     generation: u64,
 ) {
@@ -1035,14 +1102,21 @@ pub(crate) fn start_search(
                 let r = fetch_into(&ctx, &idx, &results, &count);
                 answered.fetch_add(1, Ordering::Relaxed);
                 crate::wake_ui();
-                r
+                (idx, r)
             }));
         }
         let (mut ok_count, mut first_err) = (0usize, None::<String>);
         for h in handles {
             match h.join() {
-                Ok(Ok(_)) => ok_count += 1,
-                Ok(Err(e)) => {
+                Ok((_, Ok(_))) => ok_count += 1,
+                Ok((idx, Err(e))) => {
+                    // Keep the id: "2 indexers failed" without names is the same
+                    // silent failure in a new costume.
+                    let mut f = lock_or_recover(&failed);
+                    if !f.contains(&idx) {
+                        f.push(idx);
+                    }
+                    drop(f);
                     first_err.get_or_insert(e);
                 }
                 Err(_) => {}
@@ -1334,13 +1408,13 @@ mod append_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        CATALOGUE_GROUPS, Hlth, INDEXER_CACHE_TTL, IndexerCatalogue, SearchState, Tab,
-        TorrentResult, asset_prefix, cache_fresh, catalogue_matches, category_id,
-        dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port, group_entries, hlth_lbl,
-        indexer_cache_path, is_magnet, managed_config, managed_root, normalize, parse_indexers_xml,
-        parse_latest_tag, port_open, pub_date_key, pub_year, read_server_config, search_targets,
-        set_err, start_local, stop_local, time_ago, truncate_magnet, urlenc, user_config,
-        validate_jackett_url,
+        CATALOGUE_GROUPS, Hlth, INDEXER_CACHE_TTL, IndexerCatalogue, JackettResponse, SearchState,
+        Tab, TorrentResult, asset_prefix, cache_fresh, catalogue_matches, category_id,
+        dedupe_best_seeded, dedupe_key, failed_note, find_bin, fmt_size, free_port, group_entries,
+        hlth_lbl, indexer_cache_path, is_magnet, managed_config, managed_root, normalize,
+        parse_indexers_xml, parse_latest_tag, port_open, pub_date_key, pub_year,
+        read_server_config, scrub_indexer_error, search_targets, set_err, start_local, stop_local,
+        time_ago, truncate_magnet, urlenc, user_config, validate_jackett_url,
     };
     use crate::lock_or_recover;
     use std::thread;
@@ -1703,6 +1777,105 @@ mod tests {
         assert!(!err.contains("apikey"), "the query string leaked: {err}");
     }
 
+    /// The aggregate route reports a failed indexer inside a 200 body. Reading
+    /// only `Results` turned a Cloudflare block into "0 results", and the app had
+    /// no way to say which tracker was dead.
+    #[test]
+    fn a_failed_indexer_inside_a_200_body_becomes_an_error() {
+        let body = r#"{"Results":[],"Indexers":[{"ID":"1337x","Name":"1337x","Status":1,"Results":0,"Error":"Jackett.Common.IndexerException: Exception (1337x): Connection reset by peer for url (http://localhost:9117/api/v2.0/indexers/1337x/results?apikey=SECRETKEY&Query=x) ---> inner"}]}"#;
+        let parsed: JackettResponse = serde_json::from_str(body).unwrap();
+        assert!(parsed.results.is_empty());
+        assert_eq!(parsed.indexers.len(), 1);
+        let msg = scrub_indexer_error(parsed.indexers[0].error.as_deref().unwrap_or(""));
+        assert!(msg.contains("Connection reset by peer"), "{msg}");
+        assert!(!msg.contains("SECRETKEY"), "the API key leaked: {msg}");
+        assert!(!msg.contains("apikey="), "the query string leaked: {msg}");
+        assert!(msg.len() <= 140);
+    }
+
+    /// `"Error": null` is what Jackett sends for a healthy indexer. Typing the
+    /// field as String made serde reject the whole body, so every working indexer
+    /// looked broken — the regression that turned a good search into an error.
+    #[test]
+    fn a_null_indexer_error_still_parses() {
+        let body = r#"{"Results":[{"Title":"x","Seeders":5}],"Indexers":[{"ID":"therarbg","Name":"TheRARBG","Status":2,"Results":11,"Error":null}]}"#;
+        let parsed: JackettResponse = serde_json::from_str(body).unwrap();
+        assert_eq!(parsed.results.len(), 1);
+        assert_eq!(parsed.indexers[0].id.as_deref(), Some("therarbg"));
+        assert!(parsed.indexers[0].error.is_none());
+    }
+
+    /// An indexer that answers with an error must be named in the status line.
+    /// Without this, a Cloudflare-blocked tracker is indistinguishable from one
+    /// that simply had no results — the failure that hid 1337x/eztv for days.
+    #[test]
+    fn fan_out_records_which_indexer_failed() {
+        use super::start_search;
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::sync::atomic::{AtomicU64, AtomicUsize};
+        use std::sync::{Arc, Mutex};
+        use std::time::{Duration, Instant};
+
+        let srv = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = srv.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for _ in 0..2 {
+                let Ok((mut s, _)) = srv.accept() else { return };
+                let mut buf = [0u8; 2048];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                std::thread::spawn(move || {
+                    let resp = if req.contains("/indexers/slow/") {
+                        let body = r#"{"error":"blocked"}"#;
+                        format!(
+                            "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    } else {
+                        let body = r#"{"Results":[{"Title":"x","Seeders":5}]}"#;
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    };
+                    let _ = s.write_all(resp.as_bytes());
+                });
+            }
+        });
+
+        let failed: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+        start_search(
+            format!("http://{addr}"),
+            "key".to_string(),
+            "q".to_string(),
+            "All".to_string(),
+            vec!["fast".to_string(), "slow".to_string()],
+            5,
+            Arc::new(Mutex::new(Arc::new(Vec::new()))),
+            Arc::new(Mutex::new(super::SearchState::Idle)),
+            Arc::new(Mutex::new(0usize)),
+            Arc::new(AtomicU64::new(1)),
+            Arc::new(AtomicUsize::new(0)),
+            Arc::clone(&failed),
+            false,
+            1,
+        );
+
+        let t0 = Instant::now();
+        while Instant::now() - t0 < Duration::from_secs(5) && failed.lock().unwrap().is_empty() {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let f = failed.lock().unwrap().clone();
+        assert_eq!(
+            f,
+            vec!["slow".to_string()],
+            "failed indexers were not named"
+        );
+    }
+
     #[test]
     fn fan_out_publishes_the_fast_indexer_before_the_slow_one() {
         use super::{SearchState, start_search};
@@ -1753,6 +1926,7 @@ mod tests {
             Arc::clone(&count),
             Arc::clone(&epoch),
             Arc::clone(&answered),
+            Arc::new(Mutex::new(Vec::new())),
             false,
             1,
         );
@@ -1948,6 +2122,21 @@ mod tests {
         assert_eq!(cat.unconfigured().collect::<Vec<_>>(), vec!["thepiratebay"]);
         // Forgiving parser: malformed XML yields an empty catalogue, not an error.
         assert!(parse_indexers_xml("<broken>").unwrap().all.is_empty());
+    }
+
+    /// The status line names what failed, but caps the list: a whole-outage
+    /// search must not print 600 ids into one label.
+    #[test]
+    fn failed_note_names_up_to_three_indexers() {
+        assert_eq!(failed_note(&[]), "");
+        assert_eq!(
+            failed_note(&["eztv".into(), "1337x".into()]),
+            "  ·  2 failed: 1337x, eztv"
+        );
+        assert_eq!(
+            failed_note(&["d".into(), "c".into(), "b".into(), "a".into(), "e".into()]),
+            "  ·  5 failed: a, b, c +2"
+        );
     }
 
     /// The catalogue cache is keyed by url+key, never by a name that could leak
