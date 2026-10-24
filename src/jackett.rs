@@ -589,7 +589,24 @@ pub(crate) fn category_id(label: &str) -> Option<&'static str> {
 /// Fetch the list of *configured* Jackett indexers (id slugs).
 /// Uses the Torznab `t=indexers` endpoint. Returns `None` if Jackett is
 /// unreachable, `Some(list)` (possibly empty) on success.
-pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<Vec<String>> {
+/// Jackett's whole indexer list, plus which of them are configured. The
+/// unconfigured ones cannot be added through the API (every write on
+/// `/api/v2.0/indexers*` is behind Jackett's cookie session), so the app shows
+/// them as a catalogue to search and name, and the adding happens in Jackett.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct IndexerCatalogue {
+    pub(crate) configured: Vec<String>,
+    pub(crate) all: Vec<String>,
+}
+
+impl IndexerCatalogue {
+    /// Indexers Jackett knows but has not configured, in the order Jackett sent.
+    pub(crate) fn unconfigured(&self) -> impl Iterator<Item = &String> {
+        self.all.iter().filter(|id| !self.configured.contains(id))
+    }
+}
+
+pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<IndexerCatalogue> {
     let ep = format!(
         "{}/api/v2.0/indexers/all/results/torznab/api?apikey={}&t=indexers",
         url.trim_end_matches('/'),
@@ -604,14 +621,28 @@ pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<Vec<String>> {
     parse_indexers_xml(&body)
 }
 
-/// Pull configured indexer ids out of a Jackett `t=indexers` Torznab XML body.
-/// Pure and unit-testable without a live server.
-fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
+/// Catalogue entries matching `query` that are not configured yet, capped.
+/// Pure and unit-testable: the popup calls this every frame.
+pub(crate) fn catalogue_matches<'a>(
+    cat: &'a IndexerCatalogue,
+    query: &str,
+    limit: usize,
+) -> Vec<&'a String> {
+    let q = query.trim().to_lowercase();
+    cat.unconfigured()
+        .filter(|id| q.is_empty() || id.to_lowercase().contains(&q))
+        .take(limit)
+        .collect()
+}
+
+/// Pull every indexer id out of a Jackett `t=indexers` Torznab XML body, noting
+/// which are configured. Pure and unit-testable without a live server.
+fn parse_indexers_xml(body: &str) -> Option<IndexerCatalogue> {
     use quick_xml::Reader;
     use quick_xml::events::Event;
     let mut reader = Reader::from_str(body);
     reader.config_mut().trim_text(true);
-    let mut out = vec![];
+    let mut cat = IndexerCatalogue::default();
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
@@ -633,12 +664,13 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
                         }
                     }
                 }
-                if configured
-                    && let Some(id) = id
-                    && !id.is_empty()
-                {
-                    out.push(id);
+                let Some(id) = id.filter(|i| !i.is_empty()) else {
+                    continue;
+                };
+                if configured {
+                    cat.configured.push(id.clone());
                 }
+                cat.all.push(id);
             }
             Ok(Event::Eof) => break,
             Err(_) => return None,
@@ -646,9 +678,10 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
         }
         buf.clear();
     }
-    out.sort();
-    out.dedup();
-    Some(out)
+    cat.configured.sort();
+    cat.configured.dedup();
+    cat.all.dedup();
+    Some(cat)
 }
 
 /// Which indexers a search fans out to. Picking one indexer searches only it;
@@ -1195,11 +1228,12 @@ mod append_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        Hlth, SearchState, Tab, TorrentResult, asset_prefix, category_id, dedupe_best_seeded,
-        dedupe_key, find_bin, fmt_size, free_port, hlth_lbl, is_magnet, managed_config,
-        managed_root, normalize, parse_indexers_xml, parse_latest_tag, port_open, pub_date_key,
-        pub_year, read_server_config, search_targets, set_err, start_local, stop_local, time_ago,
-        truncate_magnet, urlenc, user_config, validate_jackett_url,
+        Hlth, IndexerCatalogue, SearchState, Tab, TorrentResult, asset_prefix, catalogue_matches,
+        category_id, dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port, hlth_lbl,
+        is_magnet, managed_config, managed_root, normalize, parse_indexers_xml, parse_latest_tag,
+        port_open, pub_date_key, pub_year, read_server_config, search_targets, set_err,
+        start_local, stop_local, time_ago, truncate_magnet, urlenc, user_config,
+        validate_jackett_url,
     };
     use crate::lock_or_recover;
     use std::thread;
@@ -1799,11 +1833,35 @@ mod tests {
   <indexer id="rarbg" configured="true"/>
   <indexer configured="true"><title>No ID</title></indexer>
 </indexers>"#;
-        let ids = parse_indexers_xml(xml).unwrap();
-        // Only configured ones, sorted+deduped; missing-id ones skipped.
-        assert_eq!(ids, vec!["rarbg", "yts"]);
-        // Forgiving parser: malformed XML yields empty list, not an error.
-        assert!(parse_indexers_xml("<broken>").unwrap().is_empty());
+        let cat = parse_indexers_xml(xml).unwrap();
+        // Configured ones sorted+deduped; the id-less entry is skipped.
+        assert_eq!(cat.configured, vec!["rarbg", "yts"]);
+        // Everything Jackett knows, configured or not, in document order.
+        assert_eq!(cat.all, vec!["yts", "thepiratebay", "rarbg"]);
+        assert_eq!(cat.unconfigured().collect::<Vec<_>>(), vec!["thepiratebay"]);
+        // Forgiving parser: malformed XML yields an empty catalogue, not an error.
+        assert!(parse_indexers_xml("<broken>").unwrap().all.is_empty());
+    }
+
+    /// The catalogue popup filters on what is *not* configured and caps the rows.
+    #[test]
+    fn catalogue_matches_filters_unconfigured_and_caps() {
+        let cat = IndexerCatalogue {
+            configured: vec!["yts".into()],
+            all: vec![
+                "yts".into(),
+                "1337x".into(),
+                "piratebay1337".into(),
+                "eztv".into(),
+            ],
+        };
+        let hits: Vec<&str> = catalogue_matches(&cat, "1337", 10)
+            .into_iter()
+            .map(|s| s.as_str())
+            .collect();
+        assert_eq!(hits, vec!["1337x", "piratebay1337"]); // configured `yts` never listed
+        assert_eq!(catalogue_matches(&cat, "", 2).len(), 2); // capped
+        assert!(catalogue_matches(&cat, "no-such-indexer", 10).is_empty());
     }
 
     #[test]

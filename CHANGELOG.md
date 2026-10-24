@@ -7,6 +7,14 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Indexer catalogue in the chip window.** The app already downloads Jackett's full
+  indexer list for `t=indexers` (644 ids, 2.3 MB, ~0.09 s), so the unconfigured ones
+  are now listed too — 635 on this install — behind a filter box. Clicking one copies
+  its id and opens Jackett's dashboard, which is the only place an indexer can be
+  added (every write on `/api/v2.0/indexers*` is behind Jackett's cookie session).
+- **The chip opens a small window, not a menu.** A menu popup closes on the first
+  click, which made the checkboxes and the filter field unusable; the window keeps
+  its state and its position.
 - **The Indexers chip also gets you to Jackett's own dashboard.** Adding an indexer
   needs Jackett's web UI: `/api/v2.0/indexers/*` is UI-session gated (a POST or even
   a DELETE there redirects to `/UI/Login` with a valid API key; the only API-key route

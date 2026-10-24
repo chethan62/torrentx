@@ -606,10 +606,17 @@ impl Default for SearchUi {
 /// Indexer list + app-update check (background network state).
 pub(crate) struct NetState {
     pub(crate) indexers: Vec<String>,
+    /// Every indexer Jackett knows (configured or not) — the "add from
+    /// catalogue" list in the indexer popup.
+    pub(crate) catalogue: Vec<String>,
+    /// Filter text for that list.
+    pub(crate) cat_query: String,
+    /// Is the indexer window (enable/disable + catalogue) open?
+    pub(crate) idx_open: bool,
     pub(crate) indexer: String,
     pub(crate) indexers_loading: bool,
-    pub(crate) indexers_handle: std::sync::mpsc::Sender<Option<Vec<String>>>,
-    pub(crate) indexers_rx: std::sync::mpsc::Receiver<Option<Vec<String>>>,
+    pub(crate) indexers_handle: std::sync::mpsc::Sender<Option<crate::jackett::IndexerCatalogue>>,
+    pub(crate) indexers_rx: std::sync::mpsc::Receiver<Option<crate::jackett::IndexerCatalogue>>,
     /// (jackett_url, api_key) of the last indexer fetch attempt — lets the UI
     /// loop re-fetch automatically when settings change instead of only once.
     pub(crate) indexers_fetched_for: Option<(String, String)>,
@@ -624,10 +631,14 @@ pub(crate) struct NetState {
 
 impl Default for NetState {
     fn default() -> Self {
-        let (indexers_handle, indexers_rx) = std::sync::mpsc::channel::<Option<Vec<String>>>();
+        let (indexers_handle, indexers_rx) =
+            std::sync::mpsc::channel::<Option<crate::jackett::IndexerCatalogue>>();
         let (update_tx, update_rx) = std::sync::mpsc::channel::<Option<String>>();
         Self {
             indexers: vec![],
+            catalogue: vec![],
+            cat_query: String::new(),
+            idx_open: false,
             indexer: "All".into(),
             indexers_loading: false,
             indexers_handle,

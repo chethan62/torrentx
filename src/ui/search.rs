@@ -137,9 +137,9 @@ impl App {
                 .response
                 .on_hover_text("Search one indexer instead of all");
 
-            // Which indexers the "All" fan-out covers. Rendered as a compact
-            // "8/9" chip so it costs ~50 px in a row that has no room to spare;
-            // the popup is the only place the list of checkboxes lives.
+            // Which indexers the "All" fan-out covers, plus the catalogue. A
+            // compact "8/9" chip opens a small window: a menu popup closes on
+            // every click, which made the checkboxes and the filter field unusable.
             let all_idx = self.net.indexers.clone();
             if !all_idx.is_empty() {
                 let on = all_idx
@@ -154,58 +154,127 @@ impl App {
                     } else {
                         self.pal.yellow
                     });
-                ui.menu_button(chip, |ui| {
-                    if ui
-                        .button(RichText::new("Enable all").font(FontId::proportional(fs)))
-                        .clicked()
-                    {
-                        self.cfg.disabled_indexers.clear();
-                        let _ = crate::config::save_cfg(&self.cfg);
-                        ui.close();
-                    }
-                    ui.separator();
-                    if ui
-                        .button(
-                            RichText::new("Add indexer in Jackett…")
-                                .font(FontId::proportional(fs)),
-                        )
-                        .on_hover_text(
-                            "Jackett owns indexer credentials; its API is login-gated, so adding one happens there",
-                        )
-                        .clicked()
-                    {
-                        let base = self.cfg.jackett_url.trim().trim_end_matches('/').to_string();
-                        let _ = crate::safe_open(format!("{base}/UI/Dashboard"));
-                        ui.close();
-                    }
-                    if ui
-                        .button(RichText::new("Refresh list").font(FontId::proportional(fs)))
-                        .clicked()
-                    {
-                        self.refresh_indexers();
-                        ui.close();
-                    }
-                    ui.separator();
-                    for idx in &all_idx {
-                        let mut enabled = !self.cfg.disabled_indexers.iter().any(|d| d == idx);
-                        if ui
-                            .checkbox(
-                                &mut enabled,
-                                RichText::new(idx).font(FontId::proportional(fs)),
-                            )
-                            .changed()
-                        {
-                            if enabled {
-                                self.cfg.disabled_indexers.retain(|d| d != idx);
-                            } else if !self.cfg.disabled_indexers.contains(idx) {
-                                self.cfg.disabled_indexers.push(idx.clone());
+                if ui
+                    .button(chip)
+                    .on_hover_text("Which indexers \"All\" searches — and Jackett's catalogue")
+                    .clicked()
+                {
+                    self.net.idx_open = !self.net.idx_open;
+                }
+                let mut open = self.net.idx_open;
+                if open {
+                    egui::Window::new("Indexers")
+                        .id(egui::Id::unique("idx_win"))
+                        .open(&mut open)
+                        .collapsible(false)
+                        .resizable(false)
+                        .default_width(260.0)
+                        .show(ui.ctx(), |ui| {
+                            if ui
+                                .button(RichText::new("Enable all").font(FontId::proportional(fs)))
+                                .clicked()
+                            {
+                                self.cfg.disabled_indexers.clear();
+                                let _ = crate::config::save_cfg(&self.cfg);
                             }
-                            let _ = crate::config::save_cfg(&self.cfg);
-                        }
-                    }
-                })
-                .response
-                .on_hover_text("Indexers searched by \"All\" — untick to skip slow or broken ones");
+                            ui.separator();
+                            if ui
+                                .button(
+                                    RichText::new("Add indexer in Jackett…")
+                                        .font(FontId::proportional(fs)),
+                                )
+                                .on_hover_text(
+                                    "Jackett owns indexer credentials; its API is login-gated",
+                                )
+                                .clicked()
+                            {
+                                let base = self
+                                    .cfg
+                                    .jackett_url
+                                    .trim()
+                                    .trim_end_matches('/')
+                                    .to_string();
+                                let _ = crate::safe_open(format!("{base}/UI/Dashboard"));
+                            }
+                            if ui
+                                .button(
+                                    RichText::new("Refresh list").font(FontId::proportional(fs)),
+                                )
+                                .clicked()
+                            {
+                                self.refresh_indexers();
+                            }
+                            // Catalogue: indexers Jackett knows but has not configured.
+                            // The API cannot add one (every write needs Jackett's cookie
+                            // session), so a click copies the id and opens the dashboard.
+                            let cat = crate::jackett::IndexerCatalogue {
+                                configured: all_idx.clone(),
+                                all: self.net.catalogue.clone(),
+                            };
+                            let pending = cat.unconfigured().count();
+                            if pending > 0 {
+                                ui.separator();
+                                ui.label(
+                                    RichText::new(format!("Add from catalogue ({pending})"))
+                                        .font(FontId::proportional(fs - 1.0))
+                                        .color(self.pal.dim),
+                                );
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut self.net.cat_query)
+                                        .hint_text("filter…")
+                                        .desired_width(230.0),
+                                );
+                                let hits: Vec<String> =
+                                    crate::jackett::catalogue_matches(&cat, &self.net.cat_query, 8)
+                                        .into_iter()
+                                        .cloned()
+                                        .collect();
+                                for id in &hits {
+                                    if ui
+                                        .button(RichText::new(id).font(FontId::proportional(fs)))
+                                        .on_hover_text("Copy the name and open Jackett")
+                                        .clicked()
+                                    {
+                                        ui.ctx().copy_text(id.clone());
+                                        let base = self
+                                            .cfg
+                                            .jackett_url
+                                            .trim()
+                                            .trim_end_matches('/')
+                                            .to_string();
+                                        let _ = crate::safe_open(format!("{base}/UI/Dashboard"));
+                                    }
+                                }
+                                if hits.len() == 8 {
+                                    ui.label(
+                                        RichText::new("type to narrow the list")
+                                            .font(FontId::proportional(fs - 1.0))
+                                            .color(self.pal.dim),
+                                    );
+                                }
+                            }
+                            ui.separator();
+                            for idx in &all_idx {
+                                let mut enabled =
+                                    !self.cfg.disabled_indexers.iter().any(|d| d == idx);
+                                if ui
+                                    .checkbox(
+                                        &mut enabled,
+                                        RichText::new(idx).font(FontId::proportional(fs)),
+                                    )
+                                    .changed()
+                                {
+                                    if enabled {
+                                        self.cfg.disabled_indexers.retain(|d| d != idx);
+                                    } else if !self.cfg.disabled_indexers.contains(idx) {
+                                        self.cfg.disabled_indexers.push(idx.clone());
+                                    }
+                                    let _ = crate::config::save_cfg(&self.cfg);
+                                }
+                            }
+                        });
+                    self.net.idx_open = open;
+                }
             }
 
             ui.add_space(SP3);
