@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.6.22] — 2026-10-24
+
 ### Fixed
 - **A failed indexer is named, not counted as "no results".** Jackett's aggregate
   `results?Query=` route answers **200** and reports per-indexer failures inside the
