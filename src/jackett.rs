@@ -673,6 +673,60 @@ pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<IndexerCatalogue> {
     Some(cat)
 }
 
+/// Curated groups for the catalogue. Only ids Jackett actually ships are listed
+/// here; `catalogue_matches` intersects them with what the server returns, so a
+/// removed indexer simply disappears instead of advertising a dead name.
+///
+/// There is no Telugu/Tamil/Malayalam indexer in Jackett's catalogue — the only
+/// desi definitions are `desigaane` and `desitorrents-api`; Indian-language
+/// releases otherwise arrive through the general trackers (1337x, knaben, TPB).
+pub(crate) const CATALOGUE_GROUPS: &[(&str, &[&str])] = &[
+    (
+        "Popular",
+        &[
+            "1337x",
+            "thepiratebay",
+            "yts",
+            "eztv",
+            "knaben",
+            "limetorrents",
+            "torrentgalaxyclone",
+            "kickasstorrents-to",
+            "kickasstorrents-ws",
+            "mejortorrent",
+        ],
+    ),
+    (
+        "Anime",
+        &[
+            "nyaasi",
+            "animetosho-xyz",
+            "animebytes",
+            "bakabt",
+            "acgrip",
+            "tokyotosho",
+            "animez",
+            "sukebeinyaasi",
+        ],
+    ),
+    ("Indian / Desi", &["desigaane", "desitorrents-api"]),
+    ("Games", &["gazellegamesapi", "bitgamer"]),
+    (
+        "Books / Audio",
+        &["epublibre", "audiobookbay", "myanonamouse", "bibliotik"],
+    ),
+    ("Music", &["redacted", "orpheus", "dicmusic"]),
+];
+
+/// Unconfigured ids in one group, in the group's own order.
+pub(crate) fn group_entries<'a>(cat: &'a IndexerCatalogue, group: &[&'a str]) -> Vec<&'a String> {
+    group
+        .iter()
+        .filter_map(|id| cat.all.iter().find(|a| a.as_str() == *id))
+        .filter(|id| !cat.configured.contains(id))
+        .collect()
+}
+
 /// Catalogue entries matching `query` that are not configured yet, capped.
 /// Pure and unit-testable: the popup calls this every frame.
 pub(crate) fn catalogue_matches<'a>(
@@ -1280,12 +1334,13 @@ mod append_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        Hlth, INDEXER_CACHE_TTL, IndexerCatalogue, SearchState, Tab, TorrentResult, asset_prefix,
-        cache_fresh, catalogue_matches, category_id, dedupe_best_seeded, dedupe_key, find_bin,
-        fmt_size, free_port, hlth_lbl, indexer_cache_path, is_magnet, managed_config, managed_root,
-        normalize, parse_indexers_xml, parse_latest_tag, port_open, pub_date_key, pub_year,
-        read_server_config, search_targets, set_err, start_local, stop_local, time_ago,
-        truncate_magnet, urlenc, user_config, validate_jackett_url,
+        CATALOGUE_GROUPS, Hlth, INDEXER_CACHE_TTL, IndexerCatalogue, SearchState, Tab,
+        TorrentResult, asset_prefix, cache_fresh, catalogue_matches, category_id,
+        dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port, group_entries, hlth_lbl,
+        indexer_cache_path, is_magnet, managed_config, managed_root, normalize, parse_indexers_xml,
+        parse_latest_tag, port_open, pub_date_key, pub_year, read_server_config, search_targets,
+        set_err, start_local, stop_local, time_ago, truncate_magnet, urlenc, user_config,
+        validate_jackett_url,
     };
     use crate::lock_or_recover;
     use std::thread;
@@ -1913,6 +1968,33 @@ mod tests {
         assert!(cache_fresh(Duration::from_secs(60)));
         assert!(cache_fresh(INDEXER_CACHE_TTL));
         assert!(!cache_fresh(INDEXER_CACHE_TTL + Duration::from_secs(1)));
+    }
+
+    /// Groups only advertise ids Jackett actually returns, and never ones already
+    /// configured — the Indian group is exactly desigaane + desitorrents-api because
+    /// Jackett ships no Telugu/Tamil/Malayalam definition at all.
+    #[test]
+    fn group_entries_intersect_the_catalogue_and_skip_configured() {
+        let cat = IndexerCatalogue {
+            configured: vec!["1337x".into()],
+            all: vec![
+                "1337x".into(),
+                "thepiratebay".into(),
+                "knaben".into(),
+                "nyaasi".into(),
+                "desigaane".into(),
+                "unlisted-in-any-group".into(),
+            ],
+        };
+        let popular = group_entries(&cat, CATALOGUE_GROUPS[0].1);
+        let popular: Vec<&str> = popular.iter().map(|s| s.as_str()).collect();
+        assert_eq!(popular, vec!["thepiratebay", "knaben"]); // 1337x configured, yts absent
+        let desi: Vec<&str> = group_entries(&cat, CATALOGUE_GROUPS[2].1)
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        assert_eq!(desi, vec!["desigaane"]); // desitorrents-api not in this catalogue
+        assert!(group_entries(&cat, &["not-in-this-catalogue"]).is_empty());
     }
 
     /// The catalogue popup filters on what is *not* configured and caps the rows.

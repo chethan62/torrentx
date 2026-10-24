@@ -284,16 +284,60 @@ impl App {
                                         .font(FontId::proportional(fs - 1.0))
                                         .color(self.pal.dim),
                                 );
+                                // Group chips: with 635 entries the real question is
+                                // "which one is worth configuring", not "how do I spell it".
+                                for (gi, (label, ids)) in
+                                    crate::jackett::CATALOGUE_GROUPS.iter().enumerate()
+                                {
+                                    let entries = crate::jackett::group_entries(&cat, ids);
+                                    if entries.is_empty() {
+                                        continue;
+                                    }
+                                    let selected = self.net.cat_group == Some(gi);
+                                    let text = RichText::new(format!("{label} {}", entries.len()))
+                                        .font(FontId::proportional(fs - 1.0))
+                                        .color(if selected { self.pal.bg } else { self.pal.text });
+                                    let btn = egui::Button::new(text)
+                                        .fill(if selected {
+                                            self.pal.accent
+                                        } else {
+                                            self.pal.surface2
+                                        })
+                                        .corner_radius(R_MD);
+                                    if ui.add(btn).clicked() {
+                                        self.net.cat_group = if selected { None } else { Some(gi) };
+                                        self.net.cat_query.clear();
+                                    }
+                                }
+                                ui.add_space(SP2);
                                 ui.add(
                                     egui::TextEdit::singleline(&mut self.net.cat_query)
                                         .hint_text("filter…")
                                         .desired_width(230.0),
                                 );
-                                let hits: Vec<String> =
-                                    crate::jackett::catalogue_matches(&cat, &self.net.cat_query, 8)
+                                // A group narrows the list; the filter box narrows it further.
+                                let q = self.net.cat_query.trim().to_lowercase();
+                                let mut hits: Vec<String> = match self
+                                    .net
+                                    .cat_group
+                                    .and_then(|gi| crate::jackett::CATALOGUE_GROUPS.get(gi))
+                                {
+                                    Some((_, ids)) => crate::jackett::group_entries(&cat, ids)
                                         .into_iter()
+                                        .filter(|id| q.is_empty() || id.to_lowercase().contains(&q))
+                                        .take(8)
                                         .cloned()
-                                        .collect();
+                                        .collect(),
+                                    None => crate::jackett::catalogue_matches(
+                                        &cat,
+                                        &self.net.cat_query,
+                                        8,
+                                    )
+                                    .into_iter()
+                                    .cloned()
+                                    .collect(),
+                                };
+                                hits.retain(|h| !h.is_empty());
                                 for id in &hits {
                                     if ui
                                         .button(RichText::new(id).font(FontId::proportional(fs)))
@@ -309,6 +353,20 @@ impl App {
                                             .to_string();
                                         let _ = crate::safe_open(format!("{base}/UI/Dashboard"));
                                     }
+                                }
+                                if self.net.cat_group
+                                    == crate::jackett::CATALOGUE_GROUPS
+                                        .iter()
+                                        .position(|(l, _)| *l == "Indian / Desi")
+                                {
+                                    ui.label(
+                                        RichText::new(
+                                            "Jackett has no Telugu/Tamil/Malayalam indexer — \
+                                             those releases come through the general trackers",
+                                        )
+                                        .font(FontId::proportional(fs - 1.5))
+                                        .color(self.pal.dim),
+                                    );
                                 }
                                 if hits.len() == 8 {
                                     ui.label(

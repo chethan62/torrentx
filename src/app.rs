@@ -613,6 +613,8 @@ pub(crate) struct NetState {
     pub(crate) cat_query: String,
     /// Is the indexer window (enable/disable + catalogue) open?
     pub(crate) idx_open: bool,
+    /// Selected catalogue group (index into `jackett::CATALOGUE_GROUPS`), if any.
+    pub(crate) cat_group: Option<usize>,
     pub(crate) indexer: String,
     pub(crate) indexers_loading: bool,
     pub(crate) indexers_handle: std::sync::mpsc::Sender<Option<crate::jackett::IndexerCatalogue>>,
@@ -639,6 +641,7 @@ impl Default for NetState {
             catalogue: vec![],
             cat_query: String::new(),
             idx_open: false,
+            cat_group: None,
             indexer: "All".into(),
             indexers_loading: false,
             indexers_handle,

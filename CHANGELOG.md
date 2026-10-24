@@ -6,6 +6,19 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Catalogue groups in the indexer window.** With 635 unconfigured entries the real
+  question is "which one is worth adding", so the catalogue now opens with group chips
+  and counts — Popular 8, Anime 6, Indian / Desi 2, Games 2, Books / Audio 4, Music 3 —
+  and a chip narrows the list (the filter box narrows it further). A group only lists
+  ids Jackett actually returns, so a removed indexer disappears instead of advertising
+  a dead name.
+
+  Honest limit: Jackett ships **no Telugu, Tamil or Malayalam indexer** — the only desi
+  definitions in its 644-entry catalogue are `desigaane` and `desitorrents-api`. The
+  Indian / Desi group says so in the window, because those releases arrive through the
+  general trackers (1337x, knaben, TPB) rather than a language-specific one.
+
 ## [18.6.21] — 2026-10-24
 
 ### Added
