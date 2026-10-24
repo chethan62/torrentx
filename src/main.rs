@@ -1461,7 +1461,10 @@ fn print_cli(s: &str) {
     {
         // kernel32 is always linked; declaring the one symbol beats adding
         // windows-sys as a direct dependency for eight lines.
-        extern "system" {
+        // `extern` blocks are unsafe since Rust 2024; without the keyword this
+        // block failed to compile on Windows only — the Linux CI never sees it,
+        // and a multi-command pwsh build step hid the failure.
+        unsafe extern "system" {
             fn AttachConsole(process_id: u32) -> i32;
         }
         const ATTACH_PARENT_PROCESS: u32 = u32::MAX;

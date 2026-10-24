@@ -40,9 +40,15 @@ jobs:
             ${{ runner.os }}-native-cargo-
 
       - name: Build (native MSVC)
+        shell: pwsh
         run: |
+          # A two-command step only reports the LAST exit code: the release build
+          # failed here (a Windows-only `extern` compile error) while the debug
+          # build passed, and the step stayed green.
           cargo build --release
+          if ($LASTEXITCODE -ne 0) { throw "release build failed ($LASTEXITCODE)" }
           cargo build
+          if ($LASTEXITCODE -ne 0) { throw "debug build failed ($LASTEXITCODE)" }
 
       - name: --version answers (debug build — console subsystem)
         shell: pwsh
