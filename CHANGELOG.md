@@ -6,6 +6,17 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **The indexer list is cached on disk for a day.** Every launch fetched Jackett's
+  whole `t=indexers` document — 644 entries, 2.34 MB — just to learn which nine are
+  configured. It is now read from `~/.cache/torrentx/indexers-<hash>.xml` (hash of
+  URL+key, so another Jackett or key cannot inherit a stale list, and the key never
+  appears in a path) and refetched when older than 24 h or unparseable. "Refresh
+  list" in the indexer window always bypasses it. Measured against a stub server
+  serving the real 2.34 MB body: launch 1 = one request + cache written; launch 2 =
+  zero requests, chip still `9/9`; "Refresh list" = one request and the cache
+  rewritten; a cache aged two days = one request, timestamp refreshed.
+
 ## [18.6.19] — 2026-10-24
 
 ### Added

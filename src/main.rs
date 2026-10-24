@@ -745,7 +745,11 @@ impl eframe::App for App {
             let handle = self.net.indexers_handle.clone();
             self.net.indexers_loading = true;
             std::thread::spawn(move || {
-                let list = jackett::fetch_indexers(&url, &key);
+                // Disk cache first: 2.3 MB of XML per launch is pure waste when
+                // Jackett's indexer set has not changed. "Refresh list" in the
+                // indexer window calls `fetch_indexers` directly, bypassing this.
+                let list = jackett::cached_indexers(&url, &key)
+                    .or_else(|| jackett::fetch_indexers(&url, &key));
                 let _ = handle.send(list);
                 // Wake the parked UI loop: otherwise the Jackett status dot and the
                 // indexer list stay stale until the user happens to move the mouse.

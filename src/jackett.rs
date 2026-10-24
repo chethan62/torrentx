@@ -606,6 +606,56 @@ impl IndexerCatalogue {
     }
 }
 
+/// How long a cached `t=indexers` body is trusted. Jackett's indexer set changes
+/// only when the user edits it, and the indexer window has a "Refresh list"
+/// button that forces a fetch, so a day is generous and saves 2.3 MB per launch.
+const INDEXER_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Where the catalogue body is cached. Named by a hash of url+key so another
+/// Jackett (or another API key) cannot serve a stale list — and so the key never
+/// appears in a path.
+fn indexer_cache_path(url: &str, key: &str) -> std::path::PathBuf {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325; // FNV-1a, 64 bit
+    for b in url.bytes().chain(std::iter::once(b'|')).chain(key.bytes()) {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x100_0000_01b3);
+    }
+    dirs_next::cache_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("torrentx")
+        .join(format!("indexers-{h:016x}.xml"))
+}
+
+fn cache_fresh(age: Duration) -> bool {
+    age <= INDEXER_CACHE_TTL
+}
+
+/// The cached catalogue, if there is a fresh one. `None` means "go to the
+/// network" (missing, stale or unparseable) — never an error the UI has to show.
+pub(crate) fn cached_indexers(url: &str, key: &str) -> Option<IndexerCatalogue> {
+    let path = indexer_cache_path(url, key);
+    let meta = std::fs::metadata(&path).ok()?;
+    let age = meta.modified().ok()?.elapsed().ok()?;
+    if !cache_fresh(age) {
+        return None;
+    }
+    let body = std::fs::read_to_string(&path).ok()?;
+    parse_indexers_xml(&body)
+}
+
+fn store_indexers(url: &str, key: &str, body: &str) {
+    let path = indexer_cache_path(url, key);
+    if let Some(dir) = path.parent()
+        && std::fs::create_dir_all(dir).is_err()
+    {
+        return;
+    }
+    let tmp = path.with_extension("xml.tmp");
+    if std::fs::write(&tmp, body).is_ok() {
+        let _ = std::fs::rename(&tmp, &path);
+    }
+}
+
 pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<IndexerCatalogue> {
     let ep = format!(
         "{}/api/v2.0/indexers/all/results/torznab/api?apikey={}&t=indexers",
@@ -618,7 +668,9 @@ pub(crate) fn fetch_indexers(url: &str, key: &str) -> Option<IndexerCatalogue> {
         .send()
         .ok()?;
     let body = resp.text().ok()?;
-    parse_indexers_xml(&body)
+    let cat = parse_indexers_xml(&body)?;
+    store_indexers(url, key, &body);
+    Some(cat)
 }
 
 /// Catalogue entries matching `query` that are not configured yet, capped.
@@ -1228,12 +1280,12 @@ mod append_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        Hlth, IndexerCatalogue, SearchState, Tab, TorrentResult, asset_prefix, catalogue_matches,
-        category_id, dedupe_best_seeded, dedupe_key, find_bin, fmt_size, free_port, hlth_lbl,
-        is_magnet, managed_config, managed_root, normalize, parse_indexers_xml, parse_latest_tag,
-        port_open, pub_date_key, pub_year, read_server_config, search_targets, set_err,
-        start_local, stop_local, time_ago, truncate_magnet, urlenc, user_config,
-        validate_jackett_url,
+        Hlth, INDEXER_CACHE_TTL, IndexerCatalogue, SearchState, Tab, TorrentResult, asset_prefix,
+        cache_fresh, catalogue_matches, category_id, dedupe_best_seeded, dedupe_key, find_bin,
+        fmt_size, free_port, hlth_lbl, indexer_cache_path, is_magnet, managed_config, managed_root,
+        normalize, parse_indexers_xml, parse_latest_tag, port_open, pub_date_key, pub_year,
+        read_server_config, search_targets, set_err, start_local, stop_local, time_ago,
+        truncate_magnet, urlenc, user_config, validate_jackett_url,
     };
     use crate::lock_or_recover;
     use std::thread;
@@ -1841,6 +1893,26 @@ mod tests {
         assert_eq!(cat.unconfigured().collect::<Vec<_>>(), vec!["thepiratebay"]);
         // Forgiving parser: malformed XML yields an empty catalogue, not an error.
         assert!(parse_indexers_xml("<broken>").unwrap().all.is_empty());
+    }
+
+    /// The catalogue cache is keyed by url+key, never by a name that could leak
+    /// the key, and staleness is a plain age comparison.
+    #[test]
+    fn indexer_cache_is_keyed_by_url_and_key_and_expires() {
+        let a = indexer_cache_path("http://localhost:9117", "KEYONE");
+        let b = indexer_cache_path("http://localhost:9117", "KEYTWO");
+        let c = indexer_cache_path("http://localhost:9117", "KEYONE");
+        assert_eq!(a, c, "same server+key must map to the same file");
+        assert_ne!(a, b, "another key must not reuse the cache");
+        let name = a.file_name().unwrap().to_string_lossy().to_string();
+        assert!(
+            !name.contains("KEYONE"),
+            "the API key must not appear in the path"
+        );
+
+        assert!(cache_fresh(Duration::from_secs(60)));
+        assert!(cache_fresh(INDEXER_CACHE_TTL));
+        assert!(!cache_fresh(INDEXER_CACHE_TTL + Duration::from_secs(1)));
     }
 
     /// The catalogue popup filters on what is *not* configured and caps the rows.
