@@ -32,6 +32,8 @@ versions follow [SemVer](https://semver.org/).
   new search all get it from one place (a spinner vanishing with no word reads as a bug).
   Paging no longer closes the pane itself — it lets the view-signature path do it, so the
   message fires there too.
+- Switching rows also says so, and it cannot stack: `toast()` replaces a toast with the
+  same text, so six quick switches show one "Stopped listing files", not six.
 - Closing the detail pane now finishes while the app is idle: the fade used to freeze
   mid-way because the UI loop parks, so the pane stayed on screen (and kept the table
   narrowed) until the next event. The animation drives its own repaints and the cached

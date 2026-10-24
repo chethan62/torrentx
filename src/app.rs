@@ -730,6 +730,9 @@ pub(crate) struct UiState {
 /// What the picker shows after the user gave up on a listing (Cancel or Escape).
 pub(crate) const PICK_CANCELLED: &str = "Cancelled — Retry to list files";
 
+/// Toast when a listing is abandoned before it finished.
+pub(crate) const PICK_STOPPED: &str = "Stopped listing files";
+
 #[derive(Clone, Default)]
 pub(crate) struct PickFiles {
     /// Result title the list belongs to.
@@ -925,7 +928,7 @@ impl App {
         // a view change and a new search all reach this, and a spinner vanishing with
         // no word reads as a bug.
         if abandoned {
-            self.toast("Stopped listing files", self.pal.sub);
+            self.toast(PICK_STOPPED, self.pal.sub);
         }
         // Esc is handled after the frame was drawn: without this the pane stays on
         // screen until the next event (the app parks while idle).
@@ -1168,6 +1171,9 @@ impl App {
             && prev.magnet != magnet
         {
             crate::player::abandon(&prev.magnet);
+            // Switching rows quickly abandons each listing in turn; `toast` replaces a
+            // toast with the same text, so this can never stack.
+            self.toast(PICK_STOPPED, self.pal.sub);
         }
         self.ui.pick = Some(PickFiles {
             key: title.to_string(),
