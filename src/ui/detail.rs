@@ -35,8 +35,7 @@ impl App {
                     .on_hover_text("Close")
                     .clicked()
                 {
-                    self.ui.detail_open = false;
-                    self.ui.selected = None;
+                    self.close_detail();
                 }
             });
         });
@@ -245,7 +244,7 @@ impl App {
                                     crate::player::abandon(&st.magnet);
                                     st.loading = false;
                                     st.cancelled = true;
-                                    st.err = Some("Cancelled — Retry to list files".to_string());
+                                    st.err = Some(crate::app::PICK_CANCELLED.to_string());
                                 }
                             });
                             // The UI loop parks; without this the counter freezes.

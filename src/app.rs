@@ -727,6 +727,9 @@ pub(crate) struct UiState {
 }
 
 /// File list for one result, so a season pack can play the episode you picked.
+/// What the picker shows after the user gave up on a listing (Cancel or Escape).
+pub(crate) const PICK_CANCELLED: &str = "Cancelled — Retry to list files";
+
 #[derive(Clone, Default)]
 pub(crate) struct PickFiles {
     /// Result title the list belongs to.
@@ -900,6 +903,24 @@ impl App {
         self.cfg.last_tab = Some(tab.key().to_string());
         self.ui.tab = tab;
         let _ = save_cfg(&self.cfg);
+    }
+
+    /// Dismiss the detail pane. A listing still running for the row it showed has
+    /// no reader left, so it is abandoned exactly as the picker's Cancel does.
+    pub(crate) fn close_detail(&mut self) {
+        if let Some(p) = self.ui.pick.as_mut()
+            && p.loading
+        {
+            crate::player::abandon(&p.magnet);
+            p.loading = false;
+            p.cancelled = true;
+            p.err = Some(PICK_CANCELLED.to_string());
+        }
+        self.ui.detail_open = false;
+        self.ui.selected = None;
+        // Esc is handled after the frame was drawn: without this the pane stays on
+        // screen until the next event (the app parks while idle).
+        crate::wake_ui();
     }
 
     /// Empty the search box and put the results back to the welcome screen.

@@ -23,6 +23,11 @@ versions follow [SemVer](https://semver.org/).
 - The picker's loading row has a **Cancel** button: it abandons the fetch and leaves
   `Cancelled — Retry to list files`, so a slow swarm can be given up on in place. The
   late "no metadata" answer is ignored rather than overwriting the cancelled state.
+- **Escape (and the pane's ✕) abandon a running listing too**, via one `close_detail()`.
+- Closing the detail pane now finishes while the app is idle: the fade used to freeze
+  mid-way because the UI loop parks, so the pane stayed on screen (and kept the table
+  narrowed) until the next event. The animation drives its own repaints and the cached
+  row is dropped once it reaches zero.
 
 
 ## [18.6.23] — 2026-10-24

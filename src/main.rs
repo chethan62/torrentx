@@ -897,6 +897,15 @@ impl eframe::App for App {
         } else {
             (self.ui.detail_anim - delta).max(target)
         };
+        // The loop parks when idle, so a fade that starts from an Escape must be
+        // driven to the end by itself; and once it is over, the panel content is
+        // dropped instead of being drawn at opacity 0 forever (it also kept the
+        // table narrowed by its width).
+        if (self.ui.detail_anim - target).abs() > f32::EPSILON {
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        } else if target == 0.0 && self.rss.rss_detail.is_none() && self.ui.tab == Tab::Search {
+            self.ui.detail_row = None;
+        }
         self.ui.prev_detail_open = self.ui.detail_open;
 
         // Filter+sort the results once per frame; every consumer below
@@ -976,7 +985,7 @@ impl eframe::App for App {
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             if self.ui.detail_open {
-                self.ui.detail_open = false;
+                self.close_detail();
             } else if self.rss.rss_detail.is_some() {
                 // The RSS tab keeps its own detail index: Esc must close that panel
                 // instead of silently clearing the (hidden) search query.
