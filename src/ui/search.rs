@@ -4,6 +4,10 @@ use super::*;
 
 use crate::app::App;
 
+/// Width of the Search button. Fixed, so the field's width is derived rather than
+/// guessed from a chrome total that grows every time a control is added.
+const SEARCH_BTN_W: f32 = 132.0;
+
 impl App {
     pub(crate) fn draw_search(
         &mut self,
@@ -17,19 +21,13 @@ impl App {
         ui.add_space(SP4);
         let mut bar_rect = egui::Rect::NOTHING;
 
-        // Search input
-        ui.horizontal_wrapped(|ui| {
+        // Row 1: query field + Search. The button has a fixed width and the field
+        // takes the rest, so this row cannot wrap — the old `available - 505`
+        // constant broke as soon as a control was added beside the field and the
+        // button jumped onto a line of its own (it rendered at x=5, y=125).
+        ui.horizontal(|ui| {
             ui.add_space(SP4);
-            // Field shrinks with the window; floor at 120 so the combos +
-            // Search button can wrap onto a second row instead of clipping.
-            // Measured widths: Category label+combo ~165, Indexer label+combo
-            // ~162, Search button ~130, gaps ~24. The row only stays on ONE line
-            // while this constant is at least the real chrome width: the total is
-            // `field + chrome`, so every pixel of overflow wraps the Search button
-            // onto its own line (hit at 490 once the micro-labels grew to 11 px).
-            // 505 leaves ~13 px of slack — the price of never wrapping at any
-            // window width. Re-measure when a control in this row changes size.
-            let field_w = (ui.available_width() - 505.0).max(140.0);
+            let field_w = (ui.available_width() - SEARCH_BTN_W - SP3 - SP4).max(160.0);
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.search.query)
                     .id(egui::Id::unique("q"))
@@ -98,6 +96,37 @@ impl App {
             }
 
             ui.add_space(SP3);
+            if ui
+                .add_enabled(
+                    !busy,
+                    egui::Button::new(
+                        RichText::new(if busy {
+                            "  Scanning…  "
+                        } else {
+                            "    Search    "
+                        })
+                        .font(FontId::proportional(fs))
+                        .strong()
+                        .color(Color32::WHITE),
+                    )
+                    .fill(if busy {
+                        tint(self.pal.accent, 190)
+                    } else {
+                        self.pal.accent
+                    })
+                    .corner_radius(R_MD)
+                    .min_size(Vec2::new(SEARCH_BTN_W, 36.0)),
+                )
+                .clicked()
+            {
+                self.do_search();
+            }
+        });
+
+        // Row 2: which indexers a search reaches, and the window to change that.
+        ui.horizontal_wrapped(|ui| {
+            ui.add_space(SP4);
+            ui.add_space(SP3);
             lbl(ui, "Category", self.pal.dim, 11.0);
             ui.add_space(SP1);
             egui::ComboBox::from_id_salt("cat_cb")
@@ -147,21 +176,39 @@ impl App {
                     .filter(|i| !self.cfg.disabled_indexers.iter().any(|d| d == *i))
                     .count();
                 ui.add_space(SP1);
-                let chip = RichText::new(format!("{on}/{}", all_idx.len()))
-                    .font(FontId::proportional(fs - 1.0))
-                    .color(if on == all_idx.len() {
-                        self.pal.dim
+                // A labelled button, not a bare "9/9": the count alone never said
+                // that indexers can be enabled or added here.
+                let all_on = on == all_idx.len();
+                let label = RichText::new(format!("Indexers  {on}/{}", all_idx.len()))
+                    .font(FontId::proportional(fs))
+                    .color(if all_on {
+                        self.pal.text
                     } else {
                         self.pal.yellow
                     });
+                let btn = egui::Button::new(label)
+                    .fill(self.pal.surface2)
+                    .stroke(egui::Stroke::new(
+                        1.0,
+                        if all_on {
+                            self.pal.border
+                        } else {
+                            self.pal.yellow
+                        },
+                    ))
+                    .corner_radius(R_MD)
+                    .min_size(Vec2::new(0.0, 30.0));
                 if ui
-                    .button(chip)
-                    .on_hover_text("Which indexers \"All\" searches — and Jackett's catalogue")
+                    .add(btn)
+                    .on_hover_text(
+                        "Enable or disable indexers, add one in Jackett, browse the catalogue",
+                    )
                     .clicked()
                 {
                     self.net.idx_open = !self.net.idx_open;
                 }
                 let mut open = self.net.idx_open;
+                let mut esc = false;
                 if open {
                     egui::Window::new("Indexers")
                         .id(egui::Id::unique("idx_win"))
@@ -170,6 +217,11 @@ impl App {
                         .resizable(false)
                         .default_width(260.0)
                         .show(ui.ctx(), |ui| {
+                            // Esc closes this before it reaches "clear search":
+                            // it is the topmost surface while it is open.
+                            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                esc = true;
+                            }
                             if ui
                                 .button(RichText::new("Enable all").font(FontId::proportional(fs)))
                                 .clicked()
@@ -273,35 +325,8 @@ impl App {
                                 }
                             }
                         });
-                    self.net.idx_open = open;
+                    self.net.idx_open = open && !esc;
                 }
-            }
-
-            ui.add_space(SP3);
-            if ui
-                .add_enabled(
-                    !busy,
-                    egui::Button::new(
-                        RichText::new(if busy {
-                            "  Scanning…  "
-                        } else {
-                            "    Search    "
-                        })
-                        .font(FontId::proportional(fs))
-                        .strong()
-                        .color(Color32::WHITE),
-                    )
-                    .fill(if busy {
-                        tint(self.pal.accent, 190)
-                    } else {
-                        self.pal.accent
-                    })
-                    .corner_radius(R_MD)
-                    .min_size(Vec2::new(0.0, 36.0)),
-                )
-                .clicked()
-            {
-                self.do_search();
             }
         });
 

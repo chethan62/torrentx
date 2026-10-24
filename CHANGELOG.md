@@ -6,6 +6,15 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **The Search button no longer jumps to a second line.** The search field's width
+  came from `available - 505`, a number that had to be re-measured every time a
+  control was added beside it; the indexer chip pushed the button onto its own row,
+  where it rendered at x=5. The row is now split: the field and a **fixed-width**
+  (132 px) Search button on line one, and Category / Indexer / the indexer button on
+  line two. Field width is derived from the button, not guessed. Measured: field fill
+  spans x=24–1768, the button x=1784–1916 at the same y, window 1920 wide.
+
 ### Changed
 - **The indexer list is cached on disk for a day.** Every launch fetched Jackett's
   whole `t=indexers` document — 644 entries, 2.34 MB — just to learn which nine are
@@ -25,6 +34,10 @@ versions follow [SemVer](https://semver.org/).
   are now listed too — 635 on this install — behind a filter box. Clicking one copies
   its id and opens Jackett's dashboard, which is the only place an indexer can be
   added (every write on `/api/v2.0/indexers*` is behind Jackett's cookie session).
+- **The indexer control is a labelled button.** It read `9/9`, which said nothing
+  about what it did; it is now `Indexers  9/9`, bordered, tinted when some are off,
+  with a tooltip naming enable/disable, add-in-Jackett and the catalogue. Escape
+  closes its window.
 - **The chip opens a small window, not a menu.** A menu popup closes on the first
   click, which made the checkboxes and the filter field unusable; the window keeps
   its state and its position.
