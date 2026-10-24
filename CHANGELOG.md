@@ -7,6 +7,15 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **A `downloadmeta` that dies without metadata is retried once.** The same magnet
+  measured 4 s → file, 1 s → "0 peers", and a 40 s hang within minutes, so a transient
+  failure used to surface as "No metadata — the peers are unreachable". The retry runs
+  inside the same 30 s budget, is skipped when the listing was cancelled, and waits 700 ms
+  first. webtorrent-cli 6 has no timeout/retry flag (`downloadmeta --help`), so the loop
+  lives in the app.
+
+
+### Fixed
 - Two callers asking for the same torrent's metadata now share **one** fetch
   (per-infohash single flight): the detail pane's listing and a picker click used to
   run `downloadmeta` twice on one magnet, cost 10.2 s instead of 5.2 s and throw the

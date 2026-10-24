@@ -230,7 +230,37 @@ fn fetch_metadata(magnet: &str) -> Option<PathBuf> {
 
 /// The uncached body: one `webtorrent downloadmeta` under a 30 s budget, killed
 /// early when `cancel` is set (every waiter gave up).
+/// `downloadmeta`, retried once. Real swarms fail transiently: the same magnet took
+/// 4 s and wrote the file on one run, exited a second later with "0 peers" on the
+/// next, hung on a third. One retry inside the same 30 s budget turns that into a
+/// listing instead of an error.
 fn fetch_metadata_once(magnet: &str, cancel: &Cancel) -> Option<PathBuf> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        if let Some(path) = download_metadata(magnet, cancel, deadline) {
+            return Some(path);
+        }
+        // Cancelled work is never retried, and the second attempt cannot run past
+        // the budget.
+        if cancel.load(std::sync::atomic::Ordering::Relaxed)
+            || attempt >= 2
+            || std::time::Instant::now() >= deadline
+        {
+            return None;
+        }
+        // A beat before the second try: peers that answered "0 peers" need a moment
+        // to answer differently, and it costs nothing on a healthy swarm.
+        std::thread::sleep(std::time::Duration::from_millis(700));
+    }
+}
+
+fn download_metadata(
+    magnet: &str,
+    cancel: &Cancel,
+    deadline: std::time::Instant,
+) -> Option<PathBuf> {
     let dir = torrents_dir();
     std::fs::create_dir_all(&dir).ok()?;
     let mut child = Command::new("webtorrent")
@@ -243,7 +273,6 @@ fn fetch_metadata_once(magnet: &str, cancel: &Cancel) -> Option<PathBuf> {
         .spawn()
         .ok()?;
     let started = std::time::SystemTime::now();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     let mut killed = false;
     loop {
         if cancel.load(std::sync::atomic::Ordering::Relaxed) {
@@ -1006,6 +1035,61 @@ mod tests {
         assert!(t0.elapsed() < Duration::from_secs(2), "the waiter hung");
         assert_eq!(answer, None, "a dead leader must report no metadata");
         let _ = first.join();
+    }
+
+    /// A `downloadmeta` that exits without metadata (the "0 peers" case real swarms
+    /// hit) must be retried once, and the retry's file must be the answer.
+    #[test]
+    fn a_metadata_run_that_exits_empty_is_retried_once() {
+        use std::path::PathBuf;
+
+        // Unique per run so it cannot collide with another test's cached torrent.
+        let hash = format!("{:040x}", (std::process::id() as u64) * 7919);
+        let dir: PathBuf = std::env::temp_dir().join(format!("tx-meta-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let counter = dir.join("count");
+        let stub = dir.join("webtorrent");
+        // First call: "no peers", exit without writing. Second: write a real-sized
+        // .torrent into the working directory, which the app sets to the cache.
+        std::fs::write(
+            &stub,
+            format!(
+                "#!/bin/sh\nn=$(cat '{c}' 2>/dev/null || echo 0)\nn=$((n+1))\necho $n > '{c}'\nif [ \"$1\" = downloadmeta ] && [ \"$n\" -ge 2 ]; then head -c 2048 /dev/zero | tr '\\0' 'd' > '{h}.torrent'; fi\nexit 0\n",
+                c = counter.display(),
+                h = hash
+            ),
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let old_path = std::env::var("PATH").unwrap_or_default();
+        // SAFETY: test-only; the stub spawned here is the only consumer of PATH.
+        unsafe { std::env::set_var("PATH", format!("{}:{}", dir.display(), old_path)) };
+        let got = super::fetch_metadata_once(
+            &format!("magnet:?xt=urn:btih:{hash}&dn=x"),
+            &super::Cancel::new(false),
+        );
+        unsafe { std::env::set_var("PATH", &old_path) };
+
+        let runs: u32 = std::fs::read_to_string(&counter)
+            .unwrap_or_default()
+            .trim()
+            .parse()
+            .unwrap_or(0);
+        let cached = super::torrents_dir().join(format!("{hash}.torrent"));
+        let _ = std::fs::remove_file(&cached);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(runs, 2, "the empty run was not retried");
+        assert_eq!(
+            got.as_deref(),
+            Some(cached.as_path()),
+            "the retry's file was not returned"
+        );
     }
 
     /// The "newest .torrent" fallback used to accept a file from a previous pick
