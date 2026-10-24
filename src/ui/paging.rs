@@ -21,10 +21,8 @@ impl App {
                 ui.horizontal_wrapped(|ui| {
                     if icon_text_btn(ui, SvgIcon::ChevronLeft, "Prev", self.pal.sub, pg > 0) {
                         self.search.page -= 1;
-                        // Page content changed: a listing for the old row has no
-                        // reader left, so it is abandoned with the pane.
-                        self.close_detail();
-                        self.ui.detail_row = None;
+                        // Page content changed: the view signature notices and
+                        // `clear_row_selection` closes the pane (and says so).
                     }
                     ui.add_space(SP3);
                     for p in 0..max_p {
@@ -46,8 +44,6 @@ impl App {
                             .clicked()
                         {
                             self.search.page = p;
-                            self.close_detail();
-                            self.ui.detail_row = None;
                         }
                     }
                     ui.add_space(SP3);
@@ -59,8 +55,6 @@ impl App {
                         pg + 1 < max_p,
                     ) {
                         self.search.page += 1;
-                        self.close_detail();
-                        self.ui.detail_row = None;
                     }
                     lbl(
                         ui,

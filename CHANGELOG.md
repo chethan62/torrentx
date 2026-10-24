@@ -27,6 +27,9 @@ versions follow [SemVer](https://semver.org/).
   Cancel, picking another row, a page change, a filter change, a tab switch and a new
   search all route through `close_detail()` (view changes already went through
   `clear_row_selection`, which now calls it too).
+- A view change that kills a listing says so: "Stopped listing files — the results
+  changed" (a fading spinner looked like a bug). Paging no longer closes the pane
+  itself — it lets the view-signature path do it, so the message fires there too.
 - Closing the detail pane now finishes while the app is idle: the fade used to freeze
   mid-way because the UI loop parks, so the pane stayed on screen (and kept the table
   narrowed) until the next event. The animation drives its own repaints and the cached

@@ -907,10 +907,13 @@ impl App {
 
     /// Dismiss the detail pane. A listing still running for the row it showed has
     /// no reader left, so it is abandoned exactly as the picker's Cancel does.
-    pub(crate) fn close_detail(&mut self) {
+    /// Returns whether a running listing was abandoned, so the caller can say so.
+    pub(crate) fn close_detail(&mut self) -> bool {
+        let mut abandoned = false;
         if let Some(p) = self.ui.pick.as_mut()
             && p.loading
         {
+            abandoned = true;
             crate::player::abandon(&p.magnet);
             p.loading = false;
             p.cancelled = true;
@@ -921,6 +924,7 @@ impl App {
         // Esc is handled after the frame was drawn: without this the pane stays on
         // screen until the next event (the app parks while idle).
         crate::wake_ui();
+        abandoned
     }
 
     /// Empty the search box and put the results back to the welcome screen.
@@ -1378,7 +1382,11 @@ impl App {
     /// a different torrent — the highlight moves, F/Enter/M act on the wrong item,
     /// and a batch copy would export torrents the user never ticked.
     pub(crate) fn clear_row_selection(&mut self) {
-        self.close_detail();
+        // A view change silently kills a listing the user started; say so, or the
+        // spinner vanishing looks like a bug.
+        if self.close_detail() {
+            self.toast("Stopped listing files — the results changed", self.pal.sub);
+        }
         self.ui.detail_row = None;
         self.ui.sel_set.clear();
         self.ui.hovered = None;
