@@ -89,8 +89,14 @@ const SLOT_TTL: std::time::Duration = std::time::Duration::from_secs(35);
 enum FetchSlot {
     #[default]
     Idle,
-    /// Owned since this instant; the lease expires after `SLOT_TTL`.
-    Running(std::time::Instant),
+    /// Owned since this instant; the lease expires after the TTL.
+    Running {
+        since: std::time::Instant,
+        /// Callers parked on this slot right now.
+        waiters: usize,
+        /// Set when the last waiter gives up: the leader kills its child.
+        cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    },
     Done(Option<PathBuf>),
 }
 
@@ -114,44 +120,78 @@ fn slot_for(key: &str) -> Slot {
 /// starts another for the same magnet: two `downloadmeta` runs on one infohash
 /// cost 10.2 s instead of 5.2 s, and the second threw the first's work away.
 /// Different magnets still fetch in parallel — the lock is per infohash.
-fn single_flight(key: &str, fetch: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+fn single_flight(key: &str, fetch: impl FnOnce(&Cancel) -> Option<PathBuf>) -> Option<PathBuf> {
     single_flight_within(key, SLOT_TTL, fetch)
 }
+
+/// Set by the last waiter that gives up. `fetch` polls it and abandons the work
+/// (killing its child) so a closed picker leaves nothing downloading.
+pub(crate) type Cancel = std::sync::atomic::AtomicBool;
 
 fn single_flight_within(
     key: &str,
     ttl: std::time::Duration,
-    fetch: impl FnOnce() -> Option<PathBuf>,
+    fetch: impl FnOnce(&Cancel) -> Option<PathBuf>,
 ) -> Option<PathBuf> {
+    use std::sync::atomic::Ordering;
     let gate = slot_for(key);
     let (state, cv) = &*gate;
     let mut slot = crate::lock_or_recover(state);
     loop {
-        match &*slot {
-            FetchSlot::Done(v) => return v.clone(),
-            FetchSlot::Idle => break,
+        // `Reuse` carries the leader's answer; `Lead`/`Wait` decide under the lock.
+        let step = match &mut *slot {
+            FetchSlot::Done(v) => Some(Some(v.clone())),
+            FetchSlot::Idle => None,
             // The lease expired: whoever gets here first takes over, so a leader
             // that wedged (or died between states) cannot own the slot forever.
-            FetchSlot::Running(since) if since.elapsed() > ttl => break,
-            FetchSlot::Running(_) => {
+            FetchSlot::Running { since, .. } if since.elapsed() > ttl => None,
+            FetchSlot::Running { waiters, .. } => {
+                *waiters += 1;
                 let (guard, wait) = cv
                     .wait_timeout(slot, ttl)
                     .unwrap_or_else(|e| e.into_inner());
                 slot = guard;
-                // Out of patience: report "no metadata" instead of hanging the
-                // picker behind someone else's fetch.
-                if wait.timed_out() && matches!(&*slot, FetchSlot::Running(_)) {
+                let timed_out = wait.timed_out();
+                let mut bailed = false;
+                if let FetchSlot::Running {
+                    waiters, cancel, ..
+                } = &mut *slot
+                {
+                    *waiters = waiters.saturating_sub(1);
+                    if timed_out && *waiters == 0 {
+                        // Nobody is waiting any more: tell the leader to stop
+                        // instead of leaving a webtorrent chewing a dead swarm.
+                        cancel.store(true, Ordering::Relaxed);
+                        bailed = true;
+                    }
+                }
+                if bailed || (timed_out && matches!(&*slot, FetchSlot::Running { .. })) {
+                    // Out of patience: report "no metadata" instead of hanging
+                    // the picker behind someone else's fetch.
                     return None;
                 }
+                Some(None)
             }
+        };
+        match step {
+            Some(Some(answer)) => return answer,
+            // Woken (or arrived) onto a finished slot: read it on the next turn.
+            Some(None) => continue,
+            None => break,
         }
     }
-    *slot = FetchSlot::Running(std::time::Instant::now());
+    let cancel = std::sync::Arc::new(Cancel::new(false));
+    *slot = FetchSlot::Running {
+        since: std::time::Instant::now(),
+        waiters: 0,
+        cancel: std::sync::Arc::clone(&cancel),
+    };
     drop(slot);
 
     // A panicking fetch must still release the slot, or every waiter blocks on a
     // condvar nobody will notify.
-    let answer = std::panic::catch_unwind(std::panic::AssertUnwindSafe(fetch)).unwrap_or(None);
+    let answer =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| fetch(&cancel))).unwrap_or(None);
 
     *crate::lock_or_recover(state) = FetchSlot::Done(answer.clone());
     cv.notify_all();
@@ -162,7 +202,20 @@ fn single_flight_within(
     answer
 }
 
-/// Fetch a magnet's metadata and return the `.torrent` webtorrent saved./// Fetch a magnet's metadata and return the `.torrent` webtorrent saved./// Fetch a magnet's metadata and return the `.torrent` webtorrent saved.
+/// Abandon this torrent's metadata fetch. The picker calls it when the user moves
+/// to a different row: the listing thread nobody will read stops waiting, and the
+/// leader kills its `webtorrent` child instead of polling a dead swarm for 30 s.
+pub(crate) fn abandon(magnet: &str) {
+    let Some(hash) = magnet_hash(magnet) else {
+        return;
+    };
+    let gate = slot_for(&hash);
+    if let FetchSlot::Running { cancel, .. } = &*crate::lock_or_recover(&gate.0) {
+        cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// Fetch a magnet's metadata and return the `.torrent` webtorrent saved./// Fetch a magnet's metadata and return the `.torrent` webtorrent saved./// Fetch a magnet's metadata and return the `.torrent` webtorrent saved./// Fetch a magnet's metadata and return the `.torrent` webtorrent saved.
 ///
 /// `webtorrent downloadmeta <magnet>` writes `<infohash>.torrent` into the
 /// working directory — pointing that at the torrents cache means the picker and
@@ -170,13 +223,14 @@ fn single_flight_within(
 /// trip). Needs peers, so it runs under a budget.
 fn fetch_metadata(magnet: &str) -> Option<PathBuf> {
     match magnet_hash(magnet) {
-        Some(hash) => single_flight(&hash, || fetch_metadata_once(magnet)),
-        None => fetch_metadata_once(magnet),
+        Some(hash) => single_flight(&hash, |cancel| fetch_metadata_once(magnet, cancel)),
+        None => fetch_metadata_once(magnet, &Cancel::new(false)),
     }
 }
 
-/// The uncached body: one `webtorrent downloadmeta` under a 30 s budget.
-fn fetch_metadata_once(magnet: &str) -> Option<PathBuf> {
+/// The uncached body: one `webtorrent downloadmeta` under a 30 s budget, killed
+/// early when `cancel` is set (every waiter gave up).
+fn fetch_metadata_once(magnet: &str, cancel: &Cancel) -> Option<PathBuf> {
     let dir = torrents_dir();
     std::fs::create_dir_all(&dir).ok()?;
     let mut child = Command::new("webtorrent")
@@ -190,15 +244,24 @@ fn fetch_metadata_once(magnet: &str) -> Option<PathBuf> {
         .ok()?;
     let started = std::time::SystemTime::now();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut killed = false;
     loop {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            killed = true;
+        }
         match child.try_wait() {
             Ok(Some(_)) => break,
-            Ok(None) if std::time::Instant::now() < deadline => {
+            Ok(None) if !killed && std::time::Instant::now() < deadline => {
                 std::thread::sleep(std::time::Duration::from_millis(100))
             }
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
+                // A killed child may have left a partial .torrent: never hand it
+                // back as if it were real.
+                if killed {
+                    return None;
+                }
                 break;
             }
         }
@@ -797,7 +860,7 @@ mod tests {
         for _ in 0..4 {
             let runs = Arc::clone(&runs);
             hs.push(std::thread::spawn(move || {
-                super::single_flight("hash-a", || {
+                super::single_flight("hash-a", |_| {
                     runs.fetch_add(1, Ordering::SeqCst);
                     std::thread::sleep(Duration::from_millis(120));
                     Some(std::path::PathBuf::from("/tmp/a.torrent"))
@@ -818,12 +881,84 @@ mod tests {
         );
 
         // A second key is independent: it runs while the first is finished.
-        let other = super::single_flight("hash-b", || {
+        let other = super::single_flight("hash-b", |_| {
             runs.fetch_add(1, Ordering::SeqCst);
             None
         });
         assert_eq!(other, None);
         assert_eq!(runs.load(Ordering::SeqCst), 2);
+    }
+
+    /// Moving to another row abandons the old listing: the leader must kill its
+    /// child, not poll a swarm nobody is waiting on.
+    #[test]
+    fn abandon_stops_the_leader() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::{Duration, Instant};
+
+        let hash = "ab".repeat(20);
+        let magnet = format!("magnet:?xt=urn:btih:{hash}&dn=x");
+        let saw = Arc::new(AtomicBool::new(false));
+        let s2 = Arc::clone(&saw);
+        let leader = std::thread::spawn(move || {
+            super::single_flight_within(&hash, Duration::from_secs(30), |cancel| {
+                let t0 = Instant::now();
+                while t0.elapsed() < Duration::from_secs(3) {
+                    if cancel.load(Ordering::Relaxed) {
+                        s2.store(true, Ordering::SeqCst);
+                        return None;
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Some(std::path::PathBuf::from("/tmp/late.torrent"))
+            })
+        });
+        std::thread::sleep(Duration::from_millis(60));
+        super::abandon(&magnet);
+        assert_eq!(leader.join().unwrap(), None, "the leader kept fetching");
+        assert!(
+            saw.load(Ordering::SeqCst),
+            "the leader never saw the cancel"
+        );
+    }
+
+    /// When the last waiter gives up, the leader must notice and abandon its work
+    /// (in the app: kill the webtorrent child) instead of fetching for nobody.
+    #[test]
+    fn the_last_waiter_bailing_cancels_the_leader() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::{Duration, Instant};
+
+        let aborted = Arc::new(AtomicBool::new(false));
+        let a = Arc::clone(&aborted);
+        let leader = std::thread::spawn(move || {
+            super::single_flight_within("cancel-me", Duration::from_secs(30), |cancel| {
+                let t0 = Instant::now();
+                // Stands in for fetch_metadata_once's 100 ms poll loop.
+                while t0.elapsed() < Duration::from_secs(3) {
+                    if cancel.load(Ordering::Relaxed) {
+                        a.store(true, Ordering::SeqCst);
+                        return None;
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Some(std::path::PathBuf::from("/tmp/late.torrent"))
+            })
+        });
+        std::thread::sleep(Duration::from_millis(50));
+        // One waiter with a short lease: it times out, is the last one, so it cancels.
+        let gave_up = super::single_flight_within("cancel-me", Duration::from_millis(80), |_| {
+            Some(std::path::PathBuf::from("/tmp/waiter.torrent"))
+        });
+        let answer = leader.join().unwrap();
+        assert_eq!(gave_up, None, "the bailing waiter must not lead the fetch");
+        assert_eq!(answer, None, "the leader kept fetching for nobody");
+        assert!(
+            aborted.load(Ordering::SeqCst),
+            "the leader never saw the cancel"
+        );
     }
 
     /// A leader that wedges past its lease must not own the slot forever: the next
@@ -833,13 +968,13 @@ mod tests {
         use std::time::Duration;
         let ttl = Duration::from_millis(80);
         let slow = std::thread::spawn(|| {
-            super::single_flight_within("lease-a", std::time::Duration::from_millis(80), || {
+            super::single_flight_within("lease-a", std::time::Duration::from_millis(80), |_| {
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 Some(std::path::PathBuf::from("/tmp/slow.torrent"))
             })
         });
         std::thread::sleep(Duration::from_millis(150));
-        let taken = super::single_flight_within("lease-a", ttl, || {
+        let taken = super::single_flight_within("lease-a", ttl, |_| {
             Some(std::path::PathBuf::from("/tmp/taken.torrent"))
         });
         assert_eq!(
@@ -856,7 +991,7 @@ mod tests {
     fn a_panicking_fetch_releases_the_waiter() {
         use std::time::{Duration, Instant};
         let first = std::thread::spawn(|| {
-            let _ = super::single_flight_within("boom", Duration::from_secs(30), || {
+            let _ = super::single_flight_within("boom", Duration::from_secs(30), |_| {
                 // Panic only once the waiter is certainly attached, or it would
                 // find an Idle slot (the finished one is removed) and lead itself.
                 std::thread::sleep(Duration::from_millis(200));
@@ -865,7 +1000,7 @@ mod tests {
         });
         std::thread::sleep(Duration::from_millis(50));
         let t0 = Instant::now();
-        let answer = super::single_flight_within("boom", Duration::from_secs(30), || {
+        let answer = super::single_flight_within("boom", Duration::from_secs(30), |_| {
             Some(std::path::PathBuf::from("/tmp/never.torrent"))
         });
         assert!(t0.elapsed() < Duration::from_secs(2), "the waiter hung");

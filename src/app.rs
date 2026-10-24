@@ -740,6 +740,8 @@ pub(crate) struct PickFiles {
     pub(crate) filter: String,
     /// Whether the chooser window is open (the list outlives it).
     pub(crate) window: bool,
+    /// The magnet this listing belongs to, so a newer pick can abandon it.
+    pub(crate) magnet: String,
     /// When the listing started — the loading label counts up from here so a
     /// slow swarm reads as "6 s" and not as a hang. (`Option` only because
     /// `Instant` has no `Default`, and a manual `Default` for this struct drifts.)
@@ -1128,8 +1130,16 @@ impl App {
     /// the picker); `false` loads it quietly because the detail pane is showing
     /// the row and may never be asked for a file.
     pub(crate) fn pick_files(&mut self, title: &str, magnet: &str, link: Option<&str>, open: bool) {
+        // A pick for another row supersedes this one: nobody will read its answer.
+        if let Some(prev) = self.ui.pick.as_ref()
+            && prev.loading
+            && prev.magnet != magnet
+        {
+            crate::player::abandon(&prev.magnet);
+        }
         self.ui.pick = Some(PickFiles {
             key: title.to_string(),
+            magnet: magnet.to_string(),
             loading: true,
             window: open,
             started: Some(std::time::Instant::now()),

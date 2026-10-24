@@ -16,6 +16,10 @@ versions follow [SemVer](https://semver.org/).
   instead of hanging the picker behind someone else's fetch, and a panicking fetch
   releases the slot (it used to leave every waiter blocked on a condvar nobody
   would notify).
+- The leader's `webtorrent downloadmeta` child is **killed when nobody is waiting**:
+  the slot counts waiters and the fetch polls a cancel flag, so switching to another
+  row stops the old fetch at its next 100 ms tick instead of polling a dead swarm for
+  the full 30 s. A killed child never leaves a partial `.torrent` behind as a result.
 
 
 ## [18.6.23] — 2026-10-24
