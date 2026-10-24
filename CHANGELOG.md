@@ -13,6 +13,12 @@ versions follow [SemVer](https://semver.org/).
   inside the same 30 s budget, is skipped when the listing was cancelled, and waits 700 ms
   first. webtorrent-cli 6 has no timeout/retry flag (`downloadmeta --help`), so the loop
   lives in the app.
+- Each attempt gets its own **12 s cap** inside the 30 s budget, so the retry is
+  reachable for a magnet that *hangs* instead of exiting. A real 0-peer magnet hangs on
+  "fetching torrent metadata from 0 peers"; with one 30 s attempt the budget was spent
+  before the retry could run. Measured live: two `downloadmeta` starts 12.71 s apart.
+- The two tests that rewrite `PATH` now take a shared lock — they were racing, which made
+  `a_metadata_run_that_exits_empty_is_retried_once` fail in a full run.
 
 
 ### Fixed

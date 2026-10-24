@@ -235,10 +235,16 @@ fn fetch_metadata(magnet: &str) -> Option<PathBuf> {
 /// next, hung on a third. One retry inside the same 30 s budget turns that into a
 /// listing instead of an error.
 fn fetch_metadata_once(magnet: &str, cancel: &Cancel) -> Option<PathBuf> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    // The budget covers both attempts, but each attempt gets its own cap: a
+    // peerless magnet HANGS on "fetching torrent metadata from 0 peers" rather
+    // than exiting, so a single 30 s attempt would spend the whole budget and make
+    // the retry unreachable. 12 s + 12 s + 0.7 s stays inside the 30 s.
+    let overall = std::time::Instant::now() + std::time::Duration::from_secs(30);
     let mut attempt = 0;
     loop {
         attempt += 1;
+        let deadline =
+            (std::time::Instant::now() + std::time::Duration::from_secs(12)).min(overall);
         if let Some(path) = download_metadata(magnet, cancel, deadline) {
             return Some(path);
         }
@@ -246,7 +252,7 @@ fn fetch_metadata_once(magnet: &str, cancel: &Cancel) -> Option<PathBuf> {
         // the budget.
         if cancel.load(std::sync::atomic::Ordering::Relaxed)
             || attempt >= 2
-            || std::time::Instant::now() >= deadline
+            || std::time::Instant::now() >= overall
         {
             return None;
         }
@@ -631,6 +637,9 @@ mod stream_cache_tests {
 
 #[cfg(test)]
 mod tests {
+    /// Tests that rewrite `PATH` must not run concurrently: `env::set_var` is
+    /// process-wide, so two of them fight and one sees the other's stub.
+    static PATH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     use super::{
         PLAYERS, is_playing, log_path, parse_info_json, play_args, player_flag, start_play,
         stop_play, torrent_file,
@@ -772,6 +781,8 @@ mod tests {
     fn start_play_runs_webtorrent_with_the_stream_argv_and_stops_it() {
         use std::path::PathBuf;
         use std::time::{Duration, Instant};
+
+        let _serial = crate::lock_or_recover(&PATH_LOCK);
 
         fn wait_for<F: Fn() -> bool>(f: F, secs: u64) -> bool {
             let deadline = Instant::now() + Duration::from_secs(secs);
@@ -1042,6 +1053,8 @@ mod tests {
     #[test]
     fn a_metadata_run_that_exits_empty_is_retried_once() {
         use std::path::PathBuf;
+
+        let _serial = crate::lock_or_recover(&PATH_LOCK);
 
         // Unique per run so it cannot collide with another test's cached torrent.
         let hash = format!("{:040x}", (std::process::id() as u64) * 7919);
