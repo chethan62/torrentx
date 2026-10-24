@@ -7,6 +7,19 @@ use crate::app::App;
 impl App {
     pub(crate) fn draw_detail(&mut self, ui: &mut egui::Ui, r: &TorrentResult) {
         let fs = self.cfg.font_size;
+        // Load the file list as soon as the pane shows this row, not when the
+        // user clicks: the metadata round trip is the whole cost of the picker
+        // (measured 5.2 s cold, 0.4 s warm), and a selection is where the wait is
+        // invisible. One load per row — `pick.key` guards against restarting it
+        // every frame, and the picker click then only opens the chooser.
+        if let Some(mag) = r.magnet_uri.as_deref()
+            && self.ui.pick.as_ref().is_none_or(|p| p.key != r.title)
+            // ponytail: two at a time — arrowing through a list must not leave a
+            // dozen webtorrent processes each waiting 30 s for peers.
+            && crate::player::metadata_in_flight() < 2
+        {
+            self.pick_files(&r.title, mag, r.link.as_deref(), false);
+        }
         ui.add_space(SP4);
         ui.horizontal(|ui| {
             ui.add_space(SP4);
@@ -209,11 +222,24 @@ impl App {
                             // The list comes from the torrent's metadata, which
                             // can take list_files()'s full 30 s deadline. A bare
                             // spinner in the dimmest tier read as a hang.
+                            let secs = p
+                                .started
+                                .unwrap_or_else(std::time::Instant::now)
+                                .elapsed()
+                                .as_secs();
                             ui.horizontal(|ui| {
                                 ui.spinner();
                                 ui.add_space(SP2);
-                                lbl(ui, "Listing files — up to 30 s", self.pal.sub, fs - 1.0);
+                                lbl(
+                                    ui,
+                                    &format!("Listing files — {secs}s (metadata from peers)"),
+                                    self.pal.sub,
+                                    fs - 1.0,
+                                );
                             });
+                            // The UI loop parks; without this the counter freezes.
+                            ui.ctx()
+                                .request_repaint_after(std::time::Duration::from_millis(500));
                         }
                         Some(p) if !p.files.is_empty() => {
                             let label = match p.sel.and_then(|i| p.files.get(i)) {
@@ -232,7 +258,7 @@ impl App {
                             }
                             if wide_icon_btn(ui, SvgIcon::Refresh, "Retry file list", self.pal.sub)
                             {
-                                self.pick_files(&r.title, &mag, r.link.as_deref());
+                                self.pick_files(&r.title, &mag, r.link.as_deref(), true);
                             }
                         }
                         None => {
@@ -242,7 +268,7 @@ impl App {
                                 "Choose episode/file…",
                                 self.pal.sub,
                             ) {
-                                self.pick_files(&r.title, &mag, r.link.as_deref());
+                                self.pick_files(&r.title, &mag, r.link.as_deref(), true);
                             }
                         }
                     }

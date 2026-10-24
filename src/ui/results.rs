@@ -574,7 +574,7 @@ impl App {
                             // menu item looks like it did nothing.
                             self.ui.selected = Some(i);
                             self.ui.detail_open = true;
-                            self.pick_files(&r.title, &m, r.link.as_deref());
+                            self.pick_files(&r.title, &m, r.link.as_deref(), true);
                         }
                     }
                     "dl" => {

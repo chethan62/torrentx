@@ -6,6 +6,21 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **The file list loads when a row is selected, not when you click "Choose
+  episode/file…".** The metadata round trip is the whole cost of the picker
+  (5.2 s cold on a live swarm; 0.4 s to reuse it), so it now starts while you are
+  reading the detail pane — the chooser opens in under 0.4 s, and a cold list is
+  ready in 1.7–4.1 s. The loading label counts up instead of claiming "up to 30 s".
+
+### Fixed
+- A metadata fetch that finishes under an unexpected filename no longer hands back
+  the **previous** pick's `.torrent` (or a 46-byte stub): the fallback only trusts a
+  file this run wrote, so the picker cannot list another film's files.
+- Only two listings run at a time, so arrowing through results cannot leave a dozen
+  `webtorrent` processes each waiting 30 s for peers.
+
+
 ## [18.6.22] — 2026-10-24
 
 ### Fixed

@@ -740,6 +740,10 @@ pub(crate) struct PickFiles {
     pub(crate) filter: String,
     /// Whether the chooser window is open (the list outlives it).
     pub(crate) window: bool,
+    /// When the listing started — the loading label counts up from here so a
+    /// slow swarm reads as "6 s" and not as a hang. (`Option` only because
+    /// `Instant` has no `Default`, and a manual `Default` for this struct drifts.)
+    pub(crate) started: Option<std::time::Instant>,
 }
 
 impl Default for UiState {
@@ -1120,12 +1124,15 @@ impl App {
     /// Load the file list for one result (background; polled by `poll_pick`).
     /// Re-clicking the same row reuses nothing: a torrent's list can change
     /// between attempts, and this is a user-initiated action.
-    pub(crate) fn pick_files(&mut self, title: &str, magnet: &str, link: Option<&str>) {
+    /// `open` pops the chooser as soon as the list arrives (the user asked for
+    /// the picker); `false` loads it quietly because the detail pane is showing
+    /// the row and may never be asked for a file.
+    pub(crate) fn pick_files(&mut self, title: &str, magnet: &str, link: Option<&str>, open: bool) {
         self.ui.pick = Some(PickFiles {
             key: title.to_string(),
             loading: true,
-            // Open the chooser as soon as the list arrives.
-            window: true,
+            window: open,
+            started: Some(std::time::Instant::now()),
             ..Default::default()
         });
         crate::player::list_files(

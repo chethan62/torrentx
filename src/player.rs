@@ -98,6 +98,7 @@ fn fetch_metadata(magnet: &str) -> Option<PathBuf> {
         .stderr(Stdio::null())
         .spawn()
         .ok()?;
+    let started = std::time::SystemTime::now();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
         match child.try_wait() {
@@ -121,12 +122,33 @@ fn fetch_metadata(magnet: &str) -> Option<PathBuf> {
             return Some(want);
         }
     }
+    // Fallback for a name we did not predict: only a file this run wrote counts.
+    // "Newest wins" alone handed back the previous pick's torrent (and 46-byte
+    // stubs), so the picker listed the wrong film's files.
     std::fs::read_dir(&dir)
         .ok()?
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "torrent"))
+        .filter(|p| written_since(p, started))
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+}
+
+/// How many file listings are running right now. The detail pane starts one per
+/// selected row, so holding ArrowDown would otherwise spawn a `webtorrent` process
+/// per row, each burning a 30 s peer round trip.
+pub(crate) fn metadata_in_flight() -> usize {
+    IN_FLIGHT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+static IN_FLIGHT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Decrements `IN_FLIGHT` however the listing thread ends.
+struct FlightGuard;
+impl Drop for FlightGuard {
+    fn drop(&mut self) {
+        IN_FLIGHT.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 /// The torrent's file list, from metadata only — no data is downloaded.
@@ -138,7 +160,9 @@ pub(crate) fn list_files(
     link: Option<String>,
     tx: std::sync::mpsc::Sender<Result<Vec<FileEntry>, String>>,
 ) {
+    IN_FLIGHT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     std::thread::spawn(move || {
+        let _flying = FlightGuard;
         let source = torrent_file(&magnet, link.as_deref()).or_else(|| fetch_metadata(&magnet));
         let Some(path) = source else {
             let _ = tx.send(Err(
@@ -169,6 +193,16 @@ pub(crate) fn list_files(
         });
         crate::wake_ui();
     });
+}
+
+/// A `.torrent` this run wrote: big enough to be real, and newer than `since`.
+/// (`modified()` has 1 s granularity on some filesystems, so allow the boundary.)
+fn written_since(path: &std::path::Path, since: std::time::SystemTime) -> bool {
+    std::fs::metadata(path).is_ok_and(|m| {
+        m.len() > 64
+            && m.modified()
+                .is_ok_and(|t| t + std::time::Duration::from_secs(2) >= since)
+    })
 }
 
 /// A local copy of the result's `.torrent`, fetched from the Jackett link.
@@ -657,6 +691,39 @@ mod tests {
 
         // SAFETY: restores the value written above, same single-threaded test.
         unsafe { std::env::set_var("PATH", old_path) };
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The "newest .torrent" fallback used to accept a file from a previous pick
+    /// (or a 46-byte stub), so the picker listed the wrong torrent's files.
+    #[test]
+    fn a_metadata_fallback_only_trusts_a_file_this_run_wrote() {
+        let dir = std::env::temp_dir().join(format!("tx-pf-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let stub = dir.join("stub.torrent");
+        let real = dir.join("real.torrent");
+        std::fs::write(&stub, vec![b'd'; 46]).unwrap();
+        std::fs::write(&real, vec![b'd'; 4096]).unwrap();
+
+        let since = std::time::SystemTime::now();
+        assert!(
+            super::written_since(&real, since),
+            "a real file written now counts"
+        );
+        assert!(
+            !super::written_since(&stub, since),
+            "a 46-byte stub must never count"
+        );
+
+        // Old file: predate it by an hour.
+        let old = since - std::time::Duration::from_secs(3600);
+        let f = std::fs::File::options().write(true).open(&real).unwrap();
+        f.set_modified(old).unwrap();
+        assert!(
+            !super::written_since(&real, since),
+            "a stale torrent must not count"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
