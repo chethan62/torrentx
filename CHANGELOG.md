@@ -17,6 +17,10 @@ versions follow [SemVer](https://semver.org/).
   reachable for a magnet that *hangs* instead of exiting. A real 0-peer magnet hangs on
   "fetching torrent metadata from 0 peers"; with one 30 s attempt the budget was spent
   before the retry could run. Measured live: two `downloadmeta` starts 12.71 s apart.
+- **Attempt 2 now gets the remaining budget** instead of its own 12 s, so a
+  slow-but-live swarm (measured: 4.0, 4.3, 4.5, 5.2, 7.5 and 11.08 s to metadata across
+  live magnets) still lands on the retry instead of being cut at 12 s twice. Nothing in
+  the sample needed 13–30 s: magnets slower than that were dead, not slow.
 - The two tests that rewrite `PATH` now take a shared lock — they were racing, which made
   `a_metadata_run_that_exits_empty_is_retried_once` fail in a full run.
 

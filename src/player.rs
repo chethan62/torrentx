@@ -243,8 +243,16 @@ fn fetch_metadata_once(magnet: &str, cancel: &Cancel) -> Option<PathBuf> {
     let mut attempt = 0;
     loop {
         attempt += 1;
-        let deadline =
-            (std::time::Instant::now() + std::time::Duration::from_secs(12)).min(overall);
+        // Attempt 1 is short so a fast failure retries quickly; attempt 2 gets
+        // whatever is left, so a slow-but-live swarm still finishes instead of
+        // being cut at 12 s twice. (A 1-seed magnet was measured at 11.08 s —
+        // inside the first cap, but only just.)
+        let cap = if attempt == 1 {
+            std::time::Duration::from_secs(12)
+        } else {
+            std::time::Duration::from_secs(30)
+        };
+        let deadline = (std::time::Instant::now() + cap).min(overall);
         if let Some(path) = download_metadata(magnet, cancel, deadline) {
             return Some(path);
         }
