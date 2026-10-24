@@ -711,7 +711,7 @@ impl App {
         if let Some(gx) = guide {
             let painter = ui.ctx().layer_painter(egui::LayerId::new(
                 egui::Order::Foreground,
-                egui::Id::new("col_drag_guide"),
+                egui::Id::unique("col_drag_guide"),
             ));
             painter.vline(
                 gx,
