@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.6.23] — 2026-10-24
+
 ### Changed
 - **The file list loads when a row is selected, not when you click "Choose
   episode/file…".** The metadata round trip is the whole cost of the picker

@@ -4303,7 +4303,7 @@ dependencies = [
 
 [[package]]
 name = "torrentx"
-version = "18.6.22"
+version = "18.6.23"
 dependencies = [
  "ab_glyph",
  "chrono",
