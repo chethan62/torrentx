@@ -200,11 +200,25 @@ pub(crate) fn load_cfg() -> Config {
     };
     // Heal old configs: empty col_order (pre-column-reorder) → default order.
     c = heal_col_order(c);
+    // Stored widths are clamped when rendered, so a stale out-of-range value (an
+    // old build stretched Name to 1143) made the first drag jump to the clamp
+    // instead of following the pointer. Clamp once, on load, so what is saved is
+    // what is drawn.
+    c = heal_col_widths(c);
     // First run: mint the anonymous per-install GUID and persist it.
     if c.install_id.is_empty() {
         c.install_id = uuid::Uuid::new_v4().to_string();
         let _ = save_cfg(&c);
     }
+    c
+}
+
+/// Bring stored column widths inside the same bounds the table renders with.
+/// Pure and testable.
+pub(crate) fn heal_col_widths(mut c: Config) -> Config {
+    c.col_widths
+        .values_mut()
+        .for_each(|w| *w = clamp_col_width(*w));
     c
 }
 
@@ -550,5 +564,22 @@ mod tests {
         // The user's surviving order is kept at the front.
         assert_eq!(healed.col_order[0], "Tracker");
         assert_eq!(healed.col_order[1], "Seeds");
+    }
+}
+
+#[cfg(test)]
+mod col_width_heal_tests {
+    use super::{Config, heal_col_widths};
+
+    /// A width saved by a build that stretched the Name column (1143) must load
+    /// as the clamp, or the first drag of that divider jumps instead of tracking.
+    #[test]
+    fn stale_widths_load_inside_the_render_bounds() {
+        let mut c = Config::default();
+        c.col_widths.insert("name".into(), 1143.4688);
+        c.col_widths.insert("size".into(), f32::NAN);
+        let healed = heal_col_widths(c);
+        assert_eq!(healed.col_widths["name"], 900.0);
+        assert_eq!(healed.col_widths["size"], 120.0);
     }
 }

@@ -6,6 +6,19 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Column dividers are draggable along their whole line.** The grab band was the 30 px
+  header strip only, while the divider was painted top to bottom — so every line below the
+  header looked draggable and did nothing. The band now runs to the bottom of the table
+  (stopped above the reserved scrollbar room, which is what forced the header-only band).
+  Handles also take their x from the header cells' rendered rects instead of the stored
+  widths, and a drag scales its delta by stored/rendered so the line tracks the pointer on a
+  width-squeezed layout. Verified live: divider at 990 px dragged from 400 px and again from
+  520 px down the column, widths persisted both times.
+- **Stored column widths load inside the render bounds.** A width saved by an older build
+  (Name stretched to 1143) made the first drag jump to the clamp instead of following the
+  pointer; `heal_col_widths` clamps on load, with a test.
+
 ## [18.6.24] — 2026-10-24
 
 ### Added

@@ -150,6 +150,12 @@ impl App {
         let header_top = ui.cursor().top();
         #[allow(unused_assignments)] // assigned inside the scroll closure, read after it
         let mut table_rect = egui::Rect::NOTHING;
+        // egui_extras squeezes columns to the viewport (each column is a min..=max
+        // range), so the RENDERED width is not the stored one. Dividers and grab
+        // bands must sit where the columns actually landed — positioning them from
+        // the stored widths put every handle in the wrong place, which is why the
+        // lines looked draggable and were not. Filled by the header closure.
+        let mut col_rects: Vec<egui::Rect> = Vec::with_capacity(cols.len());
         let base_w: f32 = self.ui.col_w.iter().sum::<f32>() + ACTION_COL_W;
         let table_w = base_w.max(viewport_w);
         // Hand-formatted closure body — #[rustfmt::skip] keeps the compact
@@ -203,6 +209,7 @@ impl App {
                     TableCol::Health => SortCol::Seeds, // non-sortable; reuse Seeds
                 };
                 header.col(|ui| {
+                    col_rects.push(ui.max_rect());
                     // Header padding — labels shouldn't touch the cell edge
                     ui.add_space(CELL_PAD_X);
                     if *c == TableCol::Health {
@@ -614,14 +621,31 @@ impl App {
         // Column separators, drawn after the body so they sit on top of every
         // cell's click layer.
         table_rect = ui.min_rect();
-        let mut x = table_rect.left();
+        // The divider is painted full height, so the grab band must be full
+        // height too — a header-only strip made every line below the header look
+        // draggable and do nothing. It stops above the reserved scrollbar room:
+        // a band that reached it swallowed the horizontal scrollbar's drags.
+        let band_bottom = (table_rect.bottom() - HSCROLL_ROOM).max(header_top + COL_HANDLE_H);
+        // egui_extras shrinks the columns to the viewport, so a pointer delta of
+        // 10 px must move a stored width by 10 * (stored / rendered) or the line
+        // trails the cursor. 1.0 when nothing is squeezed.
+        let rendered_total: f32 = col_rects.iter().map(|r| r.width()).sum();
+        let drag_scale = if rendered_total > 1.0 {
+            let stored_total: f32 = widths.iter().sum();
+            (stored_total / rendered_total).max(1.0)
+        } else {
+            1.0
+        };
         for (i, w) in widths.iter().enumerate() {
-            x += *w;
-            // Grab band = the header row only (Excel's own affordance). A
-            // full-height band swallowed the horizontal scrollbar's drags.
+            // Right edge of the column as drawn; the stored sum is only a fallback
+            // for the frame before the header reports its rects.
+            let x = col_rects
+                .get(i)
+                .map(|r| r.right())
+                .unwrap_or_else(|| table_rect.left() + widths[..=i].iter().sum::<f32>());
             let handle = egui::Rect::from_min_max(
                 egui::pos2(x - COL_GRAB_W, header_top),
-                egui::pos2(x + COL_GRAB_W, header_top + COL_HANDLE_H),
+                egui::pos2(x + COL_GRAB_W, band_bottom),
             );
             let resp = ui.interact(
                 handle,
@@ -645,7 +669,7 @@ impl App {
                     (ui.ctx().pointer_latest_pos(), self.ui.col_drag)
                 && ci == i
             {
-                let w = (start_w + pos.x - start_x).clamp(COL_MIN_W, COL_MAX_W);
+                let w = (start_w + (pos.x - start_x) * drag_scale).clamp(COL_MIN_W, COL_MAX_W);
                 if let Some(slot) = self.ui.col_w.get_mut(i) {
                     *slot = w;
                 }
@@ -664,8 +688,6 @@ impl App {
                     eprintln!("save column widths: {e}");
                 }
             }
-            // The next boundary starts at this column's right edge plus spacing.
-            x += ui.spacing().item_spacing.x;
         }
 
         // Clear hover when mouse leaves the table area
