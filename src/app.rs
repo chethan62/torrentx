@@ -845,6 +845,28 @@ impl Default for App {
 }
 
 impl App {
+    /// Re-fetch Jackett's configured indexers. Jackett has no API for adding one
+    /// (`/api/v2.0/indexers/*` is UI-session gated — a DELETE or POST there
+    /// redirects to /UI/Login even with a valid API key), so the app links to
+    /// Jackett's own dashboard and then reloads the list from here.
+    pub(crate) fn refresh_indexers(&mut self) {
+        if self.net.indexers_loading || self.cfg.api_key.is_empty() {
+            return;
+        }
+        let (url, key, handle) = (
+            self.cfg.jackett_url.clone(),
+            self.cfg.api_key.clone(),
+            self.net.indexers_handle.clone(),
+        );
+        self.net.indexers_fetched_for = Some((url.clone(), key.clone()));
+        self.net.indexers_loading = true;
+        std::thread::spawn(move || {
+            let list = crate::jackett::fetch_indexers(&url, &key);
+            let _ = handle.send(list);
+            crate::wake_ui();
+        });
+    }
+
     /// Switch tabs, persisting the choice so the next launch reopens here.
     pub(crate) fn set_tab(&mut self, tab: Tab) {
         self.cfg.last_tab = Some(tab.key().to_string());

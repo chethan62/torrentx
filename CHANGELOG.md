@@ -7,6 +7,13 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **The Indexers chip also gets you to Jackett's own dashboard.** Adding an indexer
+  needs Jackett's web UI: `/api/v2.0/indexers/*` is UI-session gated (a POST or even
+  a DELETE there redirects to `/UI/Login` with a valid API key; the only API-key route
+  is the Torznab search/list endpoints), and each indexer wants its own credentials,
+  cookies or FlareSolverr. So the popup carries "Add indexer in Jackett…" (opens the
+  dashboard) and "Refresh list" (re-reads Jackett's configured indexers without a
+  restart). Indexer credentials stay in Jackett, not in TorrentX's config.
 - **Indexers can be switched off.** The `N/M` chip next to the Indexer picker opens a
   checklist of the configured indexers; an unticked one is skipped by the "All"
   fan-out (and by the `n/m` counter), so a laggard or a broken tracker stops costing

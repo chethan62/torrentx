@@ -163,6 +163,29 @@ impl App {
                         let _ = crate::config::save_cfg(&self.cfg);
                         ui.close();
                     }
+                    ui.separator();
+                    if ui
+                        .button(
+                            RichText::new("Add indexer in Jackett…")
+                                .font(FontId::proportional(fs)),
+                        )
+                        .on_hover_text(
+                            "Jackett owns indexer credentials; its API is login-gated, so adding one happens there",
+                        )
+                        .clicked()
+                    {
+                        let base = self.cfg.jackett_url.trim().trim_end_matches('/').to_string();
+                        let _ = crate::safe_open(format!("{base}/UI/Dashboard"));
+                        ui.close();
+                    }
+                    if ui
+                        .button(RichText::new("Refresh list").font(FontId::proportional(fs)))
+                        .clicked()
+                    {
+                        self.refresh_indexers();
+                        ui.close();
+                    }
+                    ui.separator();
                     for idx in &all_idx {
                         let mut enabled = !self.cfg.disabled_indexers.iter().any(|d| d == idx);
                         if ui
