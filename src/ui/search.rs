@@ -7,6 +7,13 @@ use crate::app::App;
 /// Width of the Search button. Fixed, so the field's width is derived rather than
 /// guessed from a chrome total that grows every time a control is added.
 const SEARCH_BTN_W: f32 = 132.0;
+/// One height per row: every control in a row must be the same box, or the row
+/// looks hand-assembled (the Search button used to stand 4 px taller than the
+/// field it sits next to).
+const ROW1_H: f32 = 36.0;
+const ROW2_H: f32 = 28.0;
+/// Both combos in row 2 share this width, so the labels line up in a grid.
+const COMBO_W: f32 = 120.0;
 
 impl App {
     pub(crate) fn draw_search(
@@ -26,6 +33,11 @@ impl App {
         // constant broke as soon as a control was added beside the field and the
         // button jumped onto a line of its own (it rendered at x=5, y=125).
         ui.horizontal(|ui| {
+            // Every gap in these two rows is an explicit token: egui would add its
+            // own item_spacing around each add_space, so the same SP4 produced 12 px
+            // in one place and 20 px in another.
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.spacing_mut().interact_size.y = ROW1_H;
             ui.add_space(SP4);
             let field_w = (ui.available_width() - SEARCH_BTN_W - SP3 - SP4).max(160.0);
             let resp = ui.add(
@@ -95,7 +107,7 @@ impl App {
                 }
             }
 
-            ui.add_space(SP3);
+            ui.add_space(SP4);
             if ui
                 .add_enabled(
                     !busy,
@@ -115,7 +127,7 @@ impl App {
                         self.pal.accent
                     })
                     .corner_radius(R_MD)
-                    .min_size(Vec2::new(SEARCH_BTN_W, 36.0)),
+                    .min_size(Vec2::new(SEARCH_BTN_W, ROW1_H)),
                 )
                 .clicked()
             {
@@ -125,13 +137,14 @@ impl App {
 
         // Row 2: which indexers a search reaches, and the window to change that.
         ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.spacing_mut().interact_size.y = ROW2_H;
             ui.add_space(SP4);
-            ui.add_space(SP3);
             lbl(ui, "Category", self.pal.dim, 11.0);
-            ui.add_space(SP1);
+            ui.add_space(SP2);
             egui::ComboBox::from_id_salt("cat_cb")
                 .selected_text(RichText::new(&self.search.cat).font(FontId::proportional(fs)))
-                .width(115.0)
+                .width(COMBO_W)
                 .show_ui(ui, |ui| {
                     for &c in CATS {
                         ui.selectable_value(
@@ -143,12 +156,12 @@ impl App {
                 });
 
             // Indexer picker (from Jackett's configured indexers)
-            ui.add_space(SP3);
+            ui.add_space(SP4);
             lbl(ui, "Indexer", self.pal.dim, 11.0);
-            ui.add_space(SP1);
+            ui.add_space(SP2);
             egui::ComboBox::from_id_salt("idx_cb")
                 .selected_text(RichText::new(&self.net.indexer).font(FontId::proportional(fs)))
-                .width(130.0)
+                .width(COMBO_W)
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
                         &mut self.net.indexer,
@@ -171,11 +184,14 @@ impl App {
             // every click, which made the checkboxes and the filter field unusable.
             let all_idx = self.net.indexers.clone();
             if !all_idx.is_empty() {
+                // A hair more than the label→group gap: the button's border starts
+                // at its edge while a label's ink starts after its advance width, so
+                // equal geometry read as "closer" (12 px looked like 9).
+                ui.add_space(SP5);
                 let on = all_idx
                     .iter()
                     .filter(|i| !self.cfg.disabled_indexers.iter().any(|d| d == *i))
                     .count();
-                ui.add_space(SP1);
                 // A labelled button, not a bare "9/9": the count alone never said
                 // that indexers can be enabled or added here.
                 let all_on = on == all_idx.len();
@@ -197,7 +213,7 @@ impl App {
                         },
                     ))
                     .corner_radius(R_MD)
-                    .min_size(Vec2::new(0.0, 30.0));
+                    .min_size(Vec2::new(0.0, ROW2_H));
                 if ui
                     .add(btn)
                     .on_hover_text(

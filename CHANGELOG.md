@@ -7,6 +7,13 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **The search bar is on one grid.** Row 1: the field and the Search button are the
+  same box (y=64–99, 36 px). Row 2: Category, its 120 px dropdown, Indexer, its 120 px
+  dropdown, and `Indexers 9/9` are all 28 px tall on one baseline, with 4 px from a
+  label to its control and 12–16 px between groups. `item_spacing.x` is zeroed in both
+  rows because egui added its own spacing around every `add_space`, so the same token
+  rendered as 12 px in one place and 20 px in another. The combos used to be 115 and
+  130 px wide, which pushed every downstream edge out of line.
 - **The Search button no longer jumps to a second line.** The search field's width
   came from `available - 505`, a number that had to be re-measured every time a
   control was added beside it; the indexer chip pushed the button onto its own row,
