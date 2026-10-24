@@ -111,17 +111,33 @@ impl App {
         if self.ui.col_w_sig != Some(sig) || self.ui.col_w.len() != cols.len() {
             // Never below the floor: egui_extras builds a `min..=max` range from
             // exact+at_least and panics when a column's seed width is under it.
-            let saved = if self.cfg.col_widths.len() == cols.len() {
-                Some(crate::config::clamp_col_widths(&self.cfg.col_widths))
-            } else {
-                None
-            };
-            self.ui.col_w =
-                saved.unwrap_or_else(|| cols.iter().map(|c| c.width().max(COL_MIN_W)).collect());
+            // Per-column, keyed by name: a hidden or reordered column keeps its
+            // width, and a config written before this existed just has no keys.
+            self.ui.col_w = cols
+                .iter()
+                .map(|c| {
+                    self.cfg
+                        .col_widths
+                        .get(c.key())
+                        .map(|w| crate::config::clamp_col_width(*w))
+                        .unwrap_or(c.width().max(COL_MIN_W))
+                })
+                .collect();
             self.ui.col_w_sig = Some(sig);
             self.ui.col_drag = None;
         }
         let viewport_w = ui.available_width();
+        // Name stretches into the leftover space until the user resizes it, so a
+        // fresh config still fills the window; once `name` has a stored width the
+        // table is Excel-exact and may leave space on the right.
+        let mut widths = self.ui.col_w.clone();
+        let base_now: f32 = widths.iter().sum::<f32>() + ACTION_COL_W;
+        if !self.cfg.col_widths.contains_key(TableCol::Name.key())
+            && let Some(i) = cols.iter().position(|c| *c == TableCol::Name)
+            && (viewport_w - base_now) > 0.0
+        {
+            widths[i] += viewport_w - base_now;
+        }
         // The horizontal bar is drawn just inside the scroll area, below the
         // table: reserve its thickness or the table fills the panel and the bar
         // is clipped away (which is exactly how it looked — no bar at all).
@@ -132,7 +148,6 @@ impl App {
         // exists (the table's own rect extends past the scrollbar, so subtracting
         // a guessed margin from it kept landing on top of the bar).
         let header_top = ui.cursor().top();
-        let widths = self.ui.col_w.clone();
         #[allow(unused_assignments)] // assigned inside the scroll closure, read after it
         let mut table_rect = egui::Rect::NOTHING;
         let base_w: f32 = self.ui.col_w.iter().sum::<f32>() + ACTION_COL_W;
@@ -640,7 +655,12 @@ impl App {
                 self.ui.col_drag = None;
                 // Persist once per drag, not per frame: `save_cfg` does a fsync +
                 // rename, which is far too heavy for a 60 fps path.
-                self.cfg.col_widths = self.ui.col_w.clone();
+                self.ui.col_w = widths.clone();
+                self.cfg.col_widths = cols
+                    .iter()
+                    .zip(widths.iter())
+                    .map(|(c, w)| (c.key().to_string(), *w))
+                    .collect();
                 if let Err(e) = crate::config::save_cfg(&self.cfg) {
                     eprintln!("save column widths: {e}");
                 }

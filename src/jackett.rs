@@ -119,6 +119,21 @@ impl TableCol {
             _ => return None,
         })
     }
+    /// Stable key for persisting per-column settings: unlike the index it
+    /// survives a column toggle or a reorder.
+    pub(crate) fn key(&self) -> &'static str {
+        match self {
+            TableCol::Name => "name",
+            TableCol::Tracker => "tracker",
+            TableCol::Size => "size",
+            TableCol::Seeds => "seeds",
+            TableCol::Leech => "leech",
+            TableCol::Ratio => "ratio",
+            TableCol::Health => "health",
+            TableCol::Date => "date",
+        }
+    }
+
     pub(crate) fn width(&self) -> f32 {
         match self {
             TableCol::Name => 295.0,

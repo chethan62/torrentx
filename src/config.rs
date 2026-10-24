@@ -20,11 +20,11 @@ pub(crate) struct Config {
     /// time, and the merge keeps the best-seeded copy.
     #[serde(default = "default_true")]
     pub(crate) dedupe: bool,
-    /// Results-table column widths, in display order. Empty means "use the
-    /// defaults" — a config written before this existed, or a column set that
-    /// changed, must not get arbitrary widths.
+    /// Results-table column widths keyed by column name (`"name"`, `"seeds"`, …).
+    /// Keyed, not positional: hiding a column or reordering them must not throw
+    /// the other widths away. Missing keys use the built-in width.
     #[serde(default)]
-    pub(crate) col_widths: Vec<f32>,
+    pub(crate) col_widths: std::collections::BTreeMap<String, f32>,
     pub(crate) page_size: usize,
     pub(crate) row_height: f32,
     pub(crate) font_size: f32,
@@ -81,7 +81,7 @@ impl Default for Config {
             theme: Theme::TokyoNight,
             timeout_secs: 30,
             dedupe: true,
-            col_widths: Vec::new(),
+            col_widths: std::collections::BTreeMap::new(),
             page_size: 50,
             row_height: ROW_HEIGHT_NORMAL,
             font_size: 14.0,
@@ -245,23 +245,18 @@ pub(crate) fn default_col_order() -> Vec<String> {
 pub(crate) const UI_SCALE_MIN: f32 = 0.8;
 pub(crate) const UI_SCALE_MAX: f32 = 1.6;
 
-/// Clamp + snap a scale to the 5% steps the slider and the shortcuts use.
-/// Sanitize persisted column widths: drop non-finite values and clamp to the
-/// drag range, so a hand-edited config cannot produce a zero-width column (which
-/// egui_extras panics on when `at_least` ends up above the width).
-pub(crate) fn clamp_col_widths(widths: &[f32]) -> Vec<f32> {
-    widths
-        .iter()
-        .map(|w| {
-            if w.is_finite() {
-                w.clamp(60.0, 900.0)
-            } else {
-                120.0
-            }
-        })
-        .collect()
+/// Clamp a persisted column width to the drag range. A hand-edited config cannot
+/// produce a NaN or a zero-width column, which egui_extras panics on when
+/// `at_least` ends up above the width.
+pub(crate) fn clamp_col_width(w: f32) -> f32 {
+    if w.is_finite() {
+        w.clamp(60.0, 900.0)
+    } else {
+        120.0
+    }
 }
 
+/// Clamp + snap a scale to the 5% steps the slider and the shortcuts use.
 pub(crate) fn clamp_scale(v: f32) -> f32 {
     if !v.is_finite() {
         return 1.0;
@@ -338,20 +333,19 @@ fn save_to(p: &std::path::Path, c: &Config) -> Result<(), String> {
 mod col_width_tests {
     use super::*;
 
+    /// Widths are keyed by column name so hiding or reordering a column does not
+    /// throw the others away, and a config predating the field still parses.
     #[test]
-    fn widths_round_trip_and_a_config_without_them_still_parses() {
-        let c = Config {
-            col_widths: vec![300.0, 80.0, 120.0],
-            ..Default::default()
-        };
+    fn widths_are_keyed_and_a_config_without_them_still_parses() {
+        let mut c = Config::default();
+        c.col_widths.insert("name".into(), 300.0);
+        c.col_widths.insert("seeds".into(), 80.0);
         let json = serde_json::to_string(&c).unwrap();
         assert_eq!(
             serde_json::from_str::<Config>(&json).unwrap().col_widths,
             c.col_widths
         );
 
-        // Older configs have no `col_widths`: they must load, defaulting to empty
-        // (which the UI reads as "use the built-in widths").
         let mut v: serde_json::Value = serde_json::from_str(&json).unwrap();
         v.as_object_mut().unwrap().remove("col_widths");
         let old: Config = serde_json::from_str(&v.to_string()).unwrap();
@@ -359,11 +353,11 @@ mod col_width_tests {
     }
 
     #[test]
-    fn clamp_drops_non_finite_and_clamps_the_range() {
-        assert_eq!(
-            clamp_col_widths(&[f32::NAN, 5.0, 2000.0, 200.0]),
-            vec![120.0, 60.0, 900.0, 200.0]
-        );
+    fn clamp_kills_non_finite_values_and_holds_the_range() {
+        assert_eq!(clamp_col_width(f32::NAN), 120.0);
+        assert_eq!(clamp_col_width(5.0), 60.0);
+        assert_eq!(clamp_col_width(2000.0), 900.0);
+        assert_eq!(clamp_col_width(200.0), 200.0);
     }
 }
 
