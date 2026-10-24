@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.6.19] — 2026-10-24
+
 ### Added
 - **Indexer catalogue in the chip window.** The app already downloads Jackett's full
   indexer list for `t=indexers` (644 ids, 2.3 MB, ~0.09 s), so the unconfigured ones

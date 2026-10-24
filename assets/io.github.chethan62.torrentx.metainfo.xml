@@ -21,8 +21,8 @@
       <li>CSV export, keyboard-driven workflow, system tray, desktop notifications</li>
     </ul>
     <p>
-      Requires a running Jackett instance (http://localhost:9117 by default)
-      with your trackers configured.
+      Requires a running Jackett instance (localhost:9117 by default) with your
+      trackers configured.
     </p>
   </description>
   <launchable type="desktop-id">io.github.chethan62.torrentx.desktop</launchable>
@@ -39,12 +39,23 @@
   <url type="homepage">https://github.com/chethan62/torrentx</url>
   <url type="bugtracker">https://github.com/chethan62/torrentx/issues</url>
   <url type="vcs-browser">https://github.com/chethan62/torrentx</url>
-  <developer>
+  <developer id="github.chethan62">
     <name>chethan62</name>
     <url>https://github.com/chethan62</url>
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="18.6.19" date="2026-10-24">
+      <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.19</url>
+      <description>
+        <ul>
+          <li>Individual indexers can be switched off</li>
+          <li>The indexer chip lists Jackett's whole catalogue, with a filter</li>
+          <li>Column widths resize like a spreadsheet, scroll when wide, and persist</li>
+          <li>Dedupe is on by default</li>
+        </ul>
+      </description>
+    </release>
     <release version="18.6.18" date="2026-10-23">
       <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.18</url>
       <description>
