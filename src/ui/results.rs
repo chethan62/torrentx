@@ -18,6 +18,18 @@ fn cell_rect(ui: &egui::Ui) -> egui::Rect {
     r
 }
 
+/// Width of the trailing Actions column (5 icon buttons + gaps).
+const ACTION_COL_W: f32 = 190.0;
+/// Narrowest a column can be dragged, and the widest (Excel clamps to 255 chars).
+const COL_MIN_W: f32 = 60.0;
+const COL_MAX_W: f32 = 900.0;
+/// Half-width of a column separator's grab band.
+const COL_GRAB_W: f32 = 4.0;
+/// Height reserved under the table for the horizontal scrollbar.
+const HSCROLL_ROOM: f32 = 20.0;
+/// Height of the draggable header band for column separators.
+const COL_HANDLE_H: f32 = 30.0;
+
 impl App {
     pub(crate) fn draw_results_table(
         &mut self,
@@ -87,10 +99,38 @@ impl App {
             })
             .collect();
 
-        // egui_extras 0.36 hardcodes hscroll OFF inside the table; at
-        // narrow widths the fixed columns + Actions would clip off the
-        // right edge of the window. Wrap in a both-axis ScrollArea so the
-        // columns scroll horizontally instead.
+        // egui_extras' table always sums to the width it is given and its own
+        // scroll area is `ScrollArea::new([false, vscroll])` — no horizontal
+        // scroll. The widths therefore live HERE (`UiState::col_w`), the table is
+        // built from them with `Column::exact`, and a wrapping ScrollArea scrolls
+        // whatever does not fit. That is what makes a drag change one column and
+        // nothing else: egui_extras' own handles would squeeze the remainder.
+        let sig = cols
+            .iter()
+            .fold(0u64, |h, c| h.wrapping_mul(31).wrapping_add(*c as u64 + 1));
+        if self.ui.col_w_sig != Some(sig) || self.ui.col_w.len() != cols.len() {
+            // Never below the floor: egui_extras builds a `min..=max` range from
+            // exact+at_least and panics when a column's seed width is under it.
+            self.ui.col_w = cols.iter().map(|c| c.width().max(COL_MIN_W)).collect();
+            self.ui.col_w_sig = Some(sig);
+            self.ui.col_drag = None;
+        }
+        let viewport_w = ui.available_width();
+        // The horizontal bar is drawn just inside the scroll area, below the
+        // table: reserve its thickness or the table fills the panel and the bar
+        // is clipped away (which is exactly how it looked — no bar at all).
+        // Horizontal scrollbar at the bottom of the scroll area gets clipped if the
+        // table fills the panel. Give it 20px breathing room.
+        let viewport_h = ui.available_height() - HSCROLL_ROOM;
+        // Handle band = the header row, measured from the cursor BEFORE the table
+        // exists (the table's own rect extends past the scrollbar, so subtracting
+        // a guessed margin from it kept landing on top of the bar).
+        let header_top = ui.cursor().top();
+        let widths = self.ui.col_w.clone();
+        #[allow(unused_assignments)] // assigned inside the scroll closure, read after it
+        let mut table_rect = egui::Rect::NOTHING;
+        let base_w: f32 = self.ui.col_w.iter().sum::<f32>() + ACTION_COL_W;
+        let table_w = base_w.max(viewport_w);
         // Hand-formatted closure body — #[rustfmt::skip] keeps the compact
         // single-level indentation instead of rustfmt's +1 level reflow.
         #[rustfmt::skip]
@@ -98,9 +138,16 @@ impl App {
             .id_salt("results_scroll")
             .auto_shrink([false, true])
             .show(ui, |ui| {
+        // Both bounds: a min_width alone leaves the table free to report a
+        // narrower content rect, so the ScrollArea never saw the overflow and
+        // never drew its bar. With a definite width the columns (all exact) fit
+        // exactly and the scroll area measures the real width.
+        ui.set_min_width(table_w);
+        ui.set_max_width(table_w);
+        ui.set_max_height(viewport_h);
         let mut tb = TableBuilder::new(ui)
             .striped(false)
-            .resizable(true)
+            .resizable(false)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
         // The Name column is the flexible one (absorbs window slack); all
         // other data columns are fixed-width. Actions is a normal resizable
@@ -111,21 +158,17 @@ impl App {
         // its floor must stay high; the Name remainder shrinks to absorb
         // narrow width. egui_extras 0.36 hardcodes hscroll OFF → columns clip
         // past the viewport, but every column is user-resizable.
-        for c in &cols {
-            if *c == TableCol::Name {
-                // Name is the ONLY remainder column — it must stay
-                // non-resizable so egui_extras re-computes it every frame to
-                // fill the current available width. A resizable remainder
-                // locks its width on the first frame (TableState::load:
-                // resizable columns keep `Size::exact(prev_width)`), so after
-                // a resize/maximize the table would end early and leave dead
-                // space after the Actions column.
-                tb = tb.column(Column::remainder().at_least(120.0).resizable(false));
-            } else {
-                tb = tb.column(Column::initial(c.width()).at_least(36.0));
-            }
+        // Every column has an owned, exact width: no remainder, so nothing
+        // compensates for a resize. egui_extras' own drag handles are off — this
+        // file draws its own at the boundaries below the table body.
+        for (i, _c) in cols.iter().enumerate() {
+            tb = tb.column(
+                Column::exact(widths.get(i).copied().unwrap_or(120.0))
+                    .at_least(COL_MIN_W)
+                    .clip(true),
+            );
         }
-        tb = tb.column(Column::initial(190.0).at_least(150.0)); // Actions (resizable)
+        tb = tb.column(Column::exact(ACTION_COL_W).at_least(150.0).clip(true)); // Actions
         tb.header(30.0, |mut header| {
             for c in &cols {
                 let sortcol = match c {
@@ -546,6 +589,52 @@ impl App {
                     _ => {}
                 }
             }
+        }
+
+        // Column separators, drawn after the body so they sit on top of every
+        // cell's click layer.
+        table_rect = ui.min_rect();
+        let mut x = table_rect.left();
+        for (i, w) in widths.iter().enumerate() {
+            x += *w;
+            // Grab band = the header row only (Excel's own affordance). A
+            // full-height band swallowed the horizontal scrollbar's drags.
+            let handle = egui::Rect::from_min_max(
+                egui::pos2(x - COL_GRAB_W, header_top),
+                egui::pos2(x + COL_GRAB_W, header_top + COL_HANDLE_H),
+            );
+            let resp = ui.interact(
+                handle,
+                egui::Id::unique(("colhandle", i)),
+                egui::Sense::click_and_drag(),
+            );
+            // egui_extras only paints its separators when the table is resizable,
+            // and this table is not — so draw the divider here.
+            ui.painter()
+                .vline(x, table_rect.y_range(), egui::Stroke::new(1.0, pal.border));
+            if resp.hovered() || resp.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+            }
+            if resp.drag_started()
+                && let Some(pos) = ui.ctx().pointer_latest_pos()
+            {
+                self.ui.col_drag = Some((i, pos.x, *w));
+            }
+            if resp.dragged()
+                && let (Some(pos), Some((ci, start_x, start_w))) =
+                    (ui.ctx().pointer_latest_pos(), self.ui.col_drag)
+                && ci == i
+            {
+                let w = (start_w + pos.x - start_x).clamp(COL_MIN_W, COL_MAX_W);
+                if let Some(slot) = self.ui.col_w.get_mut(i) {
+                    *slot = w;
+                }
+            }
+            if resp.drag_stopped() {
+                self.ui.col_drag = None;
+            }
+            // The next boundary starts at this column's right edge plus spacing.
+            x += ui.spacing().item_spacing.x;
         }
 
         // Clear hover when mouse leaves the table area

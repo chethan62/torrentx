@@ -656,6 +656,16 @@ pub(crate) struct UiState {
     /// is itself a focus loss, and hiding it in that same frame swallowed the
     /// click (nothing happened when a past search was picked).
     pub(crate) hist_rect: Option<egui::Rect>,
+    /// Column widths for the results table, in the order the columns are shown.
+    /// The table is built from these (`Column::exact`), so a drag changes exactly
+    /// one column and the view scrolls horizontally instead of squeezing a
+    /// neighbour — egui_extras' own widths live in a private TableState that
+    /// cannot be read back to size a wrapping ScrollArea.
+    pub(crate) col_w: Vec<f32>,
+    /// Signature of the visible column set; when it changes the widths reset.
+    pub(crate) col_w_sig: Option<u64>,
+    /// (column index, pointer x at drag start, width at drag start)
+    pub(crate) col_drag: Option<(usize, f32, f32)>,
     pub(crate) toasts: Vec<Toast>,
     pub(crate) hovered: Option<usize>,
     pub(crate) fav_search: String,
@@ -725,6 +735,9 @@ impl Default for UiState {
             detail_width: 295.0,
             show_hist: false,
             hist_rect: None,
+            col_w: Vec::new(),
+            col_w_sig: None,
+            col_drag: None,
             toasts: vec![],
             hovered: None,
             fav_search: String::new(),

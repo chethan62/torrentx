@@ -6,6 +6,21 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Column resizing behaves like a spreadsheet.** The results table used to squeeze
+  the `Name` column to absorb a resize (and had no horizontal scroll at all, so wide
+  columns were simply clipped). Widths are now owned by the app: dragging a divider in
+  the header changes exactly that column and everything to its right shifts, and when
+  the columns outgrow the window a horizontal scrollbar appears instead of the trailing
+  columns disappearing. Measured: separators `[407, 477, 557, …]` → `[407, 477, 597,
+  667, 735, …]` after a +40 drag of the third divider; scrollbar pixel row 813 appears
+  only when the sum exceeds the viewport, and dragging it moved the header labels
+  +65 px, revealing the scrolled-out `Tracker` column.
+- Column dividers are drawn by the app now (egui_extras only paints them on a
+  resizable table), so the header keeps its grid lines.
+
+
+
 ### Changed
 - **Dedupe is on by default.** The same release routinely comes back from two
   indexers (TheRARBG and The Pirate Bay, for instance) and both rows took a slot in
