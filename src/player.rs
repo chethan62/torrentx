@@ -80,12 +80,17 @@ fn magnet_hash(magnet: &str) -> Option<String> {
     (hash.len() == 40).then(|| hash.to_ascii_lowercase())
 }
 
+/// How long a leader may own its slot. Above `fetch_metadata_once`'s 30 s budget,
+/// so a wedged leader (or one whose thread died) cannot block the picker forever.
+const SLOT_TTL: std::time::Duration = std::time::Duration::from_secs(35);
+
 /// State of one infohash's metadata fetch, shared by every caller that wants it.
 #[derive(Default)]
 enum FetchSlot {
     #[default]
     Idle,
-    Running,
+    /// Owned since this instant; the lease expires after `SLOT_TTL`.
+    Running(std::time::Instant),
     Done(Option<PathBuf>),
 }
 
@@ -110,23 +115,43 @@ fn slot_for(key: &str) -> Slot {
 /// cost 10.2 s instead of 5.2 s, and the second threw the first's work away.
 /// Different magnets still fetch in parallel — the lock is per infohash.
 fn single_flight(key: &str, fetch: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+    single_flight_within(key, SLOT_TTL, fetch)
+}
+
+fn single_flight_within(
+    key: &str,
+    ttl: std::time::Duration,
+    fetch: impl FnOnce() -> Option<PathBuf>,
+) -> Option<PathBuf> {
     let gate = slot_for(key);
     let (state, cv) = &*gate;
     let mut slot = crate::lock_or_recover(state);
     loop {
         match &*slot {
             FetchSlot::Done(v) => return v.clone(),
-            // Nobody owns it: take it, and drop the lock for the slow part.
             FetchSlot::Idle => break,
-            FetchSlot::Running => {
-                slot = cv.wait(slot).unwrap_or_else(|e| e.into_inner());
+            // The lease expired: whoever gets here first takes over, so a leader
+            // that wedged (or died between states) cannot own the slot forever.
+            FetchSlot::Running(since) if since.elapsed() > ttl => break,
+            FetchSlot::Running(_) => {
+                let (guard, wait) = cv
+                    .wait_timeout(slot, ttl)
+                    .unwrap_or_else(|e| e.into_inner());
+                slot = guard;
+                // Out of patience: report "no metadata" instead of hanging the
+                // picker behind someone else's fetch.
+                if wait.timed_out() && matches!(&*slot, FetchSlot::Running(_)) {
+                    return None;
+                }
             }
         }
     }
-    *slot = FetchSlot::Running;
+    *slot = FetchSlot::Running(std::time::Instant::now());
     drop(slot);
 
-    let answer = fetch();
+    // A panicking fetch must still release the slot, or every waiter blocks on a
+    // condvar nobody will notify.
+    let answer = std::panic::catch_unwind(std::panic::AssertUnwindSafe(fetch)).unwrap_or(None);
 
     *crate::lock_or_recover(state) = FetchSlot::Done(answer.clone());
     cv.notify_all();
@@ -137,7 +162,7 @@ fn single_flight(key: &str, fetch: impl FnOnce() -> Option<PathBuf>) -> Option<P
     answer
 }
 
-/// Fetch a magnet's metadata and return the `.torrent` webtorrent saved./// Fetch a magnet's metadata and return the `.torrent` webtorrent saved.
+/// Fetch a magnet's metadata and return the `.torrent` webtorrent saved./// Fetch a magnet's metadata and return the `.torrent` webtorrent saved./// Fetch a magnet's metadata and return the `.torrent` webtorrent saved.
 ///
 /// `webtorrent downloadmeta <magnet>` writes `<infohash>.torrent` into the
 /// working directory — pointing that at the torrents cache means the picker and
@@ -799,6 +824,53 @@ mod tests {
         });
         assert_eq!(other, None);
         assert_eq!(runs.load(Ordering::SeqCst), 2);
+    }
+
+    /// A leader that wedges past its lease must not own the slot forever: the next
+    /// caller takes over instead of waiting behind dead work.
+    #[test]
+    fn an_expired_lease_is_taken_over() {
+        use std::time::Duration;
+        let ttl = Duration::from_millis(80);
+        let slow = std::thread::spawn(|| {
+            super::single_flight_within("lease-a", std::time::Duration::from_millis(80), || {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                Some(std::path::PathBuf::from("/tmp/slow.torrent"))
+            })
+        });
+        std::thread::sleep(Duration::from_millis(150));
+        let taken = super::single_flight_within("lease-a", ttl, || {
+            Some(std::path::PathBuf::from("/tmp/taken.torrent"))
+        });
+        assert_eq!(
+            taken.as_deref(),
+            Some(std::path::Path::new("/tmp/taken.torrent")),
+            "the expired lease was not taken over"
+        );
+        let _ = slow.join();
+    }
+
+    /// A panicking fetch used to leave the slot Running for good, so every waiter
+    /// blocked on a condvar nobody would notify.
+    #[test]
+    fn a_panicking_fetch_releases_the_waiter() {
+        use std::time::{Duration, Instant};
+        let first = std::thread::spawn(|| {
+            let _ = super::single_flight_within("boom", Duration::from_secs(30), || {
+                // Panic only once the waiter is certainly attached, or it would
+                // find an Idle slot (the finished one is removed) and lead itself.
+                std::thread::sleep(Duration::from_millis(200));
+                panic!("leader died mid-fetch");
+            });
+        });
+        std::thread::sleep(Duration::from_millis(50));
+        let t0 = Instant::now();
+        let answer = super::single_flight_within("boom", Duration::from_secs(30), || {
+            Some(std::path::PathBuf::from("/tmp/never.torrent"))
+        });
+        assert!(t0.elapsed() < Duration::from_secs(2), "the waiter hung");
+        assert_eq!(answer, None, "a dead leader must report no metadata");
+        let _ = first.join();
     }
 
     /// The "newest .torrent" fallback used to accept a file from a previous pick
