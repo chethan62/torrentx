@@ -266,8 +266,10 @@ Deliberate, not bugs — each line says what to do instead.
   can only slice the set that came back.
 - **One stream at a time** — starting a second play stops the first
   (`start_play` calls `stop_play`), so two players never fight for bandwidth.
-- **Column order is fixed** — Settings toggles which columns are shown, not
-  their order.
+- **Column order is reorderable, but Name and Seeds stay put** — Settings
+  toggles which columns are shown; the ◀ ▶ arrows beside each chip move it left
+  or right. Name owns the row's full-cell click layer and Seeds anchors the sort
+  arrow, so those two are pinned.
 - **No download manager** — "Download .torrent" and "Open magnet in browser"
   hand off to your torrent client; TorrentX never queues or seeds.
 - **Direct play needs `webtorrent-cli` on `PATH`** and outbound BitTorrent. On a

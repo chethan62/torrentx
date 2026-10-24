@@ -5,6 +5,24 @@ use super::*;
 use crate::app::App;
 use crate::lock_or_recover;
 
+/// Write a reordered run of movable columns back into the slots those columns
+/// already occupy, leaving the pinned ones (Name, Seeds) and any unknown names
+/// exactly where they were. Keeps `col_order` a permutation instead of letting
+/// the popup's local list overwrite the saved one.
+pub(crate) fn apply_col_order(saved: &[String], movable: &[TableCol]) -> Vec<String> {
+    let mut it = movable.iter();
+    saved
+        .iter()
+        .map(|n| match TableCol::from_name(n) {
+            Some(TableCol::Name) | Some(TableCol::Seeds) | None => n.clone(),
+            Some(_) => it
+                .next()
+                .map(|c| c.label().to_string())
+                .unwrap_or_else(|| n.clone()),
+        })
+        .collect()
+}
+
 impl App {
     pub(crate) fn draw_header(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("hdr")
@@ -549,36 +567,72 @@ impl App {
                 });
                 ui.add_space(SP2);
 
-                // Row 3 — Columns (toggle which columns are shown)
+                // Row 3 — Columns. The chips toggle visibility; the arrows move a
+                // column, because `cfg.col_order` already drives the table and had
+                // no way to be edited. Name and Seeds stay pinned: Name owns the
+                // row's full-cell click layer and Seeds anchors the sort arrow.
                 lbl(ui, "COLUMNS", self.pal.sub, 12.0);
                 ui.add_space(SP2);
+                let mut order: Vec<TableCol> = self
+                    .cfg
+                    .col_order
+                    .iter()
+                    .filter_map(|n| TableCol::from_name(n))
+                    .filter(|c| !matches!(c, TableCol::Name | TableCol::Seeds))
+                    .collect();
+                let mut col_changed = false;
                 ui.horizontal_wrapped(|ui| {
                     ui.add_space(SP1);
-                    let mut col_changed = false;
-                    for (label, val) in [
-                        ("Tracker", &mut self.cfg.col_tracker),
-                        ("Size", &mut self.cfg.col_size),
-                        ("Leech", &mut self.cfg.col_leech),
-                        ("Ratio", &mut self.cfg.col_ratio),
-                        ("Health", &mut self.cfg.col_health),
-                        ("Date", &mut self.cfg.col_date),
-                    ] {
-                        let on = *val;
+                    let mut i = 0;
+                    while i < order.len() {
+                        let c = order[i];
+                        let flag = match c {
+                            TableCol::Tracker => &mut self.cfg.col_tracker,
+                            TableCol::Size => &mut self.cfg.col_size,
+                            TableCol::Leech => &mut self.cfg.col_leech,
+                            TableCol::Ratio => &mut self.cfg.col_ratio,
+                            TableCol::Health => &mut self.cfg.col_health,
+                            TableCol::Date => &mut self.cfg.col_date,
+                            TableCol::Name | TableCol::Seeds => unreachable!(),
+                        };
+                        let on = *flag;
                         if ui
                             .add(egui::Button::selectable(
                                 on,
-                                RichText::new(label)
+                                RichText::new(c.label())
                                     .font(FontId::proportional(12.0))
                                     .color(if on { self.pal.accent } else { self.pal.dim }),
                             ))
                             .clicked()
                         {
-                            *val = !*val;
+                            *flag = !on;
+                            col_changed = true;
+                        }
+                        let arrow = |ui: &mut egui::Ui, icon: SvgIcon, live: bool| {
+                            ui.add_enabled(
+                                live,
+                                egui::Button::image(svg_image(
+                                    icon,
+                                    11.0,
+                                    if live { self.pal.sub } else { self.pal.dim },
+                                ))
+                                .frame(false),
+                            )
+                            .clicked()
+                        };
+                        if arrow(ui, SvgIcon::ChevronLeft, i > 0) {
+                            order.swap(i, i - 1);
+                            col_changed = true;
+                        }
+                        if arrow(ui, SvgIcon::ChevronRight, i + 1 < order.len()) {
+                            order.swap(i, i + 1);
                             col_changed = true;
                         }
                         ui.add_space(SP1);
+                        i += 1;
                     }
                     if col_changed {
+                        self.cfg.col_order = apply_col_order(&self.cfg.col_order, &order);
                         let _ = save_cfg(&self.cfg);
                     }
                 });
@@ -627,3 +681,48 @@ impl App {
 // ─── Search tab ────────────────────────────────────────────────────────────
 
 impl App {}
+
+#[cfg(test)]
+mod order_tests {
+    use super::apply_col_order;
+    use crate::jackett::TableCol;
+
+    fn names(v: &[TableCol]) -> Vec<String> {
+        v.iter().map(|c| c.label().to_string()).collect()
+    }
+
+    /// A swap inside the movable run must land back in the same slots, so the
+    /// pinned columns never drift and no name is lost or duplicated.
+    #[test]
+    fn reordering_rewrites_only_the_movable_slots() {
+        let saved = vec![
+            "Name", "Tracker", "Size", "Seeds", "Leech", "Ratio", "Health", "Date",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+
+        let mut movable: Vec<TableCol> = saved
+            .iter()
+            .filter_map(|n| TableCol::from_name(n))
+            .filter(|c| !matches!(c, TableCol::Name | TableCol::Seeds))
+            .collect();
+        // Move Date to the front of the movable run (arrow presses, in effect).
+        let last = movable.len() - 1;
+        for i in (0..last).rev() {
+            movable.swap(i, i + 1);
+        }
+        assert_eq!(names(&movable)[0], "Date");
+
+        let out = apply_col_order(&saved, &movable);
+        assert_eq!(out.len(), saved.len(), "no column may be lost");
+        assert_eq!(out[0], "Name", "Name is pinned to the front");
+        assert_eq!(out[3], "Seeds", "Seeds keeps its slot");
+        assert_eq!(out[1], "Date", "the reordered run fills the old slots");
+        let mut sorted = out.clone();
+        sorted.sort();
+        let mut expect = saved.clone();
+        expect.sort();
+        assert_eq!(sorted, expect, "still a permutation of the saved order");
+    }
+}

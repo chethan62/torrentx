@@ -7,6 +7,15 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Columns can be reordered.** `Config::col_order` already drove the table, but nothing
+  could edit it — the GUIDE listed a fixed order. The Settings → Columns chips now carry
+  ◀ ▶ arrows that move a column, saved immediately. Name and Seeds stay pinned (Name owns
+  the row's full-cell click layer, Seeds anchors the sort arrow). The reorder writes the
+  movable run back into the slots those columns already held, so the saved order stays a
+  permutation — a test covers that, and caught the first cut writing lowercase keys where
+  `col_order` stores display names (which would have dropped every movable column on
+  reload). Verified live: a Tracker swap moved the header to Leech/Name/Seeds/Tracker and
+  persisted to `config.json`.
 - **Export CSV honours the row ticks.** Ticking rows and pressing "Export CSV" used to write
   the whole filtered view anyway (the GUIDE called that deliberate); now the ticks decide —
   nothing ticked still means every page of the filtered view, so the old behaviour is one
