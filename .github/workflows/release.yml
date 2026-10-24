@@ -69,6 +69,9 @@ jobs:
   # the same binary windows-native.yml proves launches.
   build-windows:
     name: Windows binary (x64)
+    # Serialised behind the Linux job: both publish to the same release, and two
+    # action-gh-release runs racing to create it is a 422 waiting to happen.
+    needs: build-linux
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7

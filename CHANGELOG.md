@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.6.21] — 2026-10-24
+
 ### Added
 - **A Windows artefact is built and published from the tag.** `release.yml` gained a
   `windows-latest` job that builds the MSVC binary with a static CRT (so the zip needs
