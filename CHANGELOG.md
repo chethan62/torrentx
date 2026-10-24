@@ -13,7 +13,10 @@ versions follow [SemVer](https://semver.org/).
   `TorrentX-<ver>-windows-x64.zip` (exe, both licences, a README stating the tray and
   `Play` are Linux-only) plus its own `sha256sums-windows.txt`
   (`scripts/package-windows.ps1`). `windows-native.yml` runs the same packaging step
-  on a dispatch, so the zip is provable without cutting a release.
+  on a dispatch, so the zip is provable without cutting a release. The first run
+  caught a pre-existing Windows-only build break: `extern "system"` needs `unsafe`
+  under Rust 2024, and the workflow's two-command build step had been reporting only
+  its last command's exit code, so the failing release build looked green.
 
 ## [18.6.20] — 2026-10-24
 

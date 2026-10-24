@@ -50,7 +50,9 @@ Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip
 # Same "<hash>  <name>" shape as sha256sum, so `sha256sum -c` works on the result.
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 $sums = Join-Path $OutDir "sha256sums-windows.txt"
-Set-Content -Path $sums -Value "$hash  $(Split-Path $zip -Leaf)" -Encoding ascii
+# LF, not Set-Content's CRLF: a stray \r on every line is not a checksum and
+# `sha256sum -c` output reads cleaner without it.
+[IO.File]::WriteAllText($sums, "$hash  $(Split-Path $zip -Leaf)`n")
 
 Write-Host "packaged $zip"
 Write-Host (Get-Content $sums -Raw)
