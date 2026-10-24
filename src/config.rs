@@ -20,6 +20,10 @@ pub(crate) struct Config {
     /// time, and the merge keeps the best-seeded copy.
     #[serde(default = "default_true")]
     pub(crate) dedupe: bool,
+    /// Indexers the user switched off. A search fans out over every other
+    /// configured indexer; the name is kept so the choice survives restarts.
+    #[serde(default)]
+    pub(crate) disabled_indexers: Vec<String>,
     /// Results-table column widths keyed by column name (`"name"`, `"seeds"`, …).
     /// Keyed, not positional: hiding a column or reordering them must not throw
     /// the other widths away. Missing keys use the built-in width.
@@ -81,6 +85,7 @@ impl Default for Config {
             theme: Theme::TokyoNight,
             timeout_secs: 30,
             dedupe: true,
+            disabled_indexers: Vec::new(),
             col_widths: std::collections::BTreeMap::new(),
             page_size: 50,
             row_height: ROW_HEIGHT_NORMAL,

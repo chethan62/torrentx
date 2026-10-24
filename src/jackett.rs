@@ -655,14 +655,30 @@ fn parse_indexers_xml(body: &str) -> Option<Vec<String>> {
 /// "All" (or a list not fetched yet) fans out over every configured indexer, so
 /// the table fills as each tracker answers instead of waiting for the slowest
 /// one. Pure and tested.
-pub(crate) fn search_targets(indexer: &str, configured: &[String]) -> Vec<String> {
+pub(crate) fn search_targets(
+    indexer: &str,
+    configured: &[String],
+    disabled: &[String],
+) -> Vec<String> {
     if !indexer.is_empty() && indexer != "All" {
         return vec![indexer.to_string()];
     }
     if configured.is_empty() {
         return vec!["all".to_string()];
     }
-    configured.to_vec()
+    let mut targets: Vec<String> = configured
+        .iter()
+        .filter(|c| !disabled.iter().any(|d| d == *c))
+        .cloned()
+        .collect();
+    // Never fan out over nothing: a config that disables everything (or a
+    // disabled list naming indexers that no longer exist) would otherwise leave
+    // a search with no targets at all. Keeping the first configured indexer is
+    // the smallest honest fallback.
+    if targets.is_empty() {
+        targets.push(configured[0].clone());
+    }
+    targets
 }
 
 /// Jackett results endpoint for one indexer.
@@ -1424,11 +1440,34 @@ mod tests {
     #[test]
     fn search_targets_split_all_into_each_indexer() {
         let configured = vec!["1337x".to_string(), "yts".to_string()];
-        assert_eq!(search_targets("All", &configured), configured);
-        assert_eq!(search_targets("", &configured), configured);
-        assert_eq!(search_targets("yts", &configured), vec!["yts"]);
+        let none: Vec<String> = vec![];
+        assert_eq!(search_targets("All", &configured, &none), configured);
+        assert_eq!(search_targets("", &configured, &none), configured);
+        assert_eq!(search_targets("yts", &configured, &none), vec!["yts"]);
         // Nothing fetched yet: Jackett's own aggregate endpoint.
-        assert_eq!(search_targets("All", &[]), vec!["all"]);
+        assert_eq!(search_targets("All", &[], &none), vec!["all"]);
+    }
+
+    /// A switched-off indexer is skipped by the "All" fan-out, and a list that
+    /// disables everything still leaves one target instead of none.
+    #[test]
+    fn disabled_indexers_are_skipped_but_never_all_of_them() {
+        let configured = vec!["1337x".to_string(), "yts".to_string(), "tpb".to_string()];
+        let off = vec!["yts".to_string()];
+        assert_eq!(
+            search_targets("All", &configured, &off),
+            vec!["1337x", "tpb"]
+        );
+
+        let all_off = configured.clone();
+        assert_eq!(search_targets("All", &configured, &all_off), vec!["1337x"]);
+
+        // A stale name that no longer exists must not match anything.
+        let stale = vec!["gone".to_string()];
+        assert_eq!(search_targets("All", &configured, &stale), configured);
+
+        // Picking one indexer explicitly still works even if it is switched off.
+        assert_eq!(search_targets("yts", &configured, &off), vec!["yts"]);
     }
 
     /// The fan-out must publish each indexer's rows as they arrive: the fast

@@ -137,6 +137,54 @@ impl App {
                 .response
                 .on_hover_text("Search one indexer instead of all");
 
+            // Which indexers the "All" fan-out covers. Rendered as a compact
+            // "8/9" chip so it costs ~50 px in a row that has no room to spare;
+            // the popup is the only place the list of checkboxes lives.
+            let all_idx = self.net.indexers.clone();
+            if !all_idx.is_empty() {
+                let on = all_idx
+                    .iter()
+                    .filter(|i| !self.cfg.disabled_indexers.iter().any(|d| d == *i))
+                    .count();
+                ui.add_space(SP1);
+                let chip = RichText::new(format!("{on}/{}", all_idx.len()))
+                    .font(FontId::proportional(fs - 1.0))
+                    .color(if on == all_idx.len() {
+                        self.pal.dim
+                    } else {
+                        self.pal.yellow
+                    });
+                ui.menu_button(chip, |ui| {
+                    if ui
+                        .button(RichText::new("Enable all").font(FontId::proportional(fs)))
+                        .clicked()
+                    {
+                        self.cfg.disabled_indexers.clear();
+                        let _ = crate::config::save_cfg(&self.cfg);
+                        ui.close();
+                    }
+                    for idx in &all_idx {
+                        let mut enabled = !self.cfg.disabled_indexers.iter().any(|d| d == idx);
+                        if ui
+                            .checkbox(
+                                &mut enabled,
+                                RichText::new(idx).font(FontId::proportional(fs)),
+                            )
+                            .changed()
+                        {
+                            if enabled {
+                                self.cfg.disabled_indexers.retain(|d| d != idx);
+                            } else if !self.cfg.disabled_indexers.contains(idx) {
+                                self.cfg.disabled_indexers.push(idx.clone());
+                            }
+                            let _ = crate::config::save_cfg(&self.cfg);
+                        }
+                    }
+                })
+                .response
+                .on_hover_text("Indexers searched by \"All\" — untick to skip slow or broken ones");
+            }
+
             ui.add_space(SP3);
             if ui
                 .add_enabled(

@@ -149,6 +149,9 @@ open.
 | Rows | Compact / Normal / Roomy | row height |
 | Scale | 80% / 90% / 100% / 110% / 125% / 150% | scales text, rows and icons together (Ctrl +/- steps 5%) |
 | Page | 25 / 50 / 100 / All | results per page |
+| Indexer | All / one | search one indexer instead of the fan-out |
+| Indexers chip | `8/9` | tick/untick which indexers the "All" search uses; saved at once |
+
 | Dedupe | on (default) / off | merge near-duplicate titles across trackers, keeping the best-seeded copy |
 | Updates | on/off | startup check for newer releases |
 | At login | on/off | Linux only: writes `~/.config/autostart/torrentx.desktop` (launched with `--minimized`, tray only) so RSS keeps polling |

@@ -914,7 +914,11 @@ impl App {
         let generation = self.search.epoch.fetch_add(1, Ordering::Relaxed) + 1;
         self.search.answered.store(0, Ordering::Relaxed);
         // Fan out per indexer so results land as each tracker answers.
-        let targets = crate::jackett::search_targets(&self.net.indexer, &self.net.indexers);
+        let targets = crate::jackett::search_targets(
+            &self.net.indexer,
+            &self.net.indexers,
+            &self.cfg.disabled_indexers,
+        );
         self.search.targets.store(targets.len(), Ordering::Relaxed);
         start_search(
             self.cfg.jackett_url.clone(),

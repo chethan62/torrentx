@@ -6,6 +6,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Indexers can be switched off.** The `N/M` chip next to the Indexer picker opens a
+  checklist of the configured indexers; an unticked one is skipped by the "All"
+  fan-out (and by the `n/m` counter), so a laggard or a broken tracker stops costing
+  every search. The choice is saved immediately to `disabled_indexers` and survives
+  restarts. Never fans out over nothing: if the list empties, the first configured
+  indexer is kept.
+
 ### Fixed
 - **Column resizing behaves like a spreadsheet.** The results table used to squeeze
   the `Name` column to absorb a resize (and had no horizontal scroll at all, so wide
