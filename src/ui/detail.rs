@@ -236,6 +236,17 @@ impl App {
                                     self.pal.sub,
                                     fs - 1.0,
                                 );
+                                ui.add_space(SP2);
+                                // A slow swarm must be abandonable in place: this
+                                // kills the fetch's child and stops the thread.
+                                if wide_icon_btn(ui, SvgIcon::Close, "Cancel", self.pal.red)
+                                    && let Some(st) = self.ui.pick.as_mut()
+                                {
+                                    crate::player::abandon(&st.magnet);
+                                    st.loading = false;
+                                    st.cancelled = true;
+                                    st.err = Some("Cancelled — Retry to list files".to_string());
+                                }
                             });
                             // The UI loop parks; without this the counter freezes.
                             ui.ctx()
@@ -254,7 +265,12 @@ impl App {
                         }
                         Some(p) => {
                             if let Some(e) = &p.err {
-                                lbl(ui, e, self.pal.red, fs - 1.5);
+                                let col = if p.cancelled {
+                                    self.pal.sub
+                                } else {
+                                    self.pal.red
+                                };
+                                lbl(ui, e, col, fs - 1.5);
                             }
                             if wide_icon_btn(ui, SvgIcon::Refresh, "Retry file list", self.pal.sub)
                             {

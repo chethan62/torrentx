@@ -20,6 +20,9 @@ versions follow [SemVer](https://semver.org/).
   the slot counts waiters and the fetch polls a cancel flag, so switching to another
   row stops the old fetch at its next 100 ms tick instead of polling a dead swarm for
   the full 30 s. A killed child never leaves a partial `.torrent` behind as a result.
+- The picker's loading row has a **Cancel** button: it abandons the fetch and leaves
+  `Cancelled — Retry to list files`, so a slow swarm can be given up on in place. The
+  late "no metadata" answer is ignored rather than overwriting the cancelled state.
 
 
 ## [18.6.23] — 2026-10-24

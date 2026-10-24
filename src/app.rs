@@ -742,6 +742,9 @@ pub(crate) struct PickFiles {
     pub(crate) window: bool,
     /// The magnet this listing belongs to, so a newer pick can abandon it.
     pub(crate) magnet: String,
+    /// The user pressed Cancel: the late "no metadata" answer must not overwrite
+    /// the cancelled state.
+    pub(crate) cancelled: bool,
     /// When the listing started — the loading label counts up from here so a
     /// slow swarm reads as "6 s" and not as a hang. (`Option` only because
     /// `Instant` has no `Default`, and a manual `Default` for this struct drifts.)
@@ -1158,6 +1161,9 @@ impl App {
             let Some(p) = self.ui.pick.as_mut() else {
                 continue;
             };
+            if p.cancelled {
+                continue;
+            }
             p.loading = false;
             match res {
                 Ok(files) => {
