@@ -16,6 +16,12 @@ versions follow [SemVer](https://semver.org/).
   667, 735, …]` after a +40 drag of the third divider; scrollbar pixel row 813 appears
   only when the sum exceeds the viewport, and dragging it moved the header labels
   +65 px, revealing the scrolled-out `Tracker` column.
+- **Column widths are remembered.** A resize is saved to the config once the drag
+  ends (not per frame — `save_cfg` fsyncs), so the layout survives a restart. Widths
+  are clamped to 60–900 px and non-finite values from a hand-edited config are
+  discarded; a config written before this change, or a different column set, falls
+  back to the built-in widths. Verified by restart: separators
+  `[407, 477, 597, 667, 735, 815, 907]` before and after a relaunch.
 - Column dividers are drawn by the app now (egui_extras only paints them on a
   resizable table), so the header keeps its grid lines.
 

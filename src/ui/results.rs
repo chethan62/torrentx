@@ -111,7 +111,13 @@ impl App {
         if self.ui.col_w_sig != Some(sig) || self.ui.col_w.len() != cols.len() {
             // Never below the floor: egui_extras builds a `min..=max` range from
             // exact+at_least and panics when a column's seed width is under it.
-            self.ui.col_w = cols.iter().map(|c| c.width().max(COL_MIN_W)).collect();
+            let saved = if self.cfg.col_widths.len() == cols.len() {
+                Some(crate::config::clamp_col_widths(&self.cfg.col_widths))
+            } else {
+                None
+            };
+            self.ui.col_w =
+                saved.unwrap_or_else(|| cols.iter().map(|c| c.width().max(COL_MIN_W)).collect());
             self.ui.col_w_sig = Some(sig);
             self.ui.col_drag = None;
         }
@@ -632,6 +638,12 @@ impl App {
             }
             if resp.drag_stopped() {
                 self.ui.col_drag = None;
+                // Persist once per drag, not per frame: `save_cfg` does a fsync +
+                // rename, which is far too heavy for a 60 fps path.
+                self.cfg.col_widths = self.ui.col_w.clone();
+                if let Err(e) = crate::config::save_cfg(&self.cfg) {
+                    eprintln!("save column widths: {e}");
+                }
             }
             // The next boundary starts at this column's right edge plus spacing.
             x += ui.spacing().item_spacing.x;
