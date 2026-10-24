@@ -921,6 +921,12 @@ impl App {
         }
         self.ui.detail_open = false;
         self.ui.selected = None;
+        // Say it here rather than at each caller: Escape, the ✕, Cancel, a row switch,
+        // a view change and a new search all reach this, and a spinner vanishing with
+        // no word reads as a bug.
+        if abandoned {
+            self.toast("Stopped listing files", self.pal.sub);
+        }
         // Esc is handled after the frame was drawn: without this the pane stays on
         // screen until the next event (the app parks while idle).
         crate::wake_ui();
@@ -1382,11 +1388,7 @@ impl App {
     /// a different torrent — the highlight moves, F/Enter/M act on the wrong item,
     /// and a batch copy would export torrents the user never ticked.
     pub(crate) fn clear_row_selection(&mut self) {
-        // A view change silently kills a listing the user started; say so, or the
-        // spinner vanishing looks like a bug.
-        if self.close_detail() {
-            self.toast("Stopped listing files — the results changed", self.pal.sub);
-        }
+        self.close_detail();
         self.ui.detail_row = None;
         self.ui.sel_set.clear();
         self.ui.hovered = None;
