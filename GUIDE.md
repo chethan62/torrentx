@@ -250,9 +250,9 @@ and the window opens — a hidden window with no way back would be a dead end.
 
 Deliberate, not bugs — each line says what to do instead.
 
-- **CSV exports the whole filtered view**, every page, ticks or no ticks
-  ("Export CSV" next to the result count). Ticking rows only feeds *Copy
-  magnets*; there is no "export selection only".
+- **CSV exports what you ticked**, or the whole filtered view (every page) when
+  nothing is ticked ("Export CSV" next to the result count). The same ticks feed
+  *Copy magnets* and the export, so a selection is one idea, not two.
 - **RSS polls only while TorrentX runs** — there is no background daemon, so an
   enabled feed refreshes only with the window open. **Settings → At login** starts
   the app at login; closing the window stops the polling.

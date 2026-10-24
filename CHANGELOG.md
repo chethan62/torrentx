@@ -6,6 +6,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Export CSV honours the row ticks.** Ticking rows and pressing "Export CSV" used to write
+  the whole filtered view anyway (the GUIDE called that deliberate); now the ticks decide —
+  nothing ticked still means every page of the filtered view, so the old behaviour is one
+  click away and unchanged when you do not use Select. The toast names the row count.
+  Verified live on Kumbalangi Nights (no ticks → header + 2 rows) and pinned by a test for
+  the tick/stale-index cases.
+
 ### Fixed
 - **The UI-scale base follows the monitor.** It was captured once, so moving the window to
   a screen with a different DPI kept the first screen's base. The base now tracks

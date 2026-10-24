@@ -662,6 +662,23 @@ impl Default for NetState {
 }
 
 /// UI chrome state: tabs, panels, selection, batch mode, toasts, spinner.
+/// Which rows a CSV export writes: the ticked ones when anything is ticked, else
+/// the whole filtered view (the old behaviour). Ticks are indices into the same
+/// sorted view the export is handed, so an index past the end is simply skipped.
+pub(crate) fn csv_picks<'a>(
+    rows: &'a [TorrentResult],
+    ticks: &std::collections::HashSet<usize>,
+) -> Vec<&'a TorrentResult> {
+    if ticks.is_empty() {
+        return rows.iter().collect();
+    }
+    rows.iter()
+        .enumerate()
+        .filter(|(i, _)| ticks.contains(i))
+        .map(|(_, r)| r)
+        .collect()
+}
+
 pub(crate) struct UiState {
     pub(crate) tab: crate::jackett::Tab,
     pub(crate) show_settings: bool,
@@ -1417,8 +1434,9 @@ impl App {
                 "torrentx_{}.csv",
                 self.search.last_query.replace(' ', "_").replace('/', "-")
             ));
+        let picked = csv_picks(rows, &self.ui.sel_set);
         let mut out = "Title,Tracker,Category,Size,Seeders,Leechers,Date\n".to_string();
-        for r in rows {
+        for r in &picked {
             out.push_str(&format!(
                 "{},{},{},{},{},{},{}\n",
                 csv_safe(&r.title),
@@ -1437,7 +1455,10 @@ impl App {
         match fs::write(&path, out) {
             Ok(()) => {
                 let _ = open::that(&path);
-                self.toast(&format!("Exported {name}"), self.pal.green);
+                self.toast(
+                    &format!("Exported {name} ({} rows)", picked.len()),
+                    self.pal.green,
+                );
             }
             Err(e) => self.toast(&format!("Export failed: {e}"), self.pal.red),
         }
@@ -1554,5 +1575,37 @@ mod clear_tests {
             app.search.epoch.load(Ordering::Relaxed) > epoch,
             "a worker from before the clear must be stale now"
         );
+    }
+}
+
+#[cfg(test)]
+mod csv_pick_tests {
+    use super::{TorrentResult, csv_picks};
+    use std::collections::HashSet;
+
+    fn row(title: &str) -> TorrentResult {
+        TorrentResult {
+            title: title.to_string(),
+            ..Default::default()
+        }
+    }
+
+    /// Ticks win; no ticks keeps the documented "whole filtered view" behaviour.
+    #[test]
+    fn csv_exports_the_ticked_rows_or_everything() {
+        let rows = vec![row("a"), row("b"), row("c"), row("d")];
+        let none: HashSet<usize> = HashSet::new();
+        assert_eq!(csv_picks(&rows, &none).len(), 4, "no ticks must export all");
+
+        let some: HashSet<usize> = [1usize, 3].into_iter().collect();
+        let picked: Vec<_> = csv_picks(&rows, &some)
+            .iter()
+            .map(|r| r.title.as_str())
+            .collect();
+        assert_eq!(picked, vec!["b", "d"], "export must follow the ticks");
+
+        // A tick left over from a longer list must not panic or invent a row.
+        let stale: HashSet<usize> = [9usize].into_iter().collect();
+        assert!(csv_picks(&rows, &stale).is_empty());
     }
 }
