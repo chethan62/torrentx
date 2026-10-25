@@ -56,6 +56,17 @@ jobs:
       - name: Build
         run: cargo build --all-targets
 
+      # Doc-only commits must arrive through a PR (CONTRIBUTING.md). Runs first:
+      # it is seconds of API calls, and a doc push that skipped review should fail
+      # before the toolchain spends two minutes on a build.
+      - name: Doc changes came through a PR
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          COMMITS: ${{ join(github.event.commits.*.id, ' ') }}
+        run: python3 scripts/doc-pr-guard.py
+
       - name: UI standards
         run: ./scripts/ui-standards.sh
 
