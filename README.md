@@ -56,6 +56,12 @@ curl -fsSL https://raw.githubusercontent.com/chethan62/torrentx/main/scripts/ins
 
 `INSTALL_DIR=/somewhere sh scripts/install.sh` installs elsewhere; the script resolves the
 latest release, downloads its `sha256sums.txt` and refuses to install on a mismatch.
+With the piped form the variable has to sit on the **`sh`** side — `INSTALL_DIR=/opt/tx curl … | sh`
+only sets it for `curl` and installs to `~/Applications` anyway:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chethan62/torrentx/main/scripts/install.sh | INSTALL_DIR=/opt/tx sh
+```
 
 Or grab the file yourself from the [releases page](https://github.com/chethan62/torrentx/releases/latest):
 
