@@ -6,6 +6,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **No more grid lines down the results table.** Every column boundary had a permanent
+  full-height rule, so the table read as a spreadsheet and the lines ran on past the last row
+  into the empty area. A divider is now drawn only while the pointer is on the boundary (1 px
+  `sub`) or dragging it (2 px accent, plus the rubber band); the resize cursor is what
+  advertises the grab when nothing is drawn. Verified: no divider at rest, `(169,177,214)` line
+  on hover at x=600, 2 px accent at 679-680 mid-drag, width persisted 545.45 → 618.18.
+
 ## [18.6.25] — 2026-10-25
 
 ### Added

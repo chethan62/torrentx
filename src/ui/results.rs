@@ -675,18 +675,22 @@ impl App {
                 egui::Id::unique(("colhandle", i)),
                 egui::Sense::click_and_drag(),
             );
-            // egui_extras only paints its separators when the table is resizable,
-            // and this table is not — so draw the divider here. It lights up when
-            // grabbed, so you can tell which of several lines you took hold of.
+            // No permanent grid. A full-height rule at every boundary turned the
+            // table into a spreadsheet, with lines running on past the last row.
+            // The divider now exists only while the pointer is on the boundary
+            // (thin, `sub`) or dragging it (accent, plus the rubber band below);
+            // the resize cursor is what advertises the grab when none is drawn.
             let live = resp.hovered() || resp.dragged();
-            ui.painter().vline(
-                x,
-                table_rect.y_range(),
-                egui::Stroke::new(
-                    if live { 2.0 } else { 1.0 },
-                    if live { pal.accent } else { pal.border },
-                ),
-            );
+            if live {
+                ui.painter().vline(
+                    x,
+                    table_rect.y_range(),
+                    egui::Stroke::new(
+                        if resp.dragged() { 2.0 } else { 1.0 },
+                        if resp.dragged() { pal.accent } else { pal.sub },
+                    ),
+                );
+            }
             if live {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
             }
