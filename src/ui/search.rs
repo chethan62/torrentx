@@ -26,12 +26,36 @@ impl App {
         let fs = self.cfg.font_size;
         let busy = *state == SearchState::Searching;
         ui.add_space(SP4);
-        let mut bar_rect = egui::Rect::NOTHING;
-
         // Row 1: query field + Search. The button has a fixed width and the field
         // takes the rest, so this row cannot wrap — the old `available - 505`
         // constant broke as soon as a control was added beside the field and the
         // button jumped onto a line of its own (it rendered at x=5, y=125).
+        let bar_rect = self.search_query_row(ui, fs, busy);
+
+        // Row 2: which indexers a search reaches, and the window to change that.
+        self.search_filter_row(ui, fs);
+
+        // History dropdown
+        self.draw_history_dropdown(ctx, bar_rect, fs);
+
+        ui.add_space(SP3);
+
+        // Filter bar
+        self.draw_filter_bar(ui, fs, view);
+
+        ui.add_space(SP3);
+
+        // State-dependent content
+        // Fade in the whole state block (match is the last thing drawn in
+        // this function, so opacity can't leak to later widgets). Covers all
+        // four states including Done. eased(1.0)=1.0 → no-op at rest.
+        self.search_state_area(ui, state, view, fs);
+    }
+
+    /// Row 1: the query field and the Search button. Returns the field's rect
+    /// (the history dropdown is positioned against it).
+    fn search_query_row(&mut self, ui: &mut egui::Ui, fs: f32, busy: bool) -> egui::Rect {
+        let mut bar_rect = egui::Rect::NOTHING;
         ui.horizontal(|ui| {
             // Every gap in these two rows is an explicit token: egui would add its
             // own item_spacing around each add_space, so the same SP4 produced 12 px
@@ -134,8 +158,12 @@ impl App {
                 self.do_search();
             }
         });
+        bar_rect
+    }
 
-        // Row 2: which indexers a search reaches, and the window to change that.
+    /// Row 2: category/indexer scope, the indexer picker, and the window that
+    /// changes which indexers a search reaches.
+    fn search_filter_row(&mut self, ui: &mut egui::Ui, fs: f32) {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.spacing_mut().interact_size.y = ROW2_H;
@@ -400,21 +428,17 @@ impl App {
                 }
             }
         });
+    }
 
-        // History dropdown
-        self.draw_history_dropdown(ctx, bar_rect, fs);
-
-        ui.add_space(SP3);
-
-        // Filter bar
-        self.draw_filter_bar(ui, fs, view);
-
-        ui.add_space(SP3);
-
-        // State-dependent content
-        // Fade in the whole state block (match is the last thing drawn in
-        // this function, so opacity can't leak to later widgets). Covers all
-        // four states including Done. eased(1.0)=1.0 → no-op at rest.
+    /// The state-dependent body: idle screen, live results while searching,
+    /// done summary, error banner. Faded as one block.
+    fn search_state_area(
+        &mut self,
+        ui: &mut egui::Ui,
+        state: &SearchState,
+        view: Option<&crate::app::ResultsView>,
+        fs: f32,
+    ) {
         let search_anim = self.ui.search_state_anim;
         let eased = (self.tokens.easing)(search_anim);
         ui.set_opacity(eased);
