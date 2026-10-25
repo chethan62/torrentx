@@ -156,7 +156,7 @@ open.
 | Updates | on/off | startup check for newer releases |
 | At login | on/off | Linux only: writes `~/.config/autostart/torrentx.desktop` (launched with `--minimized`, tray only) so RSS keeps polling |
 | Cat bar | on/off | category chips above results |
-| Columns | per-column toggles | Tracker…Date; the order is fixed (Tracker, Name, Size, Seeds, Leech, Ratio, Health, Date) |
+| Columns | per-column toggles + ◀ ▶ | Tracker…Date; the arrows move a column, Name and Seeds stay pinned |
 | Accent | color | overrides the theme's accent |
 | Play with | mpv / vlc | player for direct play |
 
@@ -172,7 +172,10 @@ Changes apply immediately; press **Save** to persist connection changes.
 | F | Favorite selected row |
 | M | Open magnet for selected row |
 
-Drag a column separator to resize that column; the result table remembers the widths for the session.
+Drag a column separator anywhere down its line to resize that column — the line lights up and
+a guide follows the pointer. Widths persist in `config.json`. When the columns are wider than
+the window a scrollbar appears along the bottom of the table; the divider grab band stops above
+it, so the bar keeps its drags.
 | P | Stream selected row (direct play) |
 | Esc | Close detail panel / clear query |
 | Ctrl+F | Focus search bar |

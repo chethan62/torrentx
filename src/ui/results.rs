@@ -158,6 +158,13 @@ impl App {
         let mut col_rects: Vec<egui::Rect> = Vec::with_capacity(cols.len());
         let base_w: f32 = self.ui.col_w.iter().sum::<f32>() + ACTION_COL_W;
         let table_w = base_w.max(viewport_w);
+        // The table needs a bar you can see and grab. egui's default
+        // `ScrollStyle::floating()` draws a dormant 2px line in the handle colour
+        // (here: the border colour) that only grows while hovered, so a table
+        // wider than the window looked like it had no scrollbar at all. Solid
+        // bars always allocate their 6px — HSCROLL_ROOM already reserves 20.
+        let style_before = ui.spacing().scroll;
+        ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
         // Hand-formatted closure body — #[rustfmt::skip] keeps the compact
         // single-level indentation instead of rustfmt's +1 level reflow.
         #[rustfmt::skip]
@@ -514,6 +521,7 @@ impl App {
             }
         });
         }); // end ScrollArea::both
+        ui.spacing_mut().scroll = style_before;
 
         if let Some((col, same)) = new_sort {
             if same {

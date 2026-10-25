@@ -6,6 +6,17 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **The horizontal scrollbar now exists when the columns don't fit.** It was never missing — it
+  was egui's default `ScrollStyle::floating()`, which draws a dormant 2 px line in the handle
+  colour (this theme sets that to the border colour) that only grows while hovered. A table
+  1426 pt wide in a 985 pt viewport therefore looked like it had no scrollbar and could not be
+  scrolled sideways at all. The results table now uses solid 6 px bars (HSCROLL_ROOM already
+  reserved the space), restored afterwards so the rest of the UI keeps its floating bars.
+  Verified live: bar visible at the table bottom, dragging it scrolled the columns (dividers
+  795/921/998 → 310/437/514/602/676/764/866) with **no** width written, and a divider drag just
+  above the bar still resizes.
+
 ### Added
 - **Rubber-band guide while dragging a column divider.** The grabbed divider now lights up in
   the accent colour and a full-height guide line with a grip tab follows the pointer, so it
