@@ -28,6 +28,14 @@ cargo clippy --all-targets --all-features -- -D warnings
 - Screenshots are evidence: include before/after images in the PR body for any
   visual change.
 
+## Docs go through a PR
+
+README, GUIDE and CHANGELOG edits take the same route as code: branch, PR, green run, merge. A doc
+commit pushed straight to `main` cannot be reviewed afterwards — giving it a review record then costs a
+revert on `main` plus a re-land branch, which is exactly what happened once already. Prose deserves the
+review more than most code does: the bugs here are invisible in the diff and obvious in the rendered
+page (clipped code blocks, a table that scrolls, a stale install line).
+
 ## Commit style
 
 Conventional Commits, one logical change per commit
