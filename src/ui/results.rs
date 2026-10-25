@@ -177,7 +177,7 @@ impl App {
         // Hand-formatted closure body — #[rustfmt::skip] keeps the compact
         // single-level indentation instead of rustfmt's +1 level reflow.
         #[rustfmt::skip]
-        egui::ScrollArea::both()
+        let sa_out = egui::ScrollArea::both()
             .id_salt("results_scroll")
             .auto_shrink([false, true])
             .show(ui, |ui| {
@@ -648,6 +648,10 @@ impl App {
         // draggable and do nothing. It stops above the reserved scrollbar room:
         // a band that reached it swallowed the horizontal scrollbar's drags.
         let band_bottom = (table_rect.bottom() - HSCROLL_ROOM).max(header_top + COL_HANDLE_H);
+        // The divider belongs to the list, not to the whole scroll viewport:
+        // `table_rect` spans the viewport, so a rule drawn to its bottom ran on
+        // past the last row into empty space. `content_size` is header + rows.
+        let list_bottom = (header_top + sa_out.content_size.y).min(band_bottom);
         // egui_extras shrinks the columns to the viewport, so a pointer delta of
         // 10 px must move a stored width by 10 * (stored / rendered) or the line
         // trails the cursor. 1.0 when nothing is squeezed.
@@ -668,7 +672,7 @@ impl App {
                 .unwrap_or_else(|| table_rect.left() + widths[..=i].iter().sum::<f32>());
             let handle = egui::Rect::from_min_max(
                 egui::pos2(x - COL_GRAB_W, header_top),
-                egui::pos2(x + COL_GRAB_W, band_bottom),
+                egui::pos2(x + COL_GRAB_W, list_bottom),
             );
             let resp = ui.interact(
                 handle,
@@ -684,7 +688,7 @@ impl App {
             if live {
                 ui.painter().vline(
                     x,
-                    table_rect.y_range(),
+                    egui::Rangef::new(header_top, list_bottom),
                     egui::Stroke::new(
                         if resp.dragged() { 2.0 } else { 1.0 },
                         if resp.dragged() { pal.accent } else { pal.sub },
@@ -741,7 +745,7 @@ impl App {
             ));
             painter.vline(
                 gx,
-                table_rect.y_range(),
+                egui::Rangef::new(header_top, list_bottom),
                 egui::Stroke::new(2.0_f32, pal.accent),
             );
             painter.rect_filled(

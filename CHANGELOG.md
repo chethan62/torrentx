@@ -11,8 +11,12 @@ versions follow [SemVer](https://semver.org/).
   full-height rule, so the table read as a spreadsheet and the lines ran on past the last row
   into the empty area. A divider is now drawn only while the pointer is on the boundary (1 px
   `sub`) or dragging it (2 px accent, plus the rubber band); the resize cursor is what
-  advertises the grab when nothing is drawn. Verified: no divider at rest, `(169,177,214)` line
-  on hover at x=600, 2 px accent at 679-680 mid-drag, width persisted 545.45 → 618.18.
+  advertises the grab when nothing is drawn. The rule is also clipped to the list itself —
+  header through the last row — instead of the whole scroll viewport, so it no longer runs on
+  into the empty space under the results. Verified: no divider at rest, `(169,177,214)` line
+  on hover at x=600, 2 px accent at 679-680 mid-drag, width persisted 545.45 → 618.18; after
+  the clip the hover line and the drag guide both span y 313–501 (header + 171 pt of content),
+  not the 615 px viewport.
 
 ## [18.6.25] — 2026-10-25
 
