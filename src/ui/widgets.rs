@@ -31,18 +31,27 @@ pub(crate) fn draw_cell_content(
             );
         }
         TableCol::Seeds => {
+            // An indexer that publishes no seeder count (btdig, any DHT index) is
+            // unknown, not dead: "0" would claim the swarm is empty.
+            let (txt, col) = match r.seeders {
+                Some(s) => (s.to_string(), seed_col(s)),
+                None => ("—".into(), pal.dim),
+            };
             ui.label(
-                RichText::new(seed.to_string())
+                RichText::new(txt)
                     .font(FontId::monospace(fsz - 0.5))
-                    .color(seed_col(seed))
+                    .color(col)
                     .strong(),
             );
         }
         TableCol::Leech => {
             ui.label(
-                RichText::new(leech.to_string())
-                    .font(FontId::monospace(fsz - 0.5))
-                    .color(pal.red),
+                RichText::new(match r.peers {
+                    Some(p) => p.to_string(),
+                    None => "—".into(),
+                })
+                .font(FontId::monospace(fsz - 0.5))
+                .color(pal.red),
             );
         }
         TableCol::Ratio => {
@@ -69,6 +78,14 @@ pub(crate) fn draw_cell_content(
             }
         }
         TableCol::Health => {
+            let Some(seed) = r.seeders else {
+                ui.label(
+                    RichText::new("—")
+                        .font(FontId::proportional(fsz - 1.0))
+                        .color(pal.dim),
+                );
+                return;
+            };
             let dot = if seed > 10 {
                 SvgIcon::CircleDot
             } else {

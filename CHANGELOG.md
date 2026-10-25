@@ -7,6 +7,11 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **A missing seeder count reads "—", not `0`.** Indexers that publish no swarm data at all
+  (btdig and other DHT indexes) used to arrive with `seeders: None`, which the table rendered as
+  `0` and labelled **DEAD** — a claim about the swarm that the source never made. Those rows now
+  show `—` in Seeds, Leechers and Health, and only match the **All** health chip: `Hlth::ok_opt`
+  keeps unknown out of every band while a real `Some(0)` still lands in DEAD.
 - **The installer warns when it is about to install nowhere useful.** Run as root without
   `INSTALL_DIR` (the `| sudo sh` case), it prints that the file is going to `/root/Applications`
   and suggests `/opt/tx` before downloading.

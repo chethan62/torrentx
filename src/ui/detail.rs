@@ -125,7 +125,11 @@ impl App {
                     "∞".into()
                 };
                 grid_row(ui, "Ratio", &ratio, self.pal.sub, &self.pal, fs);
-                grid_row(ui, "Health", hlth_lbl(seed), seed_col(seed), &self.pal, fs);
+                let (hlth, hcol) = match r.seeders {
+                    Some(s) => (hlth_lbl(s), seed_col(s)),
+                    None => ("—", self.pal.dim),
+                };
+                grid_row(ui, "Health", hlth, hcol, &self.pal, fs);
                 if let Some(d) = &r.publish_date {
                     grid_row(ui, "Published", &time_ago(d), self.pal.dim, &self.pal, fs);
                 }
