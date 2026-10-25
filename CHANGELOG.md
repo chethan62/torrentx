@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.6.25] — 2026-10-25
+
 ### Fixed
 - **The horizontal scrollbar now exists when the columns don't fit.** It was never missing — it
   was egui's default `ScrollStyle::floating()`, which draws a dormant 2 px line in the handle
