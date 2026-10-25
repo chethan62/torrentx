@@ -11,10 +11,13 @@ on:
 permissions:
   contents: read
 
-# A newer push supersedes an in-flight run for the same ref.
+# PRs supersede their own in-flight run (an older attempt is irrelevant once a
+# newer commit lands). Pushes to main do NOT: cancelling them left commits on
+# main that never got a verdict at all — f1f21de shipped a clippy failure that
+# only surfaced when the cancelled run was re-run by hand.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
