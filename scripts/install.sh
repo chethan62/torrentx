@@ -14,6 +14,13 @@ API="https://api.github.com/repos/$REPO/releases/latest"
 command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum is required" >&2; exit 1; }
 
+# Under sudo, HOME is /root, so the default destination quietly becomes
+# /root/Applications — a copy nobody will ever launch. Say so before downloading.
+if [ "$(id -u)" -eq 0 ] && [ -z "${INSTALL_DIR:-}" ]; then
+    echo "warning: running as root without INSTALL_DIR — this installs to $DIR," >&2
+    echo "         which is not on anyone's PATH. Use INSTALL_DIR=/opt/tx for a system-wide copy." >&2
+fi
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 

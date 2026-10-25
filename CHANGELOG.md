@@ -7,6 +7,9 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **The installer warns when it is about to install nowhere useful.** Run as root without
+  `INSTALL_DIR` (the `| sudo sh` case), it prints that the file is going to `/root/Applications`
+  and suggests `/opt/tx` before downloading.
 - **One-command install.** `curl -fsSL .../scripts/install.sh | sh` resolves the latest release,
   verifies the AppImage against the release's `sha256sums.txt` and drops it in `~/Applications`
   (`INSTALL_DIR` overrides). A checksum mismatch aborts before anything is written into place.
