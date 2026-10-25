@@ -48,7 +48,16 @@
 
 ## Download
 
-Grab the latest build from the [releases page](https://github.com/chethan62/torrentx/releases/latest):
+One command, checksum-verified, AppImage into `~/Applications`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chethan62/torrentx/main/scripts/install.sh | sh
+```
+
+`INSTALL_DIR=/somewhere sh scripts/install.sh` installs elsewhere; the script resolves the
+latest release, downloads its `sha256sums.txt` and refuses to install on a mismatch.
+
+Or grab the file yourself from the [releases page](https://github.com/chethan62/torrentx/releases/latest):
 
 | Platform | File | Size |
 |----------|------|------|

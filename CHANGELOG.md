@@ -7,6 +7,9 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **One-command install.** `curl -fsSL .../scripts/install.sh | sh` resolves the latest release,
+  verifies the AppImage against the release's `sha256sums.txt` and drops it in `~/Applications`
+  (`INSTALL_DIR` overrides). A checksum mismatch aborts before anything is written into place.
 - **Every push to `main` now gets a CI verdict.** `cancel-in-progress` applied to every event, so a
   push that landed while the previous run was still building cancelled it: one commit reached `main`
   with UI standards, Test, Clippy, Format, Lock and cargo-deny all skipped (a real clippy failure).
