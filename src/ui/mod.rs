@@ -56,7 +56,7 @@ pub(crate) const PANEL_MARGIN_X: i8 = 12;
 
 // Re-export the shared cell renderer so `search.rs` (and any submodule) can
 // reach it via `use super::*;`.
-pub(crate) use widgets::draw_cell_content;
+pub(crate) use widgets::{band_inner, draw_cell_content};
 
 // ─── The frame: `eframe::App::ui` ─────────────────────────────────────────
 use std::sync::atomic::Ordering;

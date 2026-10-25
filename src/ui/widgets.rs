@@ -100,3 +100,35 @@ pub(crate) fn draw_cell_content(
         TableCol::Name => {} // handled inline (interaction)
     }
 }
+
+/// Content rect inside a row band: the band minus `inset`, never smaller than
+/// 1x1. An unclamped `shrink2` on a band narrower or shorter than the insets
+/// yields a negative rect that silently draws nothing (a row that looks empty).
+pub(crate) fn band_inner(band: egui::Rect, inset: egui::Vec2) -> egui::Rect {
+    let inner = band.shrink2(inset);
+    egui::Rect::from_min_max(inner.min, inner.max.max(inner.min + egui::vec2(1.0, 1.0)))
+}
+
+#[cfg(test)]
+mod band_tests {
+    use super::*;
+
+    /// Bands exactly as small as their insets must still yield a positive rect:
+    /// `shrink2` alone returns zero/negative and the child Ui draws nothing.
+    #[test]
+    fn a_tiny_band_still_yields_a_drawable_inner_rect() {
+        // RSS feed row (10,7) and Favorites band (16,10)
+        for inset in [egui::vec2(10.0, 7.0), egui::vec2(16.0, 10.0)] {
+            for (w, h) in [(200.0, 40.0), (20.0, 14.0), (12.0, 14.0), (4.0, 4.0)] {
+                let band = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(w, h));
+                let inner = band_inner(band, inset);
+                assert!(
+                    inner.width() >= 1.0 && inner.height() >= 1.0,
+                    "band {w}x{h} inset {inset:?} -> {}x{}",
+                    inner.width(),
+                    inner.height()
+                );
+            }
+        }
+    }
+}

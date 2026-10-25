@@ -133,7 +133,7 @@ impl App {
                 {
                     let mut content = ui.new_child(
                         egui::UiBuilder::new()
-                            .max_rect(band.shrink2(egui::vec2(16.0, 10.0)))
+                            .max_rect(band_inner(band, egui::vec2(16.0, 10.0)))
                             .layout(egui::Layout::top_down(egui::Align::Min)),
                     );
                     let ui = &mut content;
