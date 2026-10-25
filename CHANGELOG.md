@@ -18,9 +18,10 @@ versions follow [SemVer](https://semver.org/).
   above the bar still resizes.
   The handle also takes `dim` instead of `surface`, scoped to the bar: measured on every theme,
   `surface`-on-`background` was 1.06:1 (Light) and ~1.1:1 (Latte, Gruvbox Light) — a 6px band
-  you cannot see. With `dim` each light theme measures 4.5:1 (Light 4.50, Gruvbox Light 4.53,
-  Latte 4.56) and Tokyo Night 3.63:1, while the table's own widget fills are untouched (surface
-  pixel count in the body identical before/after: 90,265).
+  you cannot see. With `dim` every theme lands between 4.50:1 and 4.66:1 — `Pal::from` heals
+  `dim` to at least 4.5:1 against `bg` on all 19 themes (`every_theme_passes_aa_for_all_three_text_tiers`
+  already enforces it), so the light and dark themes needed no per-theme colours. The table's own
+  widget fills are untouched (surface pixel count in the body identical before/after: 90,265).
 
 ### Added
 - **Rubber-band guide while dragging a column divider.** The grabbed divider now lights up in
