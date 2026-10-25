@@ -51,7 +51,9 @@
 One command, checksum-verified, AppImage into `~/Applications`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chethan62/torrentx/main/scripts/install.sh | sh
+curl -fsSL \
+  https://github.com/chethan62/torrentx/raw/main/scripts/install.sh \
+  | sh
 ```
 
 `INSTALL_DIR=/somewhere sh scripts/install.sh` installs elsewhere; the script resolves the
@@ -60,14 +62,18 @@ With the piped form the variable has to sit on the **`sh`** side — `INSTALL_DI
 only sets it for `curl` and installs to `~/Applications` anyway:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chethan62/torrentx/main/scripts/install.sh | INSTALL_DIR=/opt/tx sh
+curl -fsSL \
+  https://github.com/chethan62/torrentx/raw/main/scripts/install.sh \
+  | INSTALL_DIR=/opt/tx sh
 ```
 
 For a system-wide copy run it as root and keep `INSTALL_DIR` on the command side of `sudo`,
 otherwise `sudo`'s `HOME=/root` sends the file to `/root/Applications`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chethan62/torrentx/main/scripts/install.sh | sudo INSTALL_DIR=/opt/tx sh
+curl -fsSL \
+  https://github.com/chethan62/torrentx/raw/main/scripts/install.sh \
+  | sudo INSTALL_DIR=/opt/tx sh
 ```
 
 Run as root with `INSTALL_DIR` unset and the installer says so on stderr before it downloads —
