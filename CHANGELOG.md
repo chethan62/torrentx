@@ -6,6 +6,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Two native sources — searching no longer requires Jackett.** `apibay` (The Pirate Bay's public
+  JSON API) and `knaben` (a meta search over ~700 trackers) are built in, on the same fan-out as the
+  Jackett indexers: same picker, same tracker column, same dedupe and sort. Measured with Jackett
+  pointed at a dead port — apibay answered `ubuntu` in 0.55 s with 88 rows, 82 alive, 339 seeders;
+  knaben returned 100 rows in 1.95 s. A native source is one id in the fan-out list (`src/sources.rs`),
+  so `fetch_into` dispatches to it before any URL is built. Jackett stays a source, not a requirement.
+
 ### Changed
 - **A missing seeder count reads "—", not `0`.** Indexers that publish no swarm data at all
   (btdig and other DHT indexes) used to arrive with `seeders: None`, which the table rendered as

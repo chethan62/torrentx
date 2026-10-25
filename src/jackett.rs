@@ -983,6 +983,15 @@ fn fetch_into(
     results: &Arc<Mutex<Arc<Vec<TorrentResult>>>>,
     count: &Arc<Mutex<usize>>,
 ) -> Result<usize, String> {
+    // A native source (apibay, knaben) has no Jackett behind it: same fan-out,
+    // same append/dedupe/wake path, just a different endpoint.
+    if crate::sources::is_native(idx) {
+        let rows = crate::sources::fetch(idx, &ctx.query, ctx.timeout)?;
+        let n = rows.len();
+        append_results(results, count, rows, ctx.dedupe);
+        crate::wake_ui();
+        return Ok(n);
+    }
     let ep = search_url(&ctx.url, &ctx.key, &ctx.query, &ctx.cat, idx);
     let resp = shared_client()
         .get(&ep)

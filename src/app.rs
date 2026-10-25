@@ -642,7 +642,7 @@ impl Default for NetState {
             std::sync::mpsc::channel::<Option<crate::jackett::IndexerCatalogue>>();
         let (update_tx, update_rx) = std::sync::mpsc::channel::<Option<String>>();
         Self {
-            indexers: vec![],
+            indexers: crate::sources::native_ids(),
             catalogue: vec![],
             cat_query: String::new(),
             idx_open: false,
