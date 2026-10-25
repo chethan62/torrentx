@@ -70,6 +70,11 @@ otherwise `sudo`'s `HOME=/root` sends the file to `/root/Applications`:
 curl -fsSL https://raw.githubusercontent.com/chethan62/torrentx/main/scripts/install.sh | sudo INSTALL_DIR=/opt/tx sh
 ```
 
+Run as root with `INSTALL_DIR` unset and the installer says so on stderr before it downloads —
+naming `/root/Applications` as the destination — then installs there anyway. It warns rather than
+refuses, because a root install to `/opt` is a legitimate thing to want; the silent part is what it
+refuses to be.
+
 Or grab the file yourself from the [releases page](https://github.com/chethan62/torrentx/releases/latest):
 
 | Platform | File | Size |
