@@ -4,6 +4,14 @@ use super::*;
 
 use crate::app::App;
 
+/// Content rect inside a feed-row band: the band minus its 10/7 insets, never
+/// smaller than 1x1. An unclamped `shrink2` on a band narrower or shorter than
+/// the insets yields a negative rect that silently draws nothing.
+fn band_inner(band: egui::Rect) -> egui::Rect {
+    let inset = band.shrink2(egui::vec2(10.0, 7.0));
+    egui::Rect::from_min_max(inset.min, inset.max.max(inset.min + egui::vec2(1.0, 1.0)))
+}
+
 impl App {
     pub(crate) fn draw_rss_detail_panel(&mut self, ui: &mut egui::Ui) {
         if self.ui.tab != Tab::Rss {
@@ -286,7 +294,7 @@ impl App {
                     {
                         let mut content = ui.new_child(
                             egui::UiBuilder::new()
-                                .max_rect(band.shrink2(egui::vec2(10.0, 7.0)))
+                                .max_rect(band_inner(band))
                                 .layout(egui::Layout::top_down(egui::Align::Min)),
                         );
                         let ui = &mut content;
@@ -930,4 +938,29 @@ impl App {
     }
 
     // ─── About tab ─────────────────────────────────────────────────────────
+}
+
+#[cfg(test)]
+mod band_tests {
+    use super::*;
+
+    /// A band exactly as tall as its insets must still yield a positive rect:
+    /// `shrink2` alone would return a zero/negative one and draw nothing.
+    #[test]
+    fn a_tiny_band_still_yields_a_drawable_inner_rect() {
+        for (w, h) in [(200.0, 24.0), (20.0, 14.0), (12.0, 14.0), (4.0, 4.0)] {
+            let band = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(w, h));
+            let inner = band_inner(band);
+            assert!(
+                inner.width() >= 1.0,
+                "width {} for band {w}x{h}",
+                inner.width()
+            );
+            assert!(
+                inner.height() >= 1.0,
+                "height {} for band {w}x{h}",
+                inner.height()
+            );
+        }
+    }
 }
