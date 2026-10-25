@@ -165,7 +165,7 @@ impl eframe::App for App {
             self.net.jackett_ok = Some(list.is_some()); // None = Jackett unreachable
             match list {
                 Some(cat) => {
-                    self.net.indexers = cat.configured.clone();
+                    self.net.indexers = crate::sources::with_native(&cat.configured);
                     self.net.catalogue = cat.all;
                     self.net.indexers_retry_at = None;
                 }

@@ -6,6 +6,7 @@ mod config;
 mod jackett;
 mod player;
 mod rss;
+mod sources;
 mod themes;
 mod ui;
 
