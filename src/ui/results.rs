@@ -30,6 +30,14 @@ const HSCROLL_ROOM: f32 = 20.0;
 /// Height of the draggable header band for column separators.
 const COL_HANDLE_H: f32 = 30.0;
 
+/// Height the table may use, with room reserved under it for the horizontal
+/// scrollbar. Clamped at 1: opening the detail panel in a short window leaves
+/// less than `HSCROLL_ROOM` and an unclamped subtraction handed egui a
+/// negative height, which panics in its layout pass (`Negative size: [0.0 -20.0]`).
+fn table_viewport_h(available: f32) -> f32 {
+    (available - HSCROLL_ROOM).max(1.0)
+}
+
 impl App {
     pub(crate) fn draw_results_table(
         &mut self,
@@ -123,7 +131,7 @@ impl App {
         // is clipped away (which is exactly how it looked — no bar at all).
         // Horizontal scrollbar at the bottom of the scroll area gets clipped if the
         // table fills the panel. Give it 20px breathing room.
-        let viewport_h = ui.available_height() - HSCROLL_ROOM;
+        let viewport_h = table_viewport_h(ui.available_height());
         // Handle band = the header row, measured from the cursor BEFORE the table
         // exists (the table's own rect extends past the scrollbar, so subtracting
         // a guessed margin from it kept landing on top of the bar).
@@ -839,4 +847,19 @@ fn attach_row_menu(
             item(ui, "Open magnet in browser", "mag");
         }
     });
+}
+
+#[cfg(test)]
+mod viewport_tests {
+    use super::*;
+
+    /// A short window (detail panel open) must not produce a negative height:
+    /// that is what panicked in egui's layout pass.
+    #[test]
+    fn a_short_window_cannot_produce_a_negative_table_height() {
+        assert_eq!(table_viewport_h(0.0), 1.0);
+        assert_eq!(table_viewport_h(10.0), 1.0);
+        assert_eq!(table_viewport_h(HSCROLL_ROOM), 1.0);
+        assert!(table_viewport_h(500.0) > 400.0);
+    }
 }
