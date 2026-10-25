@@ -63,6 +63,13 @@ only sets it for `curl` and installs to `~/Applications` anyway:
 curl -fsSL https://raw.githubusercontent.com/chethan62/torrentx/main/scripts/install.sh | INSTALL_DIR=/opt/tx sh
 ```
 
+For a system-wide copy run it as root and keep `INSTALL_DIR` on the command side of `sudo`,
+otherwise `sudo`'s `HOME=/root` sends the file to `/root/Applications`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chethan62/torrentx/main/scripts/install.sh | sudo INSTALL_DIR=/opt/tx sh
+```
+
 Or grab the file yourself from the [releases page](https://github.com/chethan62/torrentx/releases/latest):
 
 | Platform | File | Size |
