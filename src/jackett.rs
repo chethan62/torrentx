@@ -210,6 +210,16 @@ impl Hlth {
             Hlth::Dead => s == 0,
         }
     }
+
+    /// Same bands, but for a source that publishes no seeder count at all
+    /// (btdig and other DHT indexes): unknown belongs under `All` only, never
+    /// under DEAD — "we do not know" is not "the swarm is empty".
+    pub(crate) fn ok_opt(&self, s: Option<u32>) -> bool {
+        match s {
+            Some(v) => self.ok(v),
+            None => matches!(self, Hlth::All),
+        }
+    }
 }
 // ─── Pure helpers ──────────────────────────────────────────────────────────
 
@@ -1581,6 +1591,24 @@ mod tests {
         assert_eq!(tied.len(), 1);
         assert_eq!(tied[0].tracker.as_deref(), Some("a"));
         assert!(dedupe_best_seeded(vec![]).is_empty());
+    }
+
+    #[test]
+    fn unknown_seeders_are_not_dead() {
+        // btdig publishes no seeder count: such a row is unknown, so it must stay
+        // out of every band chip (especially DEAD — "we do not know" is not
+        // "empty swarm") and remain visible under All.
+        assert!(Hlth::All.ok_opt(None));
+        for chip in [Hlth::Hot, Hlth::Good, Hlth::Slow, Hlth::Dying, Hlth::Dead] {
+            assert!(
+                !chip.ok_opt(None),
+                "{} claimed an unknown row",
+                chip.label()
+            );
+        }
+        // A real zero still lands in DEAD; known values still follow the bands.
+        assert!(Hlth::Dead.ok_opt(Some(0)));
+        assert!(Hlth::Hot.ok_opt(Some(501)));
     }
 
     #[test]

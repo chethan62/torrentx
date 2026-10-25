@@ -236,7 +236,7 @@ pub(crate) fn matches_filters(r: &TorrentResult, q: &FilterQuery) -> bool {
             return false;
         }
     }
-    q.health.ok(s)
+    q.health.ok_opt(r.seeders)
 }
 
 /// Sort in place. Descending for every column, reversed for `Asc`; dates compare
