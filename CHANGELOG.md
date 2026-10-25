@@ -16,6 +16,11 @@ versions follow [SemVer](https://semver.org/).
   Verified live: bar visible at the table bottom, dragging it scrolled the columns (dividers
   795/921/998 → 310/437/514/602/676/764/866) with **no** width written, and a divider drag just
   above the bar still resizes.
+  The handle also takes `dim` instead of `surface`, scoped to the bar: measured on every theme,
+  `surface`-on-`background` was 1.06:1 (Light) and ~1.1:1 (Latte, Gruvbox Light) — a 6px band
+  you cannot see. With `dim` each light theme measures 4.5:1 (Light 4.50, Gruvbox Light 4.53,
+  Latte 4.56) and Tokyo Night 3.63:1, while the table's own widget fills are untouched (surface
+  pixel count in the body identical before/after: 90,265).
 
 ### Added
 - **Rubber-band guide while dragging a column divider.** The grabbed divider now lights up in

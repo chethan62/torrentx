@@ -165,6 +165,15 @@ impl App {
         // bars always allocate their 6px — HSCROLL_ROOM already reserves 20.
         let style_before = ui.spacing().scroll;
         ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+        // Solid bars take their handle colour from `widgets.inactive.bg_fill`,
+        // which this theme sets to `surface` — on the light themes that is within
+        // ~1.1:1 of the panel background, so the bar is a 6px band you cannot
+        // see. Use `dim` for the handle here only: the table's own widgets get
+        // `surface` back at the top of the closure below.
+        let inactive_before = ui.visuals().widgets.inactive.bg_fill;
+        let hovered_before = ui.visuals().widgets.hovered.bg_fill;
+        ui.visuals_mut().widgets.inactive.bg_fill = pal.dim;
+        ui.visuals_mut().widgets.hovered.bg_fill = pal.sub;
         // Hand-formatted closure body — #[rustfmt::skip] keeps the compact
         // single-level indentation instead of rustfmt's +1 level reflow.
         #[rustfmt::skip]
@@ -172,6 +181,9 @@ impl App {
             .id_salt("results_scroll")
             .auto_shrink([false, true])
             .show(ui, |ui| {
+        // Content keeps the normal widget fills; only the bars use `dim`.
+        ui.visuals_mut().widgets.inactive.bg_fill = inactive_before;
+        ui.visuals_mut().widgets.hovered.bg_fill = hovered_before;
         // Both bounds: a min_width alone leaves the table free to report a
         // narrower content rect, so the ScrollArea never saw the overflow and
         // never drew its bar. With a definite width the columns (all exact) fit
@@ -522,6 +534,8 @@ impl App {
         });
         }); // end ScrollArea::both
         ui.spacing_mut().scroll = style_before;
+        ui.visuals_mut().widgets.inactive.bg_fill = inactive_before;
+        ui.visuals_mut().widgets.hovered.bg_fill = hovered_before;
 
         if let Some((col, same)) = new_sort {
             if same {
