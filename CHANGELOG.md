@@ -7,6 +7,10 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **Every push to `main` now gets a CI verdict.** `cancel-in-progress` applied to every event, so a
+  push that landed while the previous run was still building cancelled it: one commit reached `main`
+  with UI standards, Test, Clippy, Format, Lock and cargo-deny all skipped (a real clippy failure).
+  Cancellation is now limited to pull requests, where the superseded attempt genuinely does not matter.
 - **No more grid lines down the results table.** Every column boundary had a permanent
   full-height rule, so the table read as a spreadsheet and the lines ran on past the last row
   into the empty area. A divider is now drawn only while the pointer is on the boundary (1 px
