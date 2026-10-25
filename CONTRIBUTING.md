@@ -28,13 +28,16 @@ cargo clippy --all-targets --all-features -- -D warnings
 - Screenshots are evidence: include before/after images in the PR body for any
   visual change.
 
-## Docs go through a PR
+## Everything goes through a pull request
 
-README, GUIDE and CHANGELOG edits take the same route as code: branch, PR, green run, merge. A doc
-commit pushed straight to `main` cannot be reviewed afterwards — giving it a review record then costs a
-revert on `main` plus a re-land branch, which is exactly what happened once already. Prose deserves the
-review more than most code does: the bugs here are invisible in the diff and obvious in the rendered
-page (clipped code blocks, a table that scrolls, a stale install line).
+`main` is protected by a ruleset with no bypass: a direct `git push` is rejected with
+`GH013 … Changes must be made through a pull request`. Branch, open a PR, let the run go green, merge.
+
+This started as a rule for docs only — a README commit pushed straight to `main` cannot be reviewed
+afterwards, and giving it a review record later costs a revert plus a re-land. GitHub cannot scope a
+ruleset to file paths on a public repository (that is a *push* ruleset, Team plan, private/internal
+only), so the rule applies to the whole branch. It is a small tax on code changes and it buys a review
+trail for the changes where a diff hides the bug.
 
 ## Commit style
 
