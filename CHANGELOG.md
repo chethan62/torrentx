@@ -8,6 +8,14 @@ versions follow [SemVer](https://semver.org/).
 
 ## [18.6.25] — 2026-10-25
 
+### Added
+- **Rubber-band guide while dragging a column divider.** The grabbed divider now lights up in
+  the accent colour and a full-height guide line with a grip tab follows the pointer, so it
+  is obvious which of several dividers you took hold of. The drag is measured from the press
+  point (`press_origin`) instead of the first drag frame, so the guide and the live column
+  edge coincide instead of trailing by a few pixels. Verified mid-drag from a screenshot:
+  accent run at the pointer x, divider moved, widths persisted on release.
+
 ### Fixed
 - **The horizontal scrollbar now exists when the columns don't fit.** It was never missing — it
   was egui's default `ScrollStyle::floating()`, which draws a dormant 2 px line in the handle
@@ -24,16 +32,6 @@ versions follow [SemVer](https://semver.org/).
   `dim` to at least 4.5:1 against `bg` on all 19 themes (`every_theme_passes_aa_for_all_three_text_tiers`
   already enforces it), so the light and dark themes needed no per-theme colours. The table's own
   widget fills are untouched (surface pixel count in the body identical before/after: 90,265).
-
-### Added
-- **Rubber-band guide while dragging a column divider.** The grabbed divider now lights up in
-  the accent colour and a full-height guide line with a grip tab follows the pointer, so it
-  is obvious which of several dividers you took hold of. The drag is measured from the press
-  point (`press_origin`) instead of the first drag frame, so the guide and the live column
-  edge coincide instead of trailing by a few pixels. Verified mid-drag from a screenshot:
-  accent run at the pointer x, divider moved, widths persisted on release.
-
-### Fixed
 - **Column dividers are draggable along their whole line.** The grab band was the 30 px
   header strip only, while the divider was painted top to bottom — so every line below the
   header looked draggable and did nothing. The band now runs to the bottom of the table
@@ -74,7 +72,6 @@ versions follow [SemVer](https://semver.org/).
   text 12 → 30 px and nothing changed over the next 3 s.
 
 
-### Fixed
 - **A `downloadmeta` that dies without metadata is retried once.** The same magnet
   measured 4 s → file, 1 s → "0 peers", and a 40 s hang within minutes, so a transient
   failure used to surface as "No metadata — the peers are unreachable". The retry runs
@@ -94,7 +91,6 @@ versions follow [SemVer](https://semver.org/).
   `a_metadata_run_that_exits_empty_is_retried_once` fail in a full run.
 
 
-### Fixed
 - Two callers asking for the same torrent's metadata now share **one** fetch
   (per-infohash single flight): the detail pane's listing and a picker click used to
   run `downloadmeta` twice on one magnet, cost 10.2 s instead of 5.2 s and throw the
