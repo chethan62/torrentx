@@ -214,8 +214,20 @@ pub(crate) fn parse_knaben(body: &str) -> Result<Vec<TorrentResult>, String> {
         .map(|h| {
             // Tracker-seeded counts first; knaben's own crawl only as a fallback,
             // so a row never claims more than its tracker reported.
-            let seeders = h.seeders.or(h.live_seeders);
-            let peers = h.peers.or(h.live_peers);
+            //
+            // A zero from knaben is "we have no count", not "the swarm is empty":
+            // its API serialises a missing tracker count as 0 (seen on nearly
+            // every hit, even when asked to sort by seeders). Passing that 0 on
+            // badged live torrents DEAD and hid them from every band but All, so
+            // a non-positive count becomes None — unknown, which is the truth.
+            let seeders = h
+                .seeders
+                .filter(|&s| s > 0)
+                .or(h.live_seeders.filter(|&s| s > 0));
+            let peers = h
+                .peers
+                .filter(|&p| p > 0)
+                .or(h.live_peers.filter(|&p| p > 0));
             TorrentResult {
                 magnet_uri: h
                     .magnet_url
@@ -269,10 +281,11 @@ mod tests {
            "liveSeeders":0,"livePeers":2,"bytes":690371952,"date":"2011-12-20T23:00:00+00:00",
            "details":"https://knaben.xyz/x","magnetUrl":"magnet:?xt=urn:btih:9A72","tracker":"The Pirate Bay",
            "category":"PC / Unix"},
-          {"title":"only-live","hash":"AA","liveSeeders":7,"bytes":10}
+          {"title":"only-live","hash":"AA","liveSeeders":7,"bytes":10},
+          {"title":"knaben-has-no-count","hash":"BB","seeders":0,"peers":0,"liveSeeders":0,"livePeers":0,"bytes":10}
         ]}"#;
         let rows = parse_knaben(body).expect("valid body");
-        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.len(), 3);
         assert_eq!(
             rows[0].seeders,
             Some(12),
@@ -287,6 +300,10 @@ mod tests {
         );
         // A hit with no tracker counts still shows the crawl's number.
         assert_eq!(rows[1].seeders, Some(7));
+        // knaben's 0 means "no count", not "empty swarm": unknown, so it stays out
+        // of DEAD and renders as — (the health chips treat None that way).
+        assert_eq!(rows[2].seeders, None, "knaben's 0 must become unknown");
+        assert_eq!(rows[2].peers, None);
         // …and one with no magnet gets one synthesised from the hash.
         assert!(
             rows[1]
