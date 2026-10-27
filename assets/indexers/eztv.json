@@ -1,0 +1,16 @@
+{
+  "id": "eztv-api",
+  "name": "EZTV (API)",
+  "category": "TV",
+  "url": "https://eztvx.to/api/get-torrents?limit=100&q={q}",
+  "rows": "torrents",
+  "fields": {
+    "title": "title",
+    "magnet": "magnet_url",
+    "hash": "hash",
+    "size": "size_bytes",
+    "seeders": "seeds",
+    "leechers": "peers",
+    "date": "date_released_unix"
+  }
+}

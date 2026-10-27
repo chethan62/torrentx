@@ -13,6 +13,24 @@ versions follow [SemVer](https://semver.org/).
   pointed at a dead port — apibay answered `ubuntu` in 0.55 s with 88 rows, 82 alive, 339 seeders;
   knaben returned 100 rows in 1.95 s. A native source is one id in the fan-out list (`src/sources.rs`),
   so `fetch_into` dispatches to it before any URL is built. Jackett stays a source, not a requirement.
+- **Your own indexers, as files.** A site whose search is already JSON is now one
+  small definition in `~/.config/torrentx/indexers/<id>.json` — a URL with a `{q}`
+  slot, a dotted path to the rows, and a field map — instead of a patch to the app
+  (`src/indexers.rs`). Definitions ride the same fan-out as everything else: picker
+  entry, category bucket, tracker column, dedupe, health bands, sort. `magnet` is
+  optional when the site returns only an infohash (the magnet is synthesised with
+  public trackers, as apibay's rows already were), counts and sizes may arrive as
+  numbers or numeric strings, and dates as unix seconds or strings. A definition
+  with a built-in's id replaces it; an invalid file is skipped, never guessed at.
+  `eztv-api` ships as the worked example (deliberately not `eztv`, which is a
+  Jackett indexer id — shadowing it would silently replace Jackett's).
+  Measured live with Jackett running: the picker reads `12/15`, `tpb-books` (a
+  user definition over apibay's `cat=601`) answers `ubuntu` with 93 rows all
+  badged **Books**, and `eztv-api` answers `slow horses` with 100 rows, 75 active,
+  604 seeds, all badged **TV**. GUIDE gained a "Your own indexers" section, and the
+  "Jackett only" limitation now says Jackett is optional (Prowlarr still unsupported;
+  the definition mechanism is JSON-only, so an HTML site still needs Jackett).
+
 
 ### Fixed
 - **A fresh launch reads Jackett's indexer list again.** The fetch was gated on

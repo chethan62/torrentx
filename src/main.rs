@@ -3,6 +3,7 @@
 // ─── Modules ────────────────────────────────────────────────────────
 mod app;
 mod config;
+mod indexers;
 mod jackett;
 mod player;
 mod rss;
