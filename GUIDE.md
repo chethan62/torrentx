@@ -7,6 +7,7 @@ Everything you need to run and use TorrentX effectively.
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Searching](#searching)
+- [Your own indexers](#your-own-indexers)
 - [Filters & sorting](#filters--sorting)
 - [Batch actions](#batch-actions)
 - [Favorites](#favorites)
@@ -72,6 +73,49 @@ specific indexer from the dropdown next to the search bar.
 - **Category chips** above the results filter by category (Movies, TV, …);
   click again to clear
 - Re-run the last search anytime with **Ctrl+R**
+
+## Your own indexers
+
+TorrentX searches three kinds of source: the two built-in APIs (`apibay`,
+`knaben`), any JSON indexer you add as a file, and Jackett's indexers if you run
+Jackett. The first two need no Jackett at all.
+
+A definition is one JSON file in `~/.config/torrentx/indexers/<id>.json`
+(under `$XDG_CONFIG_HOME/torrentx/indexers` when that variable is set):
+
+```json
+{
+  "id": "tpb-books",
+  "name": "TPB Books",
+  "category": "Books",
+  "url": "https://apibay.org/q.php?cat=601&q={q}",
+  "fields": {
+    "title": "name", "hash": "info_hash", "size": "size",
+    "seeders": "seeders", "leechers": "leechers", "date": "added"
+  }
+}
+```
+
+- `id` — letters, digits, `-` and `_`, at most 32 characters; it becomes the
+  picker entry. A file whose id matches a built-in (`apibay`, `knaben`) replaces it.
+- `url` — `{q}` is replaced with the URL-encoded query.
+- `rows` — dotted path to the array of results: `"torrents"`, `"data.movies"`,
+  `"items.0.list"`. Leave it out when the body is the array itself, or is a
+  single result.
+- `fields` — dotted paths inside one row. `title` is required. `magnet` can be
+  left out when the site returns only an infohash (a magnet is then synthesised
+  with public trackers). Counts and sizes may be numbers or numeric strings;
+  `date` may be unix seconds or a date string.
+- `category` — the bucket it fills: `Movies`, `TV`, `Music`, `PC Games`,
+  `Software`, `Anime`, `Books`, `XXX`. Without it the rows only appear under **All**.
+
+Restart TorrentX to see the file in the picker (the list is built at launch and
+when Jackett's catalogue refreshes). An unreadable or invalid file is skipped,
+never guessed at. `eztv-api` ships with the app as a worked example of the same
+format — copy it as a starting point.
+
+This covers sites whose search is already JSON. An HTML site needs Jackett's
+Cardigann definitions instead (see [Known limitations](#known-limitations)).
 
 ### Filters (apply within results, no new request)
 
@@ -259,9 +303,12 @@ Deliberate, not bugs — each line says what to do instead.
 - **RSS polls only while TorrentX runs** — there is no background daemon, so an
   enabled feed refreshes only with the window open. **Settings → At login** starts
   the app at login; closing the window stops the polling.
-- **Jackett only** — the app calls Jackett's `/api/v2.0/indexers/…` endpoints for
-  the indexer list and searches, so Prowlarr (or a bare Torznab URL) will not
-  connect. Point it at a Jackett instance.
+- **Jackett is optional, Prowlarr is not supported** — without Jackett the app
+  searches the built-in `apibay` and `knaben` APIs plus any JSON indexers you add
+  as files (`~/.config/torrentx/indexers/`). Jackett's own catalogue and its
+  indexers still come from Jackett's `/api/v2.0/indexers/…` endpoints, so Prowlarr
+  (or a bare Torznab URL) will not connect. The definition mechanism is JSON-only:
+  an HTML site needs Jackett.
 - **No deeper paging exists** — a search asks each indexer once and Jackett returns
   what it has (≤100 per indexer, newest first). Jackett ignores `Limit`/`Offset` on
   its results API (measured: identical rows with and without them) and its Torznab

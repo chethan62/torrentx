@@ -22,7 +22,15 @@ pub(crate) fn is_native(id: &str) -> bool {
 /// Native ids as owned strings — the seed value for `App::net.indexers`, so the
 /// picker is populated (and searching works) before Jackett is ever reached.
 pub(crate) fn native_ids() -> Vec<String> {
-    NATIVE.iter().map(|s| s.to_string()).collect()
+    let mut out: Vec<String> = NATIVE.iter().map(|s| s.to_string()).collect();
+    // User-defined JSON indexers are sources in exactly the same sense: they
+    // need no Jackett, so the picker offers them before Jackett is reached.
+    for id in crate::indexers::ids() {
+        if !out.iter().any(|o| o.eq_ignore_ascii_case(&id)) {
+            out.push(id);
+        }
+    }
+    out
 }
 
 /// Native sources first, then Jackett's configured indexers (which may repeat
@@ -48,7 +56,7 @@ const TRACKERS: [&str; 6] = [
     "udp://tracker.dler.org:6969/announce",
 ];
 
-fn magnet(hash: &str, name: &str) -> String {
+pub(crate) fn magnet(hash: &str, name: &str) -> String {
     let mut m = format!("magnet:?xt=urn:btih:{hash}&dn={}", urlenc(name));
     for t in TRACKERS {
         m.push_str("&tr=");
@@ -172,7 +180,7 @@ pub(crate) fn fetch(
 }
 
 /// One message per failure mode; never the URL (a query can be private).
-fn net_err(e: reqwest::Error, timeout: u64) -> String {
+pub(crate) fn net_err(e: reqwest::Error, timeout: u64) -> String {
     if e.is_timeout() {
         format!("timed out after {timeout}s")
     } else if e.is_decode() {
@@ -461,7 +469,19 @@ mod tests {
     fn native_ids_survive_the_merge_with_jackett() {
         let jackett = vec!["1337x".to_string(), "apibay".to_string()];
         let merged = with_native(&jackett);
-        assert_eq!(merged, vec!["apibay", "knaben", "1337x"]);
+        // Exact equality would depend on which definition files exist on the
+        // machine running the test; the properties are what matter.
+        assert_eq!(&merged[..2], ["apibay", "knaben"], "built-ins lead");
+        assert_eq!(
+            merged.iter().filter(|m| *m == "apibay").count(),
+            1,
+            "a Jackett indexer repeating a built-in id is dropped"
+        );
+        assert!(merged.iter().any(|m| m == "1337x"));
+        assert!(
+            merged.iter().any(|m| m == "eztv-api"),
+            "definition-backed sources ride the same list"
+        );
         assert!(
             is_native("KNABEN"),
             "the picker id must match case-insensitively"
