@@ -57,12 +57,65 @@ fn magnet(hash: &str, name: &str) -> String {
     m
 }
 
+/// The picker's category label → apibay's numeric category. apibay takes a real
+/// category, so this is narrowed by the source itself (like a Jackett indexer).
+/// Anime has no TPB category — video only — so it stays All rather than lying.
+pub(crate) fn apibay_cat(cat: &str) -> &'static str {
+    match cat {
+        "Movies" => "200",
+        "TV" => "205",
+        "Music" => "100",
+        "PC Games" => "400",
+        "Software" => "300",
+        "Books" => "601",
+        "XXX" => "500",
+        _ => "0",
+    }
+}
+
+/// Does a row's own category belong in the picker's bucket? Used where the
+/// source has no category parameter (knaben publishes categories only in the
+/// response, and its `categories` filter takes undocumented numeric ids).
+/// The leading group is what matches: "Movies / HD" is a movie, "PC / Games" is
+/// a game but "PC / Unix" is software.
+pub(crate) fn matches_cat(cat: &str, desc: Option<&str>) -> bool {
+    let Some(desc) = desc else {
+        // No category from the source: only "All" can honestly show it.
+        return cat == "All";
+    };
+    let d = desc.to_ascii_lowercase();
+    let (group, sub) = d.split_once(" / ").unwrap_or((d.as_str(), ""));
+    match cat {
+        "All" => true,
+        "Movies" => group == "movies",
+        "TV" => group == "tv",
+        "Music" => group == "audio",
+        "Anime" => group == "anime",
+        "Books" => group == "books",
+        "XXX" => group == "xxx",
+        "PC Games" => group == "pc" && sub.starts_with("game"),
+        "Software" => group == "pc" && !sub.starts_with("game"),
+        // An unknown label filters nothing: hiding every row would look like a
+        // broken search rather than an unmapped category.
+        _ => true,
+    }
+}
+
 /// Query one native source. Blocking; the caller runs it on the fan-out thread.
-pub(crate) fn fetch(id: &str, query: &str, timeout: u64) -> Result<Vec<TorrentResult>, String> {
+pub(crate) fn fetch(
+    id: &str,
+    query: &str,
+    cat: &str,
+    timeout: u64,
+) -> Result<Vec<TorrentResult>, String> {
     let budget = Duration::from_secs(timeout.min(30));
     match id {
         "apibay" => {
-            let url = format!("https://apibay.org/q.php?q={}&cat=0", urlenc(query));
+            let url = format!(
+                "https://apibay.org/q.php?q={}&cat={}",
+                urlenc(query),
+                apibay_cat(cat)
+            );
             let body = shared_client()
                 .get(&url)
                 .timeout(budget)
@@ -102,7 +155,13 @@ pub(crate) fn fetch(id: &str, query: &str, timeout: u64) -> Result<Vec<TorrentRe
                     r.text()
                         .map_err(|e| format!("knaben: {}", net_err(e, timeout)))
                 })?;
-            parse_knaben(&body)
+            let rows = parse_knaben(&body)?;
+            // knaben publishes each hit's category but its request filter wants
+            // numeric ids it never documents, so the bucket is applied here.
+            Ok(rows
+                .into_iter()
+                .filter(|r| matches_cat(cat, r.category_desc.as_deref()))
+                .collect())
         }
         other => Err(format!("unknown source {other}")),
     }
@@ -312,6 +371,43 @@ mod tests {
                 .unwrap_or("")
                 .starts_with("magnet:?xt=urn:btih:AA")
         );
+    }
+
+    #[test]
+    fn the_category_picker_narrows_a_native_source() {
+        // apibay takes a real category, so the request itself is narrowed.
+        assert_eq!(apibay_cat("All"), "0");
+        assert_eq!(apibay_cat("Movies"), "200");
+        assert_eq!(apibay_cat("TV"), "205");
+        assert_eq!(apibay_cat("Music"), "100");
+        assert_eq!(apibay_cat("PC Games"), "400");
+        assert_eq!(apibay_cat("Software"), "300");
+        assert_eq!(apibay_cat("Books"), "601");
+        assert_eq!(apibay_cat("XXX"), "500");
+        // TPB has no anime category; All beats claiming a bucket it cannot fill.
+        assert_eq!(apibay_cat("Anime"), "0");
+
+        // knaben reports its own category per hit, so the bucket is applied to
+        // the parsed rows. The leading group decides, not the sub-category.
+        assert!(matches_cat("Movies", Some("Movies / HD")));
+        assert!(matches_cat("Movies", Some("Movies / Other")));
+        assert!(!matches_cat("Movies", Some("TV / HD")));
+        assert!(matches_cat("TV", Some("TV")));
+        assert!(matches_cat("Music", Some("Audio / MP3")));
+        assert!(matches_cat("Anime", Some("Anime / Subbed")));
+        assert!(matches_cat("Books", Some("Books / EBooks")));
+        assert!(matches_cat("XXX", Some("XXX / Video")));
+        // "PC / Games" is a game; "PC / Unix" is software — one group, two buckets.
+        assert!(matches_cat("PC Games", Some("PC / Games")));
+        assert!(!matches_cat("Software", Some("PC / Games")));
+        assert!(matches_cat("Software", Some("PC / Unix")));
+        assert!(matches_cat("Software", Some("PC")));
+        // Everything is in All; an uncategorised row is only in All.
+        assert!(matches_cat("All", Some("Other / Misc")));
+        assert!(matches_cat("All", None));
+        assert!(!matches_cat("Movies", None));
+        // An unmapped label must not empty the table.
+        assert!(matches_cat("Nonsense", Some("Movies")));
     }
 
     #[test]

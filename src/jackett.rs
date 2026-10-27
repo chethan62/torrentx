@@ -986,7 +986,7 @@ fn fetch_into(
     // A native source (apibay, knaben) has no Jackett behind it: same fan-out,
     // same append/dedupe/wake path, just a different endpoint.
     if crate::sources::is_native(idx) {
-        let rows = crate::sources::fetch(idx, &ctx.query, ctx.timeout)?;
+        let rows = crate::sources::fetch(idx, &ctx.query, &ctx.cat, ctx.timeout)?;
         let n = rows.len();
         append_results(results, count, rows, ctx.dedupe);
         crate::wake_ui();
