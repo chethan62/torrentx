@@ -30,6 +30,18 @@ versions follow [SemVer](https://semver.org/).
   604 seeds, all badged **TV**. GUIDE gained a "Your own indexers" section, and the
   "Jackett only" limitation now says Jackett is optional (Prowlarr still unsupported;
   the definition mechanism is JSON-only, so an HTML site still needs Jackett).
+- **Definitions can POST — knaben is now expressible as a file.** `method: "POST"`
+  plus a `body` template (and an optional `content_type`, `application/json` by
+  default) covers every JSON API that wants a body instead of a query string.
+  `{q}` is **JSON-escaped** in a body rather than URL-encoded, so a query
+  containing a quote cannot close the string and earn a 422 — the test asserts the
+  produced body parses as JSON, not that it looks right. `category_field` reads the
+  category from each row (dotted path) instead of pinning one bucket, so a meta
+  search that returns films and books in one answer filters like the built-in
+  `knaben` does. Measured live: a `knaben-api` POST definition (id kept distinct
+  from the built-in) answered `ubuntu` with 100 rows — PC 79 / Books 5 / Other 4 /
+  TV 4 / Audio 2 / Movies 2, the same distribution the built-in returns — and
+  Movies + `1080p` with the same 30 rows.
 
 
 ### Fixed

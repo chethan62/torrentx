@@ -68,9 +68,22 @@ pub(crate) struct Def {
     pub(crate) id: String,
     #[serde(default)]
     pub(crate) name: Option<String>,
+    /// The picker bucket, when the source is one thing ("TV", "Books", …).
     #[serde(default)]
     pub(crate) category: Option<String>,
+    /// …or a dotted path to the row's own category, for a meta search that
+    /// returns films and books in one answer. Same match as knaben's.
+    #[serde(default)]
+    pub(crate) category_field: Option<String>,
     pub(crate) url: String,
+    /// "POST" (any case) sends `body`; anything else, or nothing, is a GET.
+    #[serde(default)]
+    pub(crate) method: Option<String>,
+    /// Request body template. `{q}` is JSON-escaped here, not URL-encoded.
+    #[serde(default)]
+    pub(crate) body: Option<String>,
+    #[serde(default)]
+    pub(crate) content_type: Option<String>,
     #[serde(default)]
     pub(crate) rows: Option<String>,
     pub(crate) fields: Fields,
@@ -221,7 +234,13 @@ pub(crate) fn parse(def: &Def, body: &str) -> Vec<TorrentResult> {
             Some(TorrentResult {
                 title,
                 tracker: Some(def.label()),
-                category_desc: def.category.clone(),
+                category_desc: def
+                    .category_field
+                    .as_ref()
+                    .and_then(|p| at(row, p))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+                    .or_else(|| def.category.clone()),
                 size: as_u64(f.size.as_ref().and_then(|p| at(row, p))),
                 seeders: as_u64(f.seeders.as_ref().and_then(|p| at(row, p)))
                     .map(|v| v.min(u32::MAX as u64) as u32),
@@ -241,6 +260,43 @@ pub(crate) fn parse(def: &Def, body: &str) -> Vec<TorrentResult> {
         .collect()
 }
 
+/// `{q}` in a URL is percent-encoded; in a JSON body it must be JSON-escaped, or
+/// a title containing a quote breaks the whole request.
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// The request a definition describes: `(url, Some((body, content-type)))` for a
+/// POST, `(url, None)` for a GET.
+fn request_parts(def: &Def, query: &str) -> (String, Option<(String, String)>) {
+    let url = def.url.replace("{q}", &crate::jackett::urlenc(query));
+    let is_post = def
+        .method
+        .as_deref()
+        .is_some_and(|m| m.eq_ignore_ascii_case("post"));
+    let post = def.body.as_ref().filter(|_| is_post).map(|b| {
+        (
+            b.replace("{q}", &json_escape(query)),
+            def.content_type
+                .clone()
+                .unwrap_or_else(|| "application/json".to_string()),
+        )
+    });
+    (url, post)
+}
+
 /// One request: `{q}` is substituted, the body is parsed by the definition.
 /// Blocking; the caller runs it on the fan-out thread.
 pub(crate) fn fetch(
@@ -249,9 +305,16 @@ pub(crate) fn fetch(
     cat: &str,
     timeout: u64,
 ) -> Result<Vec<TorrentResult>, String> {
-    let url = def.url.replace("{q}", &crate::jackett::urlenc(query));
-    let body = crate::jackett::shared_client()
-        .get(&url)
+    let (url, post) = request_parts(def, query);
+    let client = crate::jackett::shared_client();
+    let req = match post {
+        Some((body, ct)) => client
+            .post(&url)
+            .header(reqwest::header::CONTENT_TYPE, ct)
+            .body(body),
+        None => client.get(&url),
+    };
+    let body = req
         .timeout(std::time::Duration::from_secs(timeout.min(30)))
         .send()
         .map_err(|e| format!("{}: {}", def.id, crate::sources::net_err(e, timeout)))
@@ -351,6 +414,78 @@ mod tests {
         d.rows = Some("data.movie".into());
         let rows = parse(&d, r#"{"data":{"movie":{"title":"solo","hash":"h3"}}}"#);
         assert_eq!(rows.len(), 1, "a single object is one row");
+    }
+
+    #[test]
+    fn a_post_definition_json_escapes_the_query() {
+        // The old failure mode: a quote in the query closed the JSON string and
+        // the API rejected the whole body with a 422.
+        let mut d = eztv();
+        d.method = Some("post".into());
+        d.body = Some(r#"{"query":"{q}","size":100}"#.into());
+        d.url = "https://api.example/v1".into();
+        let (url, post) = request_parts(&d, "say \"hi\" \\ now");
+        assert_eq!(
+            url, "https://api.example/v1",
+            "no {{q}} in the url, so it is untouched"
+        );
+        let (body, ct) = post.expect("a POST body was described");
+        assert_eq!(ct, "application/json", "default content type");
+        assert_eq!(body, r#"{"query":"say \"hi\" \\ now","size":100}"#);
+        // …and it really is valid JSON, not just plausible text.
+        let parsed: serde_json::Value = serde_json::from_str(&body).expect("escaped body is json");
+        assert_eq!(parsed["query"], "say \"hi\" \\ now");
+
+        // A newline and a control character are escaped too.
+        assert_eq!(json_escape("a\nb\u{1}"), "a\\nb\\u0001");
+    }
+
+    #[test]
+    fn only_a_post_definition_with_a_body_sends_one() {
+        let mut d = eztv();
+        assert!(request_parts(&d, "x").1.is_none(), "GET by default");
+        d.method = Some("POST".into());
+        assert!(
+            request_parts(&d, "x").1.is_none(),
+            "a method without a body template stays a GET"
+        );
+        d.body = Some("q={q}".into());
+        d.content_type = Some("application/x-www-form-urlencoded".into());
+        let (_, post) = request_parts(&d, "a b");
+        assert_eq!(
+            post.expect("body").1,
+            "application/x-www-form-urlencoded",
+            "a content type can be set"
+        );
+    }
+
+    #[test]
+    fn a_row_can_name_its_own_category() {
+        // knaben answers films, books and software in one list; a fixed bucket
+        // would be a lie, so the row's own category wins.
+        let mut d = eztv();
+        d.category = None;
+        d.category_field = Some("category".into());
+        let body = r#"{"torrents":[
+          {"title":"a film","hash":"h1","category":"Movies / HD"},
+          {"title":"a book","hash":"h2","category":"Books / EBooks"}
+        ]}"#;
+        let rows = parse(&d, body);
+        assert_eq!(rows[0].category_desc.as_deref(), Some("Movies / HD"));
+        assert_eq!(rows[1].category_desc.as_deref(), Some("Books / EBooks"));
+        // …and the picker's bucket then filters on it, exactly as knaben's does.
+        assert!(crate::sources::matches_cat(
+            "Movies",
+            rows[0].category_desc.as_deref()
+        ));
+        assert!(!crate::sources::matches_cat(
+            "Movies",
+            rows[1].category_desc.as_deref()
+        ));
+        // A row without the field falls back to the fixed bucket, if any.
+        d.category = Some("Other".into());
+        let rows = parse(&d, r#"{"torrents":[{"title":"bare","hash":"h3"}]}"#);
+        assert_eq!(rows[0].category_desc.as_deref(), Some("Other"));
     }
 
     #[test]
