@@ -44,6 +44,15 @@ versions follow [SemVer](https://semver.org/).
   TV **57** with dedupe off — every row badged TV — and **55** with it on, because dedupe
   collapses the two releases that page lists twice. Both numbers come from the same 43/57 split.
 
+### Security
+- **tokio 1.53.1 → 1.54.1 (RUSTSEC-2026-0386).** `cargo audit` flagged the pinned
+  tokio as **unsound**: `AsyncFd::new` and related constructors violate I/O safety
+  (`memory-corruption` / `use-after-free` categories, patched in `>= 1.53.3`). It came in
+  transitively through `reqwest → hyper → h2`, so the bump is lockfile-only; no API the app
+  uses changed. `cargo audit` drops from 5 warnings to 4 — and those four are the
+  already-documented unmaintained crates (ttf-parser via egui, zbus_names / zvariant /
+  zvariant_derive via accesskit) that deny.toml deliberately ignores.
+
 ### Changed
 - **A missing seeder count reads "—", not `0`.** Indexers that publish no swarm data at all
   (btdig and other DHT indexes) used to arrive with `seeders: None`, which the table rendered as
