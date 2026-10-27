@@ -29,9 +29,10 @@ versions follow [SemVer](https://semver.org/).
 - **The Category picker now narrows the native sources.** It only ever reached Jackett's
   request (`Category[]=`), so with `apibay` or `knaben` selected the picker changed nothing —
   a "Movies" search still listed books and software. Each source now narrows the way it can:
-  `apibay` maps the label onto its own numeric category (`Movies`→200, `TV`→205, `Music`→100,
-  `PC Games`→400, `Software`→300, `Books`→601, `XXX`→500, `Anime`→All because TPB has no
-  anime category), while `knaben` publishes each hit's own category and filters the parsed
+  `apibay` maps the label onto its own numeric category (`Movies` and `TV` both request `200`, the
+  whole video group — `205` alone is TV shows only and drops HD TV shows; `Music`→100, `PC Games`→400,
+  `Software`→300, `Books`→601, `XXX`→500, `Anime`→All because TPB has no anime category), while
+  `knaben` publishes each hit's own category and filters the parsed
   rows on its leading group ("Movies / HD" → Movies, "PC / Games" → PC Games but "PC / Unix"
   → Software); its `categories` request field takes undocumented numeric ids, so it is not
   guessed at. Measured live on knaben: `ubuntu` → Software 79 rows, PC Games 1; `1080p` →
@@ -40,7 +41,8 @@ versions follow [SemVer](https://semver.org/).
 
   All three sources verified side by side on one build with Jackett live (`10/13` enabled),
   Movies + `1080p`: apibay **43**, knaben **30**, thepiratebay through Jackett **43**; apibay
-  TV **55** (of the same page's 43 movies / 57 TV split, dedupe on) with every row badged TV.
+  TV **57** with dedupe off — every row badged TV — and **55** with it on, because dedupe
+  collapses the two releases that page lists twice. Both numbers come from the same 43/57 split.
 
 ### Changed
 - **A missing seeder count reads "—", not `0`.** Indexers that publish no swarm data at all
