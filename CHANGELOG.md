@@ -15,6 +15,17 @@ versions follow [SemVer](https://semver.org/).
   so `fetch_into` dispatches to it before any URL is built. Jackett stays a source, not a requirement.
 
 ### Fixed
+- **A fresh launch reads Jackett's indexer list again.** The fetch was gated on
+  `net.indexers.is_empty()`, and seeding that list with the native sources made the
+  condition permanently false — so with Jackett healthy and running, the picker showed
+  `Indexers 2/2` and no Jackett indexer was searchable until "Refresh list" was clicked.
+  The gate now asks about `net.catalogue`, which only the Jackett fetch fills.
+- **apibay rows carry their category, and "Movies" no longer means all video.** TPB's numeric
+  category was dropped at parse time, so apibay rows had a blank category and a "Movies" search
+  (request `cat=200`, which is every video subcategory) listed TV episodes. The number is now
+  mapped to the same label shape knaben uses (`205`/`208` → TV, the rest of `2xx` → Movies) and
+  `matches_cat` filters on it. Both video buckets request the group rather than a leaf id: asking
+  for `205` alone emptied a "TV" + `1080p` search while 57 of the 100 video hits were HD TV shows.
 - **The Category picker now narrows the native sources.** It only ever reached Jackett's
   request (`Category[]=`), so with `apibay` or `knaben` selected the picker changed nothing —
   a "Movies" search still listed books and software. Each source now narrows the way it can:
@@ -26,6 +37,10 @@ versions follow [SemVer](https://semver.org/).
   guessed at. Measured live on knaben: `ubuntu` → Software 79 rows, PC Games 1; `1080p` →
   Movies 30 — each equal to that category's share of the same query's 100 hits. On apibay:
   `ubuntu` → Music 7, the same 7 the API returns for `cat=100`.
+
+  All three sources verified side by side on one build with Jackett live (`10/13` enabled),
+  Movies + `1080p`: apibay **43**, knaben **30**, thepiratebay through Jackett **43**; apibay
+  TV **55** (of the same page's 43 movies / 57 TV split, dedupe on) with every row badged TV.
 
 ### Changed
 - **A missing seeder count reads "—", not `0`.** Indexers that publish no swarm data at all
