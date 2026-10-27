@@ -57,13 +57,14 @@ fn magnet(hash: &str, name: &str) -> String {
     m
 }
 
-/// The picker's category label → apibay's numeric category. apibay takes a real
-/// category, so this is narrowed by the source itself (like a Jackett indexer).
+/// The picker's category label → the apibay category to *request*. This is the
+/// coarse group, never a leaf id: apibay's `205` is TV shows only, so asking for
+/// it made "TV" + `1080p` return nothing while 57 of the video hits were HD TV
+/// shows (`208`). The group is fetched and `matches_cat` does the split.
 /// Anime has no TPB category — video only — so it stays All rather than lying.
 pub(crate) fn apibay_cat(cat: &str) -> &'static str {
     match cat {
-        "Movies" => "200",
-        "TV" => "205",
+        "Movies" | "TV" => "200",
         "Music" => "100",
         "PC Games" => "400",
         "Software" => "300",
@@ -129,7 +130,10 @@ pub(crate) fn fetch(
                     r.text()
                         .map_err(|e| format!("apibay: {}", net_err(e, timeout)))
                 })?;
-            Ok(parse_apibay(&body))
+            Ok(parse_apibay(&body)
+                .into_iter()
+                .filter(|r| matches_cat(cat, r.category_desc.as_deref()))
+                .collect())
         }
         "knaben" => {
             let url = "https://api.knaben.org/v1";
@@ -181,8 +185,27 @@ fn net_err(e: reqwest::Error, timeout: u64) -> String {
 // ─── apibay ────────────────────────────────────────────────────────────────
 // Everything arrives as strings, and "no results" is a single row with id "0".
 
+/// TPB's numeric category → the same label shape knaben uses, so one filter
+/// (`matches_cat`) serves both sources. Group 200 is *all* video, so the sub-id
+/// is what separates a film from an episode — without this, "Movies" on apibay
+/// listed TV shows.
+fn apibay_label(cat: &str) -> &'static str {
+    match cat.parse::<u32>().ok() {
+        Some(205) | Some(208) => "TV",
+        Some(200..=299) => "Movies",
+        Some(100..=199) => "Audio",
+        Some(400..=499) => "PC / Games",
+        Some(300..=399) => "PC",
+        Some(500..=599) => "XXX",
+        Some(600..=699) => "Books",
+        _ => "Other",
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct ApibayRow {
+    #[serde(default)]
+    category: String,
     #[serde(default)]
     id: String,
     #[serde(default)]
@@ -208,6 +231,7 @@ pub(crate) fn parse_apibay(body: &str) -> Vec<TorrentResult> {
         .map(|r| TorrentResult {
             title: r.name.clone(),
             tracker: Some("The Pirate Bay".into()),
+            category_desc: Some(apibay_label(&r.category).to_string()),
             size: r.size.parse::<u64>().ok(),
             seeders: r.seeders.parse::<u32>().ok(),
             peers: r.leechers.parse::<u32>().ok(),
@@ -315,7 +339,7 @@ mod tests {
         // a torrent was a classic bug in clients that trusted the array length.
         let body = r#"[
           {"id":"59191690","name":"Ubuntu 22.04 LTS","info_hash":"2C6B6858D61DA9543D4231A71DB4B1C9264B0685",
-           "leechers":"5","seeders":"37","size":"3654957056","num_files":"1","username":"rjaa","added":"1652877231","status":"vip"},
+           "leechers":"5","seeders":"37","size":"3654957056","num_files":"1","username":"rjaa","added":"1652877231","status":"vip","category":"303"},
           {"id":"0","name":"No results returned","info_hash":"0000000000000000000000000000000000000000",
            "leechers":"0","seeders":"0","size":"0","added":"0"}
         ]"#;
@@ -331,6 +355,9 @@ mod tests {
         assert!(m.starts_with("magnet:?xt=urn:btih:2C6B6858"), "{m}");
         assert!(m.contains("&tr=udp%3A%2F%2F"), "magnet needs trackers: {m}");
         assert!(r.publish_date.is_some(), "unix `added` must become a date");
+        // TPB's numeric category becomes a label, so the table and the picker can
+        // read it (it used to be dropped and the column stayed blank).
+        assert_eq!(r.category_desc.as_deref(), Some("PC"));
     }
 
     #[test]
@@ -378,7 +405,9 @@ mod tests {
         // apibay takes a real category, so the request itself is narrowed.
         assert_eq!(apibay_cat("All"), "0");
         assert_eq!(apibay_cat("Movies"), "200");
-        assert_eq!(apibay_cat("TV"), "205");
+        // Both video buckets request the group; `205` alone is TV shows only and
+        // left HD TV shows (208) out of a "TV" search entirely.
+        assert_eq!(apibay_cat("TV"), "200");
         assert_eq!(apibay_cat("Music"), "100");
         assert_eq!(apibay_cat("PC Games"), "400");
         assert_eq!(apibay_cat("Software"), "300");
@@ -386,6 +415,24 @@ mod tests {
         assert_eq!(apibay_cat("XXX"), "500");
         // TPB has no anime category; All beats claiming a bucket it cannot fill.
         assert_eq!(apibay_cat("Anime"), "0");
+
+        // apibay's numeric category becomes the same label shape knaben uses —
+        // group 200 is all video, so 205/208 must not land in Movies.
+        assert_eq!(apibay_label("201"), "Movies");
+        assert_eq!(apibay_label("207"), "Movies");
+        assert_eq!(apibay_label("205"), "TV");
+        assert_eq!(apibay_label("208"), "TV");
+        assert_eq!(apibay_label("101"), "Audio");
+        assert_eq!(apibay_label("303"), "PC");
+        assert_eq!(apibay_label("401"), "PC / Games");
+        assert_eq!(apibay_label("501"), "XXX");
+        assert_eq!(apibay_label("601"), "Books");
+        assert_eq!(apibay_label("999"), "Other");
+        assert_eq!(apibay_label(""), "Other");
+        // …so the request-narrowed video group is split correctly by the filter.
+        assert!(matches_cat("Movies", Some(apibay_label("207"))));
+        assert!(!matches_cat("Movies", Some(apibay_label("205"))));
+        assert!(matches_cat("TV", Some(apibay_label("208"))));
 
         // knaben reports its own category per hit, so the bucket is applied to
         // the parsed rows. The leading group decides, not the sub-category.

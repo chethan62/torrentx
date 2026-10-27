@@ -136,7 +136,11 @@ impl eframe::App for App {
             .net
             .indexers_retry_at
             .is_none_or(|t| Instant::now() >= t);
-        if self.net.indexers.is_empty()
+        // `catalogue`, not `indexers`: the list is seeded with the native sources
+        // (apibay, knaben) before Jackett is ever reached, so "indexers is empty"
+        // stopped being a question about Jackett and the catalogue was never
+        // fetched at startup — the picker showed 2/2 until "Refresh list".
+        if self.net.catalogue.is_empty()
             && !self.net.indexers_loading
             && !self.cfg.api_key.is_empty()
             && (!tried || retry_due)
