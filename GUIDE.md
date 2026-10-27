@@ -99,6 +99,10 @@ A definition is one JSON file in `~/.config/torrentx/indexers/<id>.json`
 - `id` — letters, digits, `-` and `_`, at most 32 characters; it becomes the
   picker entry. A file whose id matches a built-in (`apibay`, `knaben`) replaces it.
 - `url` — `{q}` is replaced with the URL-encoded query.
+- `method` + `body` — for an API that wants a POST (knaben, most JSON APIs):
+  `"method": "POST"` and a `body` template. `{q}` is **JSON-escaped** inside the
+  body, not URL-encoded, so a title containing a quote cannot break the request.
+  `content_type` defaults to `application/json`. Without `body`, a definition is a GET.
 - `rows` — dotted path to the array of results: `"torrents"`, `"data.movies"`,
   `"items.0.list"`. Leave it out when the body is the array itself, or is a
   single result.
@@ -108,6 +112,24 @@ A definition is one JSON file in `~/.config/torrentx/indexers/<id>.json`
   `date` may be unix seconds or a date string.
 - `category` — the bucket it fills: `Movies`, `TV`, `Music`, `PC Games`,
   `Software`, `Anime`, `Books`, `XXX`. Without it the rows only appear under **All**.
+- `category_field` — instead of one fixed bucket, a dotted path to the row's own
+  category (`"category"`), for a meta search that returns films, books and
+  software in one answer. It uses the same matching as the built-in `knaben`, so
+  "Movies / HD" lands in Movies and "PC / Unix" in Software.
+
+A POST definition for knaben — the same source the app ships natively, written as
+a file, as the worked example of the format:
+
+```json
+{
+  "id": "knaben-api", "name": "Knaben (definition)", "category_field": "category",
+  "url": "https://api.knaben.org/v1", "method": "POST",
+  "body": "{\"query\":\"{q}\",\"searchType\":\"100%\",\"orderBy\":\"seeders\",\"orderDirection\":\"desc\",\"from\":0,\"size\":100,\"hideUnsafe\":false}",
+  "rows": "hits",
+  "fields": { "title": "title", "magnet": "magnetUrl", "hash": "hash", "size": "bytes",
+              "seeders": "seeders", "leechers": "peers", "date": "date" }
+}
+```
 
 Restart TorrentX to see the file in the picker (the list is built at launch and
 when Jackett's catalogue refreshes). An unreadable or invalid file is skipped,
