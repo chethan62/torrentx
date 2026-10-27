@@ -14,6 +14,19 @@ versions follow [SemVer](https://semver.org/).
   knaben returned 100 rows in 1.95 s. A native source is one id in the fan-out list (`src/sources.rs`),
   so `fetch_into` dispatches to it before any URL is built. Jackett stays a source, not a requirement.
 
+### Fixed
+- **The Category picker now narrows the native sources.** It only ever reached Jackett's
+  request (`Category[]=`), so with `apibay` or `knaben` selected the picker changed nothing —
+  a "Movies" search still listed books and software. Each source now narrows the way it can:
+  `apibay` maps the label onto its own numeric category (`Movies`→200, `TV`→205, `Music`→100,
+  `PC Games`→400, `Software`→300, `Books`→601, `XXX`→500, `Anime`→All because TPB has no
+  anime category), while `knaben` publishes each hit's own category and filters the parsed
+  rows on its leading group ("Movies / HD" → Movies, "PC / Games" → PC Games but "PC / Unix"
+  → Software); its `categories` request field takes undocumented numeric ids, so it is not
+  guessed at. Measured live on knaben: `ubuntu` → Software 79 rows, PC Games 1; `1080p` →
+  Movies 30 — each equal to that category's share of the same query's 100 hits. On apibay:
+  `ubuntu` → Music 7, the same 7 the API returns for `cat=100`.
+
 ### Changed
 - **A missing seeder count reads "—", not `0`.** Indexers that publish no swarm data at all
   (btdig and other DHT indexes) used to arrive with `seeders: None`, which the table rendered as
