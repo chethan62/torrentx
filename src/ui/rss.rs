@@ -63,14 +63,20 @@ impl App {
             },
         };
         let room = ui.available_width();
-        egui::Panel::right("rss_detail_pnl")
-            .resizable(true)
-            .default_size(if narrow(room) {
-                (room - 44.0).max(240.0)
-            } else {
-                300.0
-            })
-            .size_range(240.0..=640.0)
+        // Phone: full width minus a 44 px sliver; `exact_size` because a side
+        // panel reopens at the width it was last dragged to.
+        let mut panel = egui::Panel::right("rss_detail_pnl");
+        panel = if narrow(room) {
+            panel
+                .resizable(false)
+                .default_size((room - 44.0).max(240.0))
+        } else {
+            panel
+                .resizable(true)
+                .default_size(300.0)
+                .size_range(240.0..=640.0)
+        };
+        panel
             .frame(
                 egui::Frame::NONE
                     .fill(self.pal.surface)

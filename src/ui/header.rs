@@ -81,10 +81,15 @@ impl App {
             ui.add_space(SP4);
             self.header_settings(ui);
         });
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = 2.0;
-            ui.add_space(SP2);
-            self.header_tabs(ui);
+        // Tighter pill padding: at the wide spacing the fourth tab (About)
+        // wrapped onto a line of its own, costing 30 px of the header.
+        ui.scope(|ui| {
+            ui.spacing_mut().button_padding = Vec2::new(SP2, SP1);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.add_space(SP2);
+                self.header_tabs(ui);
+            });
         });
         ui.add_space(SP1);
     }

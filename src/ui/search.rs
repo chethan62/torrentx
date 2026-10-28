@@ -14,6 +14,10 @@ const ROW1_H: f32 = 36.0;
 const ROW2_H: f32 = 28.0;
 /// Both combos in row 2 share this width, so the labels line up in a grid.
 const COMBO_W: f32 = 120.0;
+/// Phone: both pickers share one row, so each box gives up 20 px. 96 still
+/// fits the longest common label in this list ("The Pirate Bay" is clipped by
+/// the combo's own ellipsis, and the tooltip keeps it readable).
+const COMBO_W_NARROW: f32 = 96.0;
 
 impl App {
     pub(crate) fn draw_search(
@@ -177,29 +181,29 @@ impl App {
         // around each add_space, so the same token rendered as 8 px in one
         // place and 16 px in another.
         if narrow(ui.available_width()) {
-            // Phone width: one control per row. Sharing a wrapped row put the
-            // indexer picker and the chip off the right edge (measured at
-            // 360 px, where the row needs ~470 px).
-            for part in 0..3 {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.spacing_mut().interact_size.y = ROW2_H;
-                    ui.add_space(SP4);
-                    match part {
-                        0 => self.cat_picker(ui, fs),
-                        1 => self.idx_picker(ui, fs),
-                        _ => self.indexers_chip(ui, fs),
-                    }
-                });
-            }
+            // Phone width: the two pickers share a row at 96 px each (they
+            // need ~470 px together at full width, which is how the indexer
+            // picker ended up off-screen), and the indexer chip gets the row
+            // below on its own.
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.spacing_mut().interact_size.y = ROW2_H;
+                ui.add_space(SP4);
+                self.cat_picker(ui, fs, COMBO_W_NARROW);
+                ui.add_space(SP3);
+                self.idx_picker(ui, fs, COMBO_W_NARROW);
+            });
+            // The indexer chip shares the Filters row on a phone (it is
+            // drawn by `draw_filter_bar` there): its own row cost 50 px of a
+            // 520 px screen, which is where the results table went.
         } else {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 ui.spacing_mut().interact_size.y = ROW2_H;
                 ui.add_space(SP4);
-                self.cat_picker(ui, fs);
+                self.cat_picker(ui, fs, COMBO_W);
                 ui.add_space(SP4);
-                self.idx_picker(ui, fs);
+                self.idx_picker(ui, fs, COMBO_W);
                 ui.add_space(SP4);
                 self.indexers_chip(ui, fs);
             });
@@ -207,7 +211,7 @@ impl App {
     }
 
     /// Category picker, label and box as one atom.
-    fn cat_picker(&mut self, ui: &mut egui::Ui, fs: f32) {
+    fn cat_picker(&mut self, ui: &mut egui::Ui, fs: f32, w: f32) {
         // Label + picker are ONE atom in the wrapping row: as separate
         // items the label could wrap to the line below its own picker.
         ui.horizontal(|ui| {
@@ -215,7 +219,7 @@ impl App {
             ui.add_space(SP2);
             egui::ComboBox::from_id_salt("cat_cb")
                 .selected_text(RichText::new(&self.search.cat).font(FontId::proportional(fs)))
-                .width(COMBO_W)
+                .width(w)
                 .show_ui(ui, |ui| {
                     for &c in CATS {
                         ui.selectable_value(
@@ -229,15 +233,13 @@ impl App {
     }
 
     /// Indexer picker (from Jackett's configured indexers).
-    fn idx_picker(&mut self, ui: &mut egui::Ui, fs: f32) {
-        // Indexer picker (from Jackett's configured indexers)
-        ui.add_space(SP4);
+    fn idx_picker(&mut self, ui: &mut egui::Ui, fs: f32, w: f32) {
         ui.horizontal(|ui| {
             lbl(ui, "Indexer", self.pal.dim, 11.0);
             ui.add_space(SP2);
             egui::ComboBox::from_id_salt("idx_cb")
                 .selected_text(RichText::new(&self.net.indexer).font(FontId::proportional(fs)))
-                .width(COMBO_W)
+                .width(w)
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
                         &mut self.net.indexer,
@@ -260,7 +262,7 @@ impl App {
     /// Which indexers the "All" fan-out covers, plus the catalogue. A compact
     /// "8/9" chip opens a small window: a menu popup closes on every click,
     /// which made the checkboxes and the filter field unusable.
-    fn indexers_chip(&mut self, ui: &mut egui::Ui, fs: f32) {
+    pub(crate) fn indexers_chip(&mut self, ui: &mut egui::Ui, fs: f32) {
         // Which indexers the "All" fan-out covers, plus the catalogue. A
         // compact "8/9" chip opens a small window: a menu popup closes on
         // every click, which made the checkboxes and the filter field unusable.
@@ -606,16 +608,19 @@ impl App {
                     let seeds: u32 = sorted.iter().map(|r| r.seeders.unwrap_or(0)).sum();
                     let trackers: std::collections::HashSet<_> =
                         sorted.iter().filter_map(|r| r.tracker.as_deref()).collect();
-                    lbl(
-                        ui,
-                        &format!(
+                    // Phone: the four-field summary wrapped and left
+                    // "· 5 trackers" orphaned on its own line, so the two
+                    // fields a phone reader scans for stay on one line.
+                    let summary = if narrow(ui.available_width()) {
+                        format!("Showing {page_n} of {total}  ·  {seeds} seeds")
+                    } else {
+                        format!(
                             "Showing {page_n} of {total}  ·  {active} active  ·  \
                                       {seeds} seeds  ·  {} trackers",
                             trackers.len()
-                        ),
-                        self.pal.sub,
-                        fs - 1.0,
-                    );
+                        )
+                    };
+                    lbl(ui, &summary, self.pal.sub, fs - 1.0);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add_space(SP4);
                         if outline_btn(ui, "Export CSV", self.pal.sub) {
@@ -629,10 +634,16 @@ impl App {
                     let chips = App::cat_chips(sorted);
                     if !chips.is_empty() {
                         ui.add_space(SP2);
-                        ui.horizontal_wrapped(|ui| {
+                        // Phone: one scrollable row instead of a wrapped
+                        // block. Wrapped, the last chip ("Movies 5") ran off
+                        // the right edge and the row cost two lines of a
+                        // 520 px screen; a side-scrolling strip is the
+                        // pattern a phone expects for filter chips.
+                        let tight = narrow(ui.available_width());
+                        let draw = |ui: &mut egui::Ui, me: &mut Self| {
                             ui.add_space(SP4);
                             for (cat, count, col) in &chips {
-                                let sel = self.search.f_text == *cat;
+                                let sel = me.search.f_text == *cat;
                                 egui::Frame::NONE
                                     .fill(tint(*col, if sel { 50 } else { 20 }))
                                     .corner_radius(R_LG)
@@ -658,20 +669,30 @@ impl App {
                                                 .set_cursor_icon(egui::CursorIcon::PointingHand);
                                         }
                                         if chip_resp.clicked() {
-                                            if self.search.f_text == *cat {
-                                                self.search.f_text.clear();
+                                            if me.search.f_text == *cat {
+                                                me.search.f_text.clear();
                                             } else {
-                                                self.search.f_text = cat.clone();
+                                                me.search.f_text = cat.clone();
                                             }
                                             // Category filter changed the result set: drop batch selections.
-                                            self.ui.sel_set.clear();
-                                            self.ui.sel_mode = false;
-                                            self.search.page = 0;
+                                            me.ui.sel_set.clear();
+                                            me.ui.sel_mode = false;
+                                            me.search.page = 0;
                                         }
                                     });
                                 ui.add_space(SP1);
                             }
-                        });
+                        };
+                        if tight {
+                            egui::ScrollArea::horizontal()
+                                .id_salt("cat_chips_scroll")
+                                .max_height(34.0)
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| draw(ui, self));
+                                });
+                        } else {
+                            ui.horizontal_wrapped(|ui| draw(ui, self));
+                        }
                     }
                 }
                 ui.add_space(SP2);
@@ -790,35 +811,45 @@ impl App {
         let Some(r) = self.ui.detail_row.clone() else {
             return;
         };
-        // Frame-level right panel (reserves space — table shrinks,
-        // no overlap). Must be added BEFORE CentralPanel.
-        // Phone: the panel takes the screen minus a 44 px sliver, so the
-        // table stays visible as the way back and the panel is not a 240 px
-        // column squeezing content into 120 px.
+        // Wide: a frame-level right panel — it reserves space, so the table
+        // shrinks beside it instead of being covered.
         let room = ui.available_width();
-        let w = if narrow(room) {
-            (room - 44.0).max(240.0)
+        let frame = egui::Frame::NONE
+            .fill(self.pal.surface)
+            .stroke(Stroke::new(1.0_f32, self.pal.border))
+            .inner_margin(margin(PANEL_MARGIN_X as f32, SP3));
+        if narrow(room) {
+            // Phone: an overlay window over the content area instead of a side
+            // panel. A right panel in a 327 pt window is either a sliver (it
+            // kept a 61 pt width that ignored every size passed in) or wider
+            // than the screen; the overlay is the phone pattern anyway — the
+            // table waits behind it and the header's X closes it.
+            let rect = ui.available_rect_before_wrap();
+            egui::Window::new("detail_overlay")
+                .id(egui::Id::unique("detail_overlay"))
+                .title_bar(false)
+                .collapsible(false)
+                .resizable(false)
+                .fixed_rect(rect)
+                .frame(frame)
+                .show(ui.ctx(), |ui| self.detail_panel_body(ui, &r));
         } else {
-            self.ui.detail_width.clamp(240.0, 520.0)
-        };
-        egui::Panel::right("detail_pnl")
-            .resizable(true)
-            .default_size(w)
-            .size_range(220.0..=640.0)
-            .frame(
-                egui::Frame::NONE
-                    .fill(self.pal.surface)
-                    .stroke(Stroke::new(1.0_f32, self.pal.border))
-                    .inner_margin(margin(PANEL_MARGIN_X as f32, SP3)),
-            )
-            .show(ui, |ui| {
-                // Fade + slide in the panel content (from the right edge).
-                // detail_anim is driven in main.rs toward 0/1 on open/close.
-                let anim = self.ui.detail_anim;
-                let eased = (self.tokens.easing)(anim);
-                ui.set_opacity(eased);
-                ui.add_space((1.0 - eased) * 8.0); // slight downward settle
-                egui::ScrollArea::vertical().show(ui, |ui| self.draw_detail(ui, &r));
-            });
+            egui::Panel::right("detail_pnl")
+                .resizable(true)
+                .default_size(self.ui.detail_width.clamp(240.0, 520.0))
+                .size_range(220.0..=640.0)
+                .frame(frame)
+                .show(ui, |ui| self.detail_panel_body(ui, &r));
+        }
+    }
+
+    /// Fade + slide in, then the panel's content. Shared by the desktop side
+    /// panel and the phone overlay so the two cannot drift apart.
+    fn detail_panel_body(&mut self, ui: &mut egui::Ui, r: &crate::jackett::TorrentResult) {
+        let anim = self.ui.detail_anim;
+        let eased = (self.tokens.easing)(anim);
+        ui.set_opacity(eased);
+        ui.add_space((1.0 - eased) * 8.0); // slight downward settle
+        egui::ScrollArea::vertical().show(ui, |ui| self.draw_detail(ui, r));
     }
 }

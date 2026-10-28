@@ -222,7 +222,10 @@ impl App {
                 {
                     self.ui.filters_open = Some(!open);
                 }
-                ui.add_space(SP4);
+                ui.add_space(SP3);
+                // The "11/14 indexers" chip lives in this row on a phone.
+                self.indexers_chip(ui, fs);
+                ui.add_space(SP3);
                 self.select_group(ui, fs, view);
             });
             ui.add_space(SP2);

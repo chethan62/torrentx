@@ -70,6 +70,19 @@ versions follow [SemVer](https://semver.org/).
   Movies + `1080p` with the same 30 rows.
 
 
+### Changed
+- **The window reflows at phone width.** Below 720 px the header splits into
+  logo / controls / tabs rows, the category and indexer pickers share a row at
+  96 px each, the indexer chip joins the Filters row, the filter cells become two
+  aligned columns, and the category chips become one side-scrolling strip. The
+  filter card folds behind a `Filters` toggle there — at 360x520 the expanded card
+  plus the summary and pager left the results table zero usable rows (measured:
+  291 results, no row on screen). The detail panel becomes a full-width overlay
+  with the table behind it, Settings and the file-chooser windows are capped to
+  the screen, and the status bar drops its keyboard-shortcut hint and lists
+  failed indexers by count only. Verified at 360x520, 360x800 and 412 px wide,
+  with the wide layout unchanged at 864 and 1300 px.
+
 ### Fixed
 - **A fresh launch reads Jackett's indexer list again.** The fetch was gated on
   `net.indexers.is_empty()`, and seeding that list with the native sources made the
