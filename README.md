@@ -17,9 +17,12 @@ Native egui — no Electron, no browser, ~17 MB AppImage.
 ## Screenshots
 
 A search with the detail panel open: per-tracker rows, health bands, and the magnet/file list for the
-selected release. 19 themes ship — 16 dark, 3 light — switching instantly.
+selected release. The layout reflows under 720 pt — the table keeps Name, Seeds and Size, the detail
+panel becomes an overlay — so the same build runs on a phone.
 
-<img width="880" alt="TorrentX — results for a search with the detail panel open" src="docs/screenshots/results-detail.png">
+| Desktop — 1300 pt | Phone width — 412 pt |
+|---|---|
+| <img width="640" alt="TorrentX — results for a search with the detail panel open" src="docs/screenshots/results-detail.png"> | <img width="190" alt="TorrentX at phone width — results, filters and pagination stacked" src="docs/screenshots/phone-width.png"> |
 
 Results stream in per tracker instead of arriving all at once at the end:
 
