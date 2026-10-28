@@ -54,6 +54,12 @@ fn table_viewport_h(available: f32) -> f32 {
 /// slightly tight icon row does not.
 fn phone_action_w(avail: f32) -> f32 {
     let data = 78.0 + 62.0 + COL_MIN_W; // size + seeds + Name's floor
+    // ponytail: the 48 pt floor only engages below a ~262 pt window, and under
+    // that the four widths exceed `avail` by up to 2 pt — the table clips
+    // instead of scrolling (phone width has no horizontal bar). Unreachable
+    // today: min_inner_size is 360x520 in lib.rs and the narrowest phone is
+    // 320 pt. If a ~260 pt target ever appears, drop a column there rather than
+    // lowering this floor.
     ACTION_COL_W_PHONE.min((avail - data).max(48.0))
 }
 
