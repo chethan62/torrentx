@@ -24,6 +24,11 @@
 - **19 themes** — 16 dark + 3 light, instant switching
 - **All Jackett indexers** — search 100+ trackers simultaneously, or pick one;
   results stream in as each tracker answers instead of waiting for the slowest
+- **Two built-in sources** — `apibay` and `knaben` search without Jackett at all; Jackett is a
+  source, not a requirement
+- **Your own indexers as files** — one JSON definition in
+  `~/.config/torrentx/indexers/<id>.json` adds a JSON-API site to the same fan-out (post bodies,
+  per-row categories, `${VAR}` keys read from the environment)
 - **Multi-column results** — Name, Tracker, Size, Seeds, Leechers, Ratio, Health, Date (toggle any in Settings → Columns)
 - **Row density** — Compact / Normal / Roomy
 - **Filters** — text search, min seeds, size range, year, tracker, health status, category chips
@@ -48,7 +53,7 @@
 - **`--config <path>`** — portable config for multiple profiles/installs
 - **Update checker** — notifies when a new release is out (opt-out in Settings)
 - **Toast notifications** — animated, per-theme colored
-- **egui 0.36** — modern rendering, GPU-accelerated
+- **egui 0.37** — modern rendering, GPU-accelerated
 
 ## Download
 
@@ -90,16 +95,18 @@ Or grab the file yourself from the [releases page](https://github.com/chethan62/
 | Platform | File | Size |
 |----------|------|------|
 | Linux (AppImage) | `TorrentX-<version>-x86_64.AppImage` | ~17 MB |
-| Linux (binary) | `torrentx` | ~36 MB (stripped, thin LTO) |
+| Linux (binary) | `torrentx-v<version>-x86_64-linux.tar.gz` | ~17 MB |
+| Windows (x64) | `TorrentX-<version>-windows-x64.zip` | ~14 MB (static CRT) |
 
-Windows builds and **launches** on a real Windows runner in CI
-(`.github/workflows/windows-native.yml`) but is not published — no interactive
-pass has been done there, so releases ship Linux only.
+Each release also ships `sha256sums.txt` (Linux) and `sha256sums-windows.txt`.
+The Windows build is compiled and packaged on a Windows runner and **launches**
+there in CI (`.github/workflows/windows-native.yml`); it has not been driven by
+hand on Windows hardware, so treat the exe as tested-by-CI only.
 
 ## Build from source
 
 ```bash
-# Prerequisites: Rust 1.82+, cargo
+# Prerequisites: Rust 1.85+ (edition 2024), cargo
 cargo build --release
 # Binary: target/release/torrentx
 ```
@@ -136,8 +143,9 @@ chmod 600 ~/.config/torrentx/signing.env ~/.config/torrentx/torrentx-release.jks
 
 On the device the native sources (apibay, knaben) and definition files work; the
 player does not (it shells out to mpv/vlc/webtorrent), and the tray, desktop
-notifications and single-instance socket are desktop-only. The UI is laid out for
-a desktop window — set a smaller window/`ui_scale` for now.
+notifications and single-instance socket are desktop-only. The window reflows under
+720 px wide (header, pickers, filters and the detail panel all stack), so it is usable at
+phone width; `ui_scale` is still the knob for text size.
 
 ## Setup
 
@@ -197,7 +205,7 @@ Shortcuts don't fire while you're typing in a field.
 
 ## Tech
 
-- **GUI:** egui 0.36 + eframe (GPU-accelerated via wgpu, software-GL fallback)
+- **GUI:** egui 0.37 + eframe (GPU-accelerated via wgpu, software-GL fallback)
 - **HTTP:** reqwest (blocking)
 - **Config:** `~/.config/torrentx/config.json`
 - **Binary size:** ~36 MB stripped + thin LTO; ~17 MB packed as AppImage (measured)
