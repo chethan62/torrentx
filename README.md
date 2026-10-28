@@ -1,63 +1,87 @@
 # TorrentX
 
-**Native Rust desktop torrent search app** — query all your [Jackett](https://github.com/Jackett/Jackett) indexers from one blazing-fast GUI.
+**Torrent search for the desktop, in Rust.** One window over your Jackett indexers *or* the two
+sources built in (`apibay`, `knaben`), with results streaming in per tracker as each one answers.
+Native egui — no Electron, no browser, ~17 MB AppImage.
 
 [![Release](https://img.shields.io/github/v/release/chethan62/torrentx?label=latest)](https://github.com/chethan62/torrentx/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/chethan62/torrentx/ci.yml?branch=main&label=CI)](https://github.com/chethan62/torrentx/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chethan62/torrentx)](LICENSE)
 [![Guide](https://img.shields.io/badge/docs-user%20guide-blue)](GUIDE.md)
 
+**Contents** · [Screenshots](#screenshots) · [Why TorrentX](#why-torrentx) · [Features](#features) ·
+[Requirements](#requirements) · [Download](#download) · [Setup](#setup) · [Usage](#usage) ·
+[Build from source](#build-from-source) · [Platforms](#platforms) · [Tech](#tech) ·
+[Contributing](#contributing) · [License](#license) · [Disclaimer](#disclaimer)
+
 ## Screenshots
 
-**Dark — Tokyo Night**
+Results table with the detail panel open. 19 themes ship — 16 dark, 3 light — switching instantly.
 
-<img width="880" alt="TorrentX — dark theme (Tokyo Night)" src="docs/screenshots/dark.png">
+<img width="880" alt="TorrentX — results table with the detail panel open (Tokyo Night)" src="docs/screenshots/dark.png">
 
-**Light — Catppuccin Latte**
+<details>
+<summary>Light theme (Catppuccin Latte)</summary>
 
 <img width="880" alt="TorrentX — light theme (Catppuccin Latte)" src="docs/screenshots/light.png">
 
-*19 themes total — 16 dark + 3 light, instant switching.*
+</details>
+
+## Why TorrentX
+
+- **vs the Jackett web UI** — a real table (sort, resize, filters, favourites, batch copy) instead of
+  a page you reload per query, and each tracker's rows appear as it answers rather than at the end.
+- **vs Prowlarr** — Prowlarr feeds *other* apps; this is the search client itself.
+- **vs qBittorrent's search plugin** — its own window, keyboard-driven, and it can hand a result
+  straight to a player.
 
 ## Features
 
-- **19 themes** — 16 dark + 3 light, instant switching
-- **All Jackett indexers** — search 100+ trackers simultaneously, or pick one;
-  results stream in as each tracker answers instead of waiting for the slowest
-- **Two built-in sources** — `apibay` and `knaben` search without Jackett at all; Jackett is a
-  source, not a requirement
-- **Your own indexers as files** — one JSON definition in
-  `~/.config/torrentx/indexers/<id>.json` adds a JSON-API site to the same fan-out (post bodies,
-  per-row categories, `${VAR}` keys read from the environment)
-- **Multi-column results** — Name, Tracker, Size, Seeds, Leechers, Ratio, Health, Date (toggle any in Settings → Columns)
-- **Row density** — Compact / Normal / Roomy
-- **Filters** — text search, min seeds, size range, year, tracker, health status, category chips
-- **Sort** — by Name, Tracker, Size, Seeds, Leechers, Ratio, Date
-- **Favorites** — save torrents with timestamps, search filter, persistent storage
-- **Detail panel** — seeder/leecher ratio bar, magnet copy/open, .torrent download
-- **Direct play** — stream a result to mpv/vlc without downloading the whole torrent;
-  multi-file packs get an episode picker (filterable file list) and a Stop control
-  (needs [webtorrent-cli](https://github.com/webtorrent/webtorrent-cli): `npm install -g webtorrent-cli`;
-  its output, including the peer count, goes to `~/.cache/torrentx/webtorrent.log`)
-- **Batch actions** — select mode, select-all, copy N magnets at once
-- **Keyboard shortcuts** — ↑↓ Enter D F M P Ctrl+F Ctrl+R Esc
-- **CSV export** — export filtered results
-- **Pagination** — 25/50/100/All
-- **Deduplication** — across trackers (main search + RSS)
-- **Search history** — with per-item delete
-- **RSS feeds** — Jackett Torznab indexer feeds with auto-refresh (10 min), deduped
-- **Custom accent color** — override any theme's accent
-- **System tray** — show/hide + quit from the tray menu (on Wayland, where a
-  window cannot be restored by the app itself, the item minimizes instead)
-- **Desktop notifications** — alerted when a search completes
-- **`--config <path>`** — portable config for multiple profiles/installs
-- **Update checker** — notifies when a new release is out (opt-out in Settings)
-- **Toast notifications** — animated, per-theme colored
-- **egui 0.37** — modern rendering, GPU-accelerated
+**Search**
+
+- All Jackett indexers at once (100+ trackers), or one picked from the Indexer menu
+- Two built-in sources, `apibay` and `knaben` — Jackett is a source, not a requirement
+- Your own indexers as files: one JSON definition per site in `~/.config/torrentx/indexers/`
+- Results stream in per tracker; the status bar names any tracker that failed
+- Deduplication across trackers (search and RSS), search history with per-item delete
+
+**Results and filtering**
+
+- Multi-column table — Name, Tracker, Size, Seeds, Leechers, Ratio, Health, Date (toggle in Settings → Columns)
+- Filters: text, min seeds, max size, year, tracker, health status, category chips
+- Sort by any column, drag separators to resize, three row densities (Compact / Normal / Roomy)
+- Pagination 25/50/100/All, CSV export, batch select + copy N magnets
+
+**Playback and picking**
+
+- Detail panel: seeder/leecher ratio bar, health, magnet copy/open, `.torrent` download, file list
+- Direct play — stream to **mpv** or **vlc** through `webtorrent-cli`, with an episode picker for packs
+- Favourites with timestamps; RSS feeds (Jackett Torznab) with 10-minute auto-refresh
+
+**App and desktop**
+
+- 19 themes plus a custom accent colour
+- Keyboard-driven (see [Usage](#usage)); interface scaling for HiDPI
+- System tray, a notification when a search finishes, release-update check (opt-out)
+- `--config <path>` for a portable profile; `--minimized` to start in the tray
+
+## Requirements
+
+| Need | Why | Optional? |
+| --- | --- | --- |
+| Linux x86-64, X11 or Wayland desktop | the published build | no |
+| `curl` | the install command pipes a script into `sh` | no |
+| Write access to `~/Applications` | default install dir; `INSTALL_DIR` overrides | no |
+| [Jackett](https://github.com/Jackett/Jackett) running locally | the classic multi-indexer search. API key: Jackett's dashboard, top-right — paste it in Settings | **yes** — `apibay` and `knaben` need nothing |
+| [`webtorrent-cli`](https://github.com/webtorrent/webtorrent-cli) on `PATH` | fetches torrent metadata for the file list and streaming | yes — Direct play only |
+| `mpv` or `vlc` on `PATH` | plays the stream | yes — Direct play only |
+
+No GTK, appindicator or `xdotool` libraries are needed: the tray is published over D-Bus.
 
 ## Download
 
-One command, checksum-verified, AppImage into `~/Applications`:
+One command — resolves the latest release, verifies it against that release's `sha256sums.txt`,
+and installs the AppImage to `~/Applications`. Re-running it upgrades in place.
 
 ```bash
 curl -fsSL \
@@ -65,10 +89,10 @@ curl -fsSL \
   | sh
 ```
 
-`INSTALL_DIR=/somewhere sh scripts/install.sh` installs elsewhere; the script resolves the
-latest release, downloads its `sha256sums.txt` and refuses to install on a mismatch.
-With the piped form the variable has to sit on the **`sh`** side — `INSTALL_DIR=/opt/tx curl … | sh`
-only sets it for `curl` and installs to `~/Applications` anyway:
+<details>
+<summary>Installing elsewhere, as root, or without piping to a shell</summary>
+
+**Another directory** — the variable has to sit on the `sh` side of the pipe, or only `curl` sees it:
 
 ```bash
 curl -fsSL \
@@ -76,8 +100,9 @@ curl -fsSL \
   | INSTALL_DIR=/opt/tx sh
 ```
 
-For a system-wide copy run it as root and keep `INSTALL_DIR` on the command side of `sudo`,
-otherwise `sudo`'s `HOME=/root` sends the file to `/root/Applications`:
+**System-wide** — the same, under `sudo`. `INSTALL_DIR` must be set, because `sudo` resets `HOME` to
+`/root` and the file would land in `/root/Applications`. Running as root *without* `INSTALL_DIR`
+prints a warning naming that path, then installs there anyway.
 
 ```bash
 curl -fsSL \
@@ -85,12 +110,15 @@ curl -fsSL \
   | sudo INSTALL_DIR=/opt/tx sh
 ```
 
-Run as root with `INSTALL_DIR` unset and the installer says so on stderr before it downloads —
-naming `/root/Applications` as the destination — then installs there anyway. It warns rather than
-refuses, because a root install to `/opt` is a legitimate thing to want; the silent part is what it
-refuses to be.
+**By hand, no installer** — take the archive and `sha256sums.txt` from the
+[releases page](https://github.com/chethan62/torrentx/releases/latest), then check before running:
 
-Or grab the file yourself from the [releases page](https://github.com/chethan62/torrentx/releases/latest):
+```bash
+sha256sum -c sha256sums.txt --ignore-missing
+chmod +x TorrentX-*-x86_64.AppImage
+```
+
+</details>
 
 | Platform | File | Size |
 |----------|------|------|
@@ -98,82 +126,30 @@ Or grab the file yourself from the [releases page](https://github.com/chethan62/
 | Linux (binary) | `torrentx-v<version>-x86_64-linux.tar.gz` | ~17 MB |
 | Windows (x64) | `TorrentX-<version>-windows-x64.zip` | ~14 MB (static CRT) |
 
-Each release also ships `sha256sums.txt` (Linux) and `sha256sums-windows.txt`.
-The Windows build is compiled and packaged on a Windows runner and **launches**
-there in CI (`.github/workflows/windows-native.yml`); it has not been driven by
-hand on Windows hardware, so treat the exe as tested-by-CI only.
+Windows builds are compiled, packaged and **launched** on a Windows runner in CI
+(`.github/workflows/windows-native.yml`), but have not been driven by hand on Windows hardware —
+treat the exe as tested-by-CI only. No macOS build exists.
 
-## Build from source
-
-```bash
-# Prerequisites: Rust 1.85+ (edition 2024), cargo
-cargo build --release
-# Binary: target/release/torrentx
-```
-
-### Android (APK)
-
-The same code builds as an `.so` that Android's `NativeActivity` loads:
-
-```bash
-# Prerequisites: Android SDK + NDK r27, `cargo install cargo-apk`
-export ANDROID_HOME=$HOME/Android/Sdk ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.0.12077973
-rustup target add aarch64-linux-android
-cargo apk build --lib          # -> target/debug/apk/torrentx.apk (~85 MB, debug-signed)
-```
-
-`--lib` is required: the package has both a `cdylib` (what Android loads) and the
-desktop `bin`, and cargo-apk refuses a package that mixes the two.
-
-A **release** APK needs a signing key. It is read from the environment, never from
-this repo (`cargo-apk` checks these before `Cargo.toml`):
-
-```bash
-# one-time; back the keystore up — losing it means no in-place updates
-keytool -genkeypair -keystore ~/.config/torrentx/torrentx-release.jks \
-  -storetype PKCS12 -alias torrentx -keyalg RSA -keysize 4096 -validity 10000 \
-  -dname "CN=TorrentX, O=chethan62, C=IN"
-printf 'export CARGO_APK_RELEASE_KEYSTORE=%s\nexport CARGO_APK_RELEASE_KEYSTORE_PASSWORD=%s\n' \
-  ~/.config/torrentx/torrentx-release.jks <password> > ~/.config/torrentx/signing.env
-chmod 600 ~/.config/torrentx/signing.env ~/.config/torrentx/torrentx-release.jks
-
-./scripts/build-apk.sh          # sources signing.env; 13 MB signed release APK
-./scripts/build-apk.sh debug    # debug-signed, ~85 MB
-```
-
-On the device the native sources (apibay, knaben) and definition files work; the
-player does not (it shells out to mpv/vlc/webtorrent), and the tray, desktop
-notifications and single-instance socket are desktop-only. The window reflows under
-720 px wide (header, pickers, filters and the detail panel all stack), so it is usable at
-phone width; `ui_scale` is still the knob for text size.
+> **On `curl | sh`:** the checksum comes from the same release as the binary, so it catches a
+> corrupted download, not a compromised release. If that matters to you, use the manual path above,
+> or build from source.
 
 ## Setup
 
-**Preconditions:** Linux x86-64 with a desktop session (X11 or Wayland), `curl`, and write access to
-`~/Applications` — or pass your own `INSTALL_DIR`. Jackett is optional: the built-in `apibay` and
-`knaben` sources search without it.
-
-1. **Install it** — one command: resolves the latest release, verifies it against the release's
-   `sha256sums.txt`, and drops the AppImage in `~/Applications`. Re-running it upgrades in place.
-
-   ```bash
-   curl -fsSL \
-     https://github.com/chethan62/torrentx/raw/main/scripts/install.sh \
-     | sh
-   ```
-
-   Elsewhere: `… | INSTALL_DIR=/opt/tx sh` — the variable has to sit on the **`sh`** side of the pipe.
-2. **Launch it**:
+1. **Install** — the one command in [Download](#download).
+2. **Run it.**
 
    ```bash
    ~/Applications/TorrentX.AppImage
    ```
-3. Click ⚙ **Settings**
-4. Enter your Jackett URL (default: `http://localhost:9117`) and API Key
-5. Start searching
 
-📖 **Full documentation**: [GUIDE.md](GUIDE.md) — installation, filters,
-RSS, settings reference, config file, troubleshooting, and privacy notes.
+3. **Search.** Type a query, press `Enter`. The built-in sources work with no configuration.
+
+4. **Add Jackett (optional).** ⚙ **Settings** → Jackett URL (default `http://localhost:9117`) and API
+   Key → save. Its indexers join the same fan-out; the Indexers chip shows how many are enabled.
+
+📖 **Full documentation**: [GUIDE.md](GUIDE.md) — every filter, RSS, settings reference, config file,
+troubleshooting and privacy notes.
 
 ## Usage
 
@@ -203,61 +179,84 @@ RSS, settings reference, config file, troubleshooting, and privacy notes.
 
 Shortcuts don't fire while you're typing in a field.
 
+### Your own indexer, in one file
+
+Drop this in `~/.config/torrentx/indexers/mysite.json` and restart the app — it appears in the
+Indexer menu and rides the same fan-out as everything else (dedupe, health bands, sort, categories):
+
+```json
+{
+  "id": "mysite",
+  "name": "My Site",
+  "category": "TV",
+  "url": "https://api.example.org/search?limit=100&q={q}",
+  "rows": "results",
+  "fields": {
+    "title": "name",
+    "magnet": "magnet",
+    "size": "size_bytes",
+    "seeders": "seeds",
+    "leechers": "peers",
+    "date": "published_unix"
+  }
+}
+```
+
+`{q}` is the query (JSON-escaped when it goes into a POST body), `rows` is a dotted path to the
+array, and each field is a dotted path inside a row. `magnet` may be omitted when the site returns
+only `hash`; `headers` adds fixed headers and reads `${VAR}` from the environment at request time —
+where an API key goes. `assets/indexers/eztv.json` is a working example.
+
+## Build from source
+
+```bash
+# Rust 1.85+ (edition 2024). Debian/Ubuntu libraries:
+sudo apt-get install -y libxkbcommon-dev libasound2-dev \
+  libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxcb1-dev libssl-dev pkg-config
+cargo build --release
+# Binary: target/release/torrentx
+```
+
+Gates CI runs: `cargo fmt --all --check`, `cargo test --all-targets`,
+`cargo clippy --all-targets --all-features -- -D warnings`, `./scripts/ui-standards.sh`,
+`cargo deny …`. Build-time measurements live in
+[docs/build-performance.md](docs/build-performance.md); the Android build (APK from the same source)
+in [docs/android.md](docs/android.md).
+
+## Platforms
+
+| Platform | Status |
+| --- | --- |
+| Linux x86-64 (X11 / Wayland) | **Supported** — AppImage + tarball in every release |
+| Android (arm64) | **Builds and runs** from the same source; the APK is not published — see [docs/android.md](docs/android.md). Player, tray, notifications and the single-instance socket are desktop-only |
+| Windows x64 | **Published** as a static-CRT zip; launches in CI, not hand-tested on Windows |
+| macOS | **Not supported** — no build, no CI job |
+
 ## Tech
 
 - **GUI:** egui 0.37 + eframe (GPU-accelerated via wgpu, software-GL fallback)
 - **HTTP:** reqwest (blocking)
 - **Config:** `~/.config/torrentx/config.json`
 - **Binary size:** ~36 MB stripped + thin LTO; ~17 MB packed as AppImage (measured)
-- **Build speed:** thin LTO keeps release rebuilds parallel — see [docs/build-performance.md](docs/build-performance.md) for the measurements
+- **Build speed:** thin LTO keeps release rebuilds parallel — measurements in
+  [docs/build-performance.md](docs/build-performance.md)
 
-### Bundled icons
+## Contributing
 
-`assets/icons/*.svg` are [Lucide](https://lucide.dev) glyphs (ISC licence, ©
-Lucide Contributors), pinned to lucide-static 1.61.0 and re-tintable via
-`stroke="currentColor"`. `assets/icons/update-icons.sh <version>` refreshes
-them; `assets/icons/README.md` has the details.
+Issues and pull requests are welcome — [open an issue](https://github.com/chethan62/torrentx/issues)
+or send a PR. `main` requires a PR with a green `build + test + clippy` check; CI also reruns the
+test suite 20× to catch flakes. Details in
+[CONTRIBUTING.md](CONTRIBUTING.md). Minimum Rust: 1.85 (edition 2024).
 
 ## License
 
-Dual-licensed under **MIT OR Apache-2.0** © [chethan62](https://github.com/chethan62) —
-use whichever suits you; Apache-2.0 adds an explicit patent grant.
+Dual-licensed **MIT OR Apache-2.0** © [chethan62](https://github.com/chethan62) — use whichever suits
+you; Apache-2.0 adds an explicit patent grant. Every notice the binary carries (fonts, icons, the
+dependency allow-list) is listed in [docs/licenses.md](docs/licenses.md).
 
-Every licence the binary carries ships with it — under `usr/share/licenses/torrentx/` in the
-AppImage and tarball you will find `MIT.txt`, `Apache-2.0.txt`, `NotoSansCJK-OFL.txt` and
-`Lucide-ISC.txt`. `cargo deny` gates the dependency tree against the allow-list in
-[`deny.toml`](/chethan62/torrentx/blob/main/deny.toml) in CI.
+## Disclaimer
 
-Paths below are relative to the repo root and to the same directory in the AppImage.
-
-| Part | Licence | Notice file |
-| --- | --- | --- |
-| TorrentX source and binary | MIT OR Apache-2.0 | `LICENSE-MIT`, `LICENSE-APACHE` |
-| `NotoSansCJK*-subset.otf` (modified Noto CJK subsets) | OFL-1.1 | `NotoSansCJKjp-subset.LICENSE.txt` |
-| `icons/*.svg` (Lucide 1.61.0) | ISC | `Lucide.ISC.LICENSE.txt` |
-
-### Bundled fonts
-
-Torrent titles are often Japanese, Chinese or Korean, so two font subsets are
-embedded in every build (`include_bytes!` in `src/app.rs`) and used as per-character
-fallbacks after egui's Latin font:
-
-| File | Covers | Size |
-|------|--------|------|
-| `assets/NotoSansCJKjp-subset.otf` | Han (CJK Unified Ideographs), hiragana, katakana, CJK/fullwidth punctuation | 4.9 MB |
-| `assets/NotoSansKR-subset.otf` | Hangul syllables and jamo | 1.1 MB |
-
-They are single-face `.otf` files because egui's `ab_glyph` cannot select a face out of
-a system `.ttc` collection — the app therefore needs no CJK fonts installed. Together
-they are 6.0 MB of the binary, down from 9.2 MB for the previous JP-only subset, which
-also left Korean titles as □□□□ (the JP face contains no Hangul).
-
-Both are subsets of **Noto Sans CJK 2.004** (Adobe/Google, derivative of Source Han
-Sans) under the **SIL Open Font License 1.1** — © 2014-2021 Adobe; "Noto" is a
-trademark of Google Inc. A subset is a *modified* version, and the copyright notice,
-the licence, the modification evidence (the upstream faces declare **no** Reserved
-Font Name) and the exact `pyftsubset` commands ship at
-[`assets/NotoSansCJKjp-subset.LICENSE.txt`](assets/NotoSansCJKjp-subset.LICENSE.txt).
-A unit test asserts the promised scripts resolve to real glyphs, and the same notice is
-viewable in **About → Bundled font licence** (the release artifacts are a bare binary and
-an AppImage, so the text ships inside both).
+TorrentX is a **search client**. It hosts no content and distributes nothing: it queries indexers
+you configure and hands you a magnet link. What you do with a result is your responsibility —
+downloading copyrighted material without permission is illegal in most jurisdictions.
