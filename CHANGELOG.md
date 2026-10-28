@@ -30,6 +30,20 @@ versions follow [SemVer](https://semver.org/).
   604 seeds, all badged **TV**. GUIDE gained a "Your own indexers" section, and the
   "Jackett only" limitation now says Jackett is optional (Prowlarr still unsupported;
   the definition mechanism is JSON-only, so an HTML site still needs Jackett).
+- **An Android APK builds from the same source.** `src/main.rs` is now a two-line
+  desktop shell over `src/lib.rs` (crate-type `cdylib` + `rlib`), so the identical
+  code also links as `libtorrentx.so` for `NativeActivity`. Build with
+  `cargo apk build --lib` — the `--lib` is required because cargo-apk rejects a
+  package that has both a `bin` and a `cdylib`. Desktop-only pieces (tray, desktop
+  notifications, single instance) are `cfg`-gated, the tray/notify crates are
+  Android-absent dependencies, the config directory moves to the app's private
+  storage (there is no XDG dir on a phone), and TLS moved to rustls with bundled
+  Mozilla roots — cross-compiling native-tls would need an OpenSSL for the NDK.
+  Measured: stripped debug APK 84.7 MB, `arm64-v8a`, minSdk 26 / targetSdk 34,
+  package `org.chethan.torrentx`, INTERNET permission, `android_main` exported.
+  **Not run on a device yet** — no phone was reachable (no wireless debugging),
+  so install/runtime behaviour is unverified beyond the package being structurally
+  valid and signed.
 - **Definitions can carry an API key.** `headers` sends fixed headers with every
   request, and a `${VAR}` value is read from the environment at request time — in
   `url` as well as in a header, for sites that take the key as a query parameter.

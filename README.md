@@ -100,6 +100,27 @@ cargo build --release
 # Binary: target/release/torrentx
 ```
 
+### Android (APK)
+
+The same code builds as an `.so` that Android's `NativeActivity` loads:
+
+```bash
+# Prerequisites: Android SDK + NDK r27, `cargo install cargo-apk`
+export ANDROID_HOME=$HOME/Android/Sdk ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.0.12077973
+rustup target add aarch64-linux-android
+cargo apk build --lib          # -> target/debug/apk/torrentx.apk (~85 MB, debug-signed)
+```
+
+`--lib` is required: the package has both a `cdylib` (what Android loads) and the
+desktop `bin`, and cargo-apk refuses a package that mixes the two. A **release**
+APK additionally needs a keystore in
+`[package.metadata.android.signing.release]` — deliberately not committed here.
+
+On the device the native sources (apibay, knaben) and definition files work; the
+player does not (it shells out to mpv/vlc/webtorrent), and the tray, desktop
+notifications and single-instance socket are desktop-only. The UI is laid out for
+a desktop window — set a smaller window/`ui_scale` for now.
+
 ## Setup
 
 1. Launch TorrentX

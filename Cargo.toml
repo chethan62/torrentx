@@ -6,15 +6,33 @@ license = "MIT OR Apache-2.0"
 description = "Native Rust desktop app for searching torrents through Jackett"
 repository = "https://github.com/chethan62/torrentx"
 
+# cdylib is what Android loads (`libtorrentx.so` via NativeActivity); rlib is
+# what the desktop binary links against. cargo-apk builds the cdylib.
+[lib]
+name = "torrentx"
+crate-type = ["cdylib", "rlib"]
+
 [[bin]]
 name = "torrentx"
 path = "src/main.rs"
 
 [dependencies]
-eframe = { version = "0.37", features = ["default"] }
+# eframe is declared per target, not here: Android must build it with
+# `default-features = false` (its default accesskit conflicts with the
+# native-activity backend), and a shared declaration would unify the features
+# back on.
 egui = "0.37"
 egui_extras = { version = "0.37", features = ["default", "svg"] }
-reqwest = { version = "0.13", features = ["blocking", "json"] }
+# rustls, not native-tls: the Android build cross-compiles without a system
+# OpenSSL to link against, and one TLS stack for both targets is one less
+# difference to debug. The cost is that enterprise MITM roots are not trusted.
+reqwest = { version = "0.13", default-features = false, features = [
+    "blocking",
+    "json",
+    "rustls",
+    # Bundled Mozilla roots: an Android device has no store rustls can read.
+    "webpki-roots",
+] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
@@ -23,12 +41,52 @@ dirs-next = "2.0"
 url = "2.5"
 quick-xml = { version = "0.42", features = ["escape-html"] }
 uuid = { version = "1", features = ["v4"] }
+# Desktop only: the tray is a StatusNotifierItem over D-Bus and notify-rust is
+# D-Bus too. Neither exists on Android, and both would fail to link there.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+eframe = { version = "0.37", features = ["default"] }
 tray-icon = { version = "0.25", default-features = false, features = ["ksni"] }
 notify-rust = "4.11"
+
+# Android: no accesskit (it conflicts with the native-activity backend), and no
+# system font discovery (no fontconfig on the device) — the app embeds its own.
+[target.'cfg(target_os = "android")'.dependencies]
+eframe = { version = "0.37", default-features = false, features = [
+    "android-native-activity",
+    "clipboard",
+    "default_fonts",
+    "links",
+    "wgpu",
+] }
+winit = "0.30"
+android_logger = "0.14"
+log = "0.4"
 
 [dev-dependencies]
 # Glyph-coverage guard for the embedded CJK subsets (already in the tree via egui).
 ab_glyph = "0.2"
+
+# `cargo apk build` reads this. A debug APK is signed with the local debug
+# keystore; there is no release keystore here on purpose — a published build
+# needs one the author keeps, not one generated in CI.
+# The keys mirror the manifest, not the Rust crate: `package` is the application
+# id, and the SDK levels live in their own table. Without INTERNET here the
+# searches fail with a permission error the app cannot explain.
+[package.metadata.android]
+package = "org.chethan.torrentx"
+apk_name = "torrentx"
+build_targets = ["aarch64-linux-android"]
+uses_permission = [{ name = "android.permission.INTERNET" }]
+# A debug build carries full DWARF and lands at 340 MB; stripping the `.so`
+# before it goes in the zip takes that down to something a phone can install.
+strip = "strip"
+
+[package.metadata.android.sdk]
+min_sdk_version = 26
+target_sdk_version = 34
+
+[package.metadata.android.application]
+label = "TorrentX"
 
 [profile.release]
 opt-level = 3
