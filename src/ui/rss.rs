@@ -62,9 +62,14 @@ impl App {
                 None => return,
             },
         };
+        let room = ui.available_width();
         egui::Panel::right("rss_detail_pnl")
             .resizable(true)
-            .default_size(300.0)
+            .default_size(if narrow(room) {
+                (room - 44.0).max(240.0)
+            } else {
+                300.0
+            })
             .size_range(240.0..=640.0)
             .frame(
                 egui::Frame::NONE

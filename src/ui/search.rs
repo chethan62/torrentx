@@ -173,276 +173,309 @@ impl App {
     /// Row 2: category/indexer scope, the indexer picker, and the window that
     /// changes which indexers a search reaches.
     fn search_filter_row(&mut self, ui: &mut egui::Ui, fs: f32) {
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            ui.spacing_mut().interact_size.y = ROW2_H;
-            ui.add_space(SP4);
-            // Label + picker are ONE atom in the wrapping row: as separate
-            // items the label could wrap to the line below its own picker.
-            ui.horizontal(|ui| {
-                lbl(ui, "Category", self.pal.dim, 11.0);
-                ui.add_space(SP2);
-                egui::ComboBox::from_id_salt("cat_cb")
-                    .selected_text(RichText::new(&self.search.cat).font(FontId::proportional(fs)))
-                    .width(COMBO_W)
-                    .show_ui(ui, |ui| {
-                        for &c in CATS {
-                            ui.selectable_value(
-                                &mut self.search.cat,
-                                c.into(),
-                                RichText::new(c).font(FontId::proportional(fs)),
-                            );
-                        }
-                    });
+        // Every gap in this row is explicit: egui adds its own item_spacing
+        // around each add_space, so the same token rendered as 8 px in one
+        // place and 16 px in another.
+        if narrow(ui.available_width()) {
+            // Phone width: one control per row. Sharing a wrapped row put the
+            // indexer picker and the chip off the right edge (measured at
+            // 360 px, where the row needs ~470 px).
+            for part in 0..3 {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    ui.spacing_mut().interact_size.y = ROW2_H;
+                    ui.add_space(SP4);
+                    match part {
+                        0 => self.cat_picker(ui, fs),
+                        1 => self.idx_picker(ui, fs),
+                        _ => self.indexers_chip(ui, fs),
+                    }
+                });
+            }
+        } else {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.spacing_mut().interact_size.y = ROW2_H;
+                ui.add_space(SP4);
+                self.cat_picker(ui, fs);
+                ui.add_space(SP4);
+                self.idx_picker(ui, fs);
+                ui.add_space(SP4);
+                self.indexers_chip(ui, fs);
             });
+        }
+    }
 
-            // Indexer picker (from Jackett's configured indexers)
-            ui.add_space(SP4);
-            ui.horizontal(|ui| {
-                lbl(ui, "Indexer", self.pal.dim, 11.0);
-                ui.add_space(SP2);
-                egui::ComboBox::from_id_salt("idx_cb")
-                    .selected_text(RichText::new(&self.net.indexer).font(FontId::proportional(fs)))
-                    .width(COMBO_W)
-                    .show_ui(ui, |ui| {
+    /// Category picker, label and box as one atom.
+    fn cat_picker(&mut self, ui: &mut egui::Ui, fs: f32) {
+        // Label + picker are ONE atom in the wrapping row: as separate
+        // items the label could wrap to the line below its own picker.
+        ui.horizontal(|ui| {
+            lbl(ui, "Category", self.pal.dim, 11.0);
+            ui.add_space(SP2);
+            egui::ComboBox::from_id_salt("cat_cb")
+                .selected_text(RichText::new(&self.search.cat).font(FontId::proportional(fs)))
+                .width(COMBO_W)
+                .show_ui(ui, |ui| {
+                    for &c in CATS {
+                        ui.selectable_value(
+                            &mut self.search.cat,
+                            c.into(),
+                            RichText::new(c).font(FontId::proportional(fs)),
+                        );
+                    }
+                });
+        });
+    }
+
+    /// Indexer picker (from Jackett's configured indexers).
+    fn idx_picker(&mut self, ui: &mut egui::Ui, fs: f32) {
+        // Indexer picker (from Jackett's configured indexers)
+        ui.add_space(SP4);
+        ui.horizontal(|ui| {
+            lbl(ui, "Indexer", self.pal.dim, 11.0);
+            ui.add_space(SP2);
+            egui::ComboBox::from_id_salt("idx_cb")
+                .selected_text(RichText::new(&self.net.indexer).font(FontId::proportional(fs)))
+                .width(COMBO_W)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.net.indexer,
+                        "All".into(),
+                        RichText::new("All").font(FontId::proportional(fs)),
+                    );
+                    for idx in &self.net.indexers {
                         ui.selectable_value(
                             &mut self.net.indexer,
-                            "All".into(),
-                            RichText::new("All").font(FontId::proportional(fs)),
+                            idx.clone(),
+                            RichText::new(idx).font(FontId::proportional(fs)),
                         );
-                        for idx in &self.net.indexers {
-                            ui.selectable_value(
-                                &mut self.net.indexer,
-                                idx.clone(),
-                                RichText::new(idx).font(FontId::proportional(fs)),
-                            );
-                        }
-                    })
-                    .response
-                    .on_hover_text("Search one indexer instead of all");
-            });
+                    }
+                })
+                .response
+                .on_hover_text("Search one indexer instead of all");
+        });
+    }
 
-            // Which indexers the "All" fan-out covers, plus the catalogue. A
-            // compact "8/9" chip opens a small window: a menu popup closes on
-            // every click, which made the checkboxes and the filter field unusable.
-            let all_idx = self.net.indexers.clone();
-            if !all_idx.is_empty() {
-                ui.add_space(SP4);
-                let on = all_idx
-                    .iter()
-                    .filter(|i| !self.cfg.disabled_indexers.iter().any(|d| d == *i))
-                    .count();
-                // A labelled button, not a bare "9/9": the count alone never said
-                // that indexers can be enabled or added here.
-                let all_on = on == all_idx.len();
-                let label = RichText::new(format!("Indexers  {on}/{}", all_idx.len()))
-                    .font(FontId::proportional(fs))
-                    .color(if all_on {
-                        self.pal.text
+    /// Which indexers the "All" fan-out covers, plus the catalogue. A compact
+    /// "8/9" chip opens a small window: a menu popup closes on every click,
+    /// which made the checkboxes and the filter field unusable.
+    fn indexers_chip(&mut self, ui: &mut egui::Ui, fs: f32) {
+        // Which indexers the "All" fan-out covers, plus the catalogue. A
+        // compact "8/9" chip opens a small window: a menu popup closes on
+        // every click, which made the checkboxes and the filter field unusable.
+        let all_idx = self.net.indexers.clone();
+        if !all_idx.is_empty() {
+            ui.add_space(SP4);
+            let on = all_idx
+                .iter()
+                .filter(|i| !self.cfg.disabled_indexers.iter().any(|d| d == *i))
+                .count();
+            // A labelled button, not a bare "9/9": the count alone never said
+            // that indexers can be enabled or added here.
+            let all_on = on == all_idx.len();
+            let label = RichText::new(format!("Indexers  {on}/{}", all_idx.len()))
+                .font(FontId::proportional(fs))
+                .color(if all_on {
+                    self.pal.text
+                } else {
+                    self.pal.yellow
+                });
+            let btn = egui::Button::new(label)
+                .fill(self.pal.surface2)
+                .stroke(egui::Stroke::new(
+                    1.0,
+                    if all_on {
+                        self.pal.border
                     } else {
                         self.pal.yellow
-                    });
-                let btn = egui::Button::new(label)
-                    .fill(self.pal.surface2)
-                    .stroke(egui::Stroke::new(
-                        1.0,
-                        if all_on {
-                            self.pal.border
-                        } else {
-                            self.pal.yellow
-                        },
-                    ))
-                    .corner_radius(R_MD)
-                    .min_size(Vec2::new(0.0, ROW2_H));
-                if ui
-                    .add(btn)
-                    .on_hover_text(
-                        "Enable or disable indexers, add one in Jackett, browse the catalogue",
-                    )
-                    .clicked()
-                {
-                    self.net.idx_open = !self.net.idx_open;
-                }
-                let mut open = self.net.idx_open;
-                let mut esc = false;
-                if open {
-                    egui::Window::new("Indexers")
-                        .id(egui::Id::unique("idx_win"))
-                        .open(&mut open)
-                        .collapsible(false)
-                        .resizable(false)
-                        .default_width(260.0)
-                        .show(ui.ctx(), |ui| {
-                            // Esc closes this before it reaches "clear search":
-                            // it is the topmost surface while it is open.
-                            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                                esc = true;
-                            }
-                            if ui
-                                .button(RichText::new("Enable all").font(FontId::proportional(fs)))
-                                .clicked()
-                            {
-                                self.cfg.disabled_indexers.clear();
-                                let _ = crate::config::save_cfg(&self.cfg);
-                            }
+                    },
+                ))
+                .corner_radius(R_MD)
+                .min_size(Vec2::new(0.0, ROW2_H));
+            if ui
+                .add(btn)
+                .on_hover_text(
+                    "Enable or disable indexers, add one in Jackett, browse the catalogue",
+                )
+                .clicked()
+            {
+                self.net.idx_open = !self.net.idx_open;
+            }
+            let mut open = self.net.idx_open;
+            let mut esc = false;
+            if open {
+                egui::Window::new("Indexers")
+                    .id(egui::Id::unique("idx_win"))
+                    .open(&mut open)
+                    .collapsible(false)
+                    .resizable(false)
+                    .default_width(260.0)
+                    .show(ui.ctx(), |ui| {
+                        // Esc closes this before it reaches "clear search":
+                        // it is the topmost surface while it is open.
+                        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            esc = true;
+                        }
+                        if ui
+                            .button(RichText::new("Enable all").font(FontId::proportional(fs)))
+                            .clicked()
+                        {
+                            self.cfg.disabled_indexers.clear();
+                            let _ = crate::config::save_cfg(&self.cfg);
+                        }
+                        ui.separator();
+                        if ui
+                            .button(
+                                RichText::new("Add indexer in Jackett…")
+                                    .font(FontId::proportional(fs)),
+                            )
+                            .on_hover_text(
+                                "Jackett owns indexer credentials; its API is login-gated",
+                            )
+                            .clicked()
+                        {
+                            let base = self
+                                .cfg
+                                .jackett_url
+                                .trim()
+                                .trim_end_matches('/')
+                                .to_string();
+                            let _ = crate::safe_open(format!("{base}/UI/Dashboard"));
+                        }
+                        if ui
+                            .button(RichText::new("Refresh list").font(FontId::proportional(fs)))
+                            .clicked()
+                        {
+                            self.refresh_indexers();
+                        }
+                        // Catalogue: indexers Jackett knows but has not configured.
+                        // The API cannot add one (every write needs Jackett's cookie
+                        // session), so a click copies the id and opens the dashboard.
+                        let cat = crate::jackett::IndexerCatalogue {
+                            configured: all_idx.clone(),
+                            all: self.net.catalogue.clone(),
+                        };
+                        let pending = cat.unconfigured().count();
+                        if pending > 0 {
                             ui.separator();
-                            if ui
-                                .button(
-                                    RichText::new("Add indexer in Jackett…")
-                                        .font(FontId::proportional(fs)),
-                                )
-                                .on_hover_text(
-                                    "Jackett owns indexer credentials; its API is login-gated",
-                                )
-                                .clicked()
+                            ui.label(
+                                RichText::new(format!("Add from catalogue ({pending})"))
+                                    .font(FontId::proportional(fs - 1.0))
+                                    .color(self.pal.dim),
+                            );
+                            // Group chips: with 635 entries the real question is
+                            // "which one is worth configuring", not "how do I spell it".
+                            for (gi, (label, ids)) in
+                                crate::jackett::CATALOGUE_GROUPS.iter().enumerate()
                             {
-                                let base = self
-                                    .cfg
-                                    .jackett_url
-                                    .trim()
-                                    .trim_end_matches('/')
-                                    .to_string();
-                                let _ = crate::safe_open(format!("{base}/UI/Dashboard"));
-                            }
-                            if ui
-                                .button(
-                                    RichText::new("Refresh list").font(FontId::proportional(fs)),
-                                )
-                                .clicked()
-                            {
-                                self.refresh_indexers();
-                            }
-                            // Catalogue: indexers Jackett knows but has not configured.
-                            // The API cannot add one (every write needs Jackett's cookie
-                            // session), so a click copies the id and opens the dashboard.
-                            let cat = crate::jackett::IndexerCatalogue {
-                                configured: all_idx.clone(),
-                                all: self.net.catalogue.clone(),
-                            };
-                            let pending = cat.unconfigured().count();
-                            if pending > 0 {
-                                ui.separator();
-                                ui.label(
-                                    RichText::new(format!("Add from catalogue ({pending})"))
-                                        .font(FontId::proportional(fs - 1.0))
-                                        .color(self.pal.dim),
-                                );
-                                // Group chips: with 635 entries the real question is
-                                // "which one is worth configuring", not "how do I spell it".
-                                for (gi, (label, ids)) in
-                                    crate::jackett::CATALOGUE_GROUPS.iter().enumerate()
-                                {
-                                    let entries = crate::jackett::group_entries(&cat, ids);
-                                    if entries.is_empty() {
-                                        continue;
-                                    }
-                                    let selected = self.net.cat_group == Some(gi);
-                                    let text = RichText::new(format!("{label} {}", entries.len()))
-                                        .font(FontId::proportional(fs - 1.0))
-                                        .color(if selected { self.pal.bg } else { self.pal.text });
-                                    let btn = egui::Button::new(text)
-                                        .fill(if selected {
-                                            self.pal.accent
-                                        } else {
-                                            self.pal.surface2
-                                        })
-                                        .corner_radius(R_MD);
-                                    if ui.add(btn).clicked() {
-                                        self.net.cat_group = if selected { None } else { Some(gi) };
-                                        self.net.cat_query.clear();
-                                    }
+                                let entries = crate::jackett::group_entries(&cat, ids);
+                                if entries.is_empty() {
+                                    continue;
                                 }
-                                ui.add_space(SP2);
-                                ui.add(
-                                    egui::TextEdit::singleline(&mut self.net.cat_query)
-                                        .hint_text("filter…")
-                                        .desired_width(230.0),
-                                );
-                                // A group narrows the list; the filter box narrows it further.
-                                let q = self.net.cat_query.trim().to_lowercase();
-                                let mut hits: Vec<String> = match self
-                                    .net
-                                    .cat_group
-                                    .and_then(|gi| crate::jackett::CATALOGUE_GROUPS.get(gi))
-                                {
-                                    Some((_, ids)) => crate::jackett::group_entries(&cat, ids)
-                                        .into_iter()
-                                        .filter(|id| q.is_empty() || id.to_lowercase().contains(&q))
-                                        .take(8)
-                                        .cloned()
-                                        .collect(),
-                                    None => crate::jackett::catalogue_matches(
-                                        &cat,
-                                        &self.net.cat_query,
-                                        8,
-                                    )
+                                let selected = self.net.cat_group == Some(gi);
+                                let text = RichText::new(format!("{label} {}", entries.len()))
+                                    .font(FontId::proportional(fs - 1.0))
+                                    .color(if selected { self.pal.bg } else { self.pal.text });
+                                let btn = egui::Button::new(text)
+                                    .fill(if selected {
+                                        self.pal.accent
+                                    } else {
+                                        self.pal.surface2
+                                    })
+                                    .corner_radius(R_MD);
+                                if ui.add(btn).clicked() {
+                                    self.net.cat_group = if selected { None } else { Some(gi) };
+                                    self.net.cat_query.clear();
+                                }
+                            }
+                            ui.add_space(SP2);
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.net.cat_query)
+                                    .hint_text("filter…")
+                                    .desired_width(230.0),
+                            );
+                            // A group narrows the list; the filter box narrows it further.
+                            let q = self.net.cat_query.trim().to_lowercase();
+                            let mut hits: Vec<String> = match self
+                                .net
+                                .cat_group
+                                .and_then(|gi| crate::jackett::CATALOGUE_GROUPS.get(gi))
+                            {
+                                Some((_, ids)) => crate::jackett::group_entries(&cat, ids)
                                     .into_iter()
+                                    .filter(|id| q.is_empty() || id.to_lowercase().contains(&q))
+                                    .take(8)
                                     .cloned()
                                     .collect(),
-                                };
-                                hits.retain(|h| !h.is_empty());
-                                for id in &hits {
-                                    if ui
-                                        .button(RichText::new(id).font(FontId::proportional(fs)))
-                                        .on_hover_text("Copy the name and open Jackett")
-                                        .clicked()
-                                    {
-                                        ui.ctx().copy_text(id.clone());
-                                        let base = self
-                                            .cfg
-                                            .jackett_url
-                                            .trim()
-                                            .trim_end_matches('/')
-                                            .to_string();
-                                        let _ = crate::safe_open(format!("{base}/UI/Dashboard"));
-                                    }
+                                None => {
+                                    crate::jackett::catalogue_matches(&cat, &self.net.cat_query, 8)
+                                        .into_iter()
+                                        .cloned()
+                                        .collect()
                                 }
-                                if self.net.cat_group
-                                    == crate::jackett::CATALOGUE_GROUPS
-                                        .iter()
-                                        .position(|(l, _)| *l == "Indian / Desi")
-                                {
-                                    ui.label(
-                                        RichText::new(
-                                            "Jackett has no Telugu/Tamil/Malayalam indexer — \
-                                             those releases come through the general trackers",
-                                        )
-                                        .font(FontId::proportional(fs - 1.5))
-                                        .color(self.pal.dim),
-                                    );
-                                }
-                                if hits.len() == 8 {
-                                    ui.label(
-                                        RichText::new("type to narrow the list")
-                                            .font(FontId::proportional(fs - 1.0))
-                                            .color(self.pal.dim),
-                                    );
-                                }
-                            }
-                            ui.separator();
-                            for idx in &all_idx {
-                                let mut enabled =
-                                    !self.cfg.disabled_indexers.iter().any(|d| d == idx);
+                            };
+                            hits.retain(|h| !h.is_empty());
+                            for id in &hits {
                                 if ui
-                                    .checkbox(
-                                        &mut enabled,
-                                        RichText::new(idx).font(FontId::proportional(fs)),
-                                    )
-                                    .changed()
+                                    .button(RichText::new(id).font(FontId::proportional(fs)))
+                                    .on_hover_text("Copy the name and open Jackett")
+                                    .clicked()
                                 {
-                                    if enabled {
-                                        self.cfg.disabled_indexers.retain(|d| d != idx);
-                                    } else if !self.cfg.disabled_indexers.contains(idx) {
-                                        self.cfg.disabled_indexers.push(idx.clone());
-                                    }
-                                    let _ = crate::config::save_cfg(&self.cfg);
+                                    ui.ctx().copy_text(id.clone());
+                                    let base = self
+                                        .cfg
+                                        .jackett_url
+                                        .trim()
+                                        .trim_end_matches('/')
+                                        .to_string();
+                                    let _ = crate::safe_open(format!("{base}/UI/Dashboard"));
                                 }
                             }
-                        });
-                    self.net.idx_open = open && !esc;
-                }
+                            if self.net.cat_group
+                                == crate::jackett::CATALOGUE_GROUPS
+                                    .iter()
+                                    .position(|(l, _)| *l == "Indian / Desi")
+                            {
+                                ui.label(
+                                    RichText::new(
+                                        "Jackett has no Telugu/Tamil/Malayalam indexer — \
+                                     those releases come through the general trackers",
+                                    )
+                                    .font(FontId::proportional(fs - 1.5))
+                                    .color(self.pal.dim),
+                                );
+                            }
+                            if hits.len() == 8 {
+                                ui.label(
+                                    RichText::new("type to narrow the list")
+                                        .font(FontId::proportional(fs - 1.0))
+                                        .color(self.pal.dim),
+                                );
+                            }
+                        }
+                        ui.separator();
+                        for idx in &all_idx {
+                            let mut enabled = !self.cfg.disabled_indexers.iter().any(|d| d == idx);
+                            if ui
+                                .checkbox(
+                                    &mut enabled,
+                                    RichText::new(idx).font(FontId::proportional(fs)),
+                                )
+                                .changed()
+                            {
+                                if enabled {
+                                    self.cfg.disabled_indexers.retain(|d| d != idx);
+                                } else if !self.cfg.disabled_indexers.contains(idx) {
+                                    self.cfg.disabled_indexers.push(idx.clone());
+                                }
+                                let _ = crate::config::save_cfg(&self.cfg);
+                            }
+                        }
+                    });
+                self.net.idx_open = open && !esc;
             }
-        });
+        }
     }
 
     /// The state-dependent body: idle screen, live results while searching,
@@ -759,7 +792,15 @@ impl App {
         };
         // Frame-level right panel (reserves space — table shrinks,
         // no overlap). Must be added BEFORE CentralPanel.
-        let w = self.ui.detail_width.clamp(240.0, 520.0);
+        // Phone: the panel takes the screen minus a 44 px sliver, so the
+        // table stays visible as the way back and the panel is not a 240 px
+        // column squeezing content into 120 px.
+        let room = ui.available_width();
+        let w = if narrow(room) {
+            (room - 44.0).max(240.0)
+        } else {
+            self.ui.detail_width.clamp(240.0, 520.0)
+        };
         egui::Panel::right("detail_pnl")
             .resizable(true)
             .default_size(w)

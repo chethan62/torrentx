@@ -29,7 +29,7 @@ impl App {
     /// narrow window put the caption on the line below its own box ("Max" over
     /// a field labelled "GB"), so which input belonged to which caption stopped
     /// being readable.
-    fn filter_cell(&mut self, ui: &mut egui::Ui, slot: Slot, fs: f32) -> bool {
+    fn filter_cell(&mut self, ui: &mut egui::Ui, slot: Slot, fs: f32, fill: bool) -> bool {
         let dim = self.pal.dim;
         let (label, field) = match slot {
             Slot::Text => (
@@ -67,7 +67,14 @@ impl App {
         ui.horizontal(|ui| {
             lbl(ui, label, dim, fs);
             ui.add_space(SP1);
-            changed = ui.add(field.font(FontId::proportional(fs))).changed();
+            let mut field = field.font(FontId::proportional(fs));
+            // Phone: the field takes whatever the label left in its column, so
+            // no cell is narrower than its own placeholder ("within results"
+            // rendered as "wi…" at a fixed 115 px inside a two-column grid).
+            if fill {
+                field = field.desired_width(ui.available_width().max(40.0));
+            }
+            changed = ui.add(field).changed();
         });
         changed
     }
@@ -104,18 +111,19 @@ impl App {
     fn filter_cells(&mut self, ui: &mut egui::Ui, fs: f32, tight: bool) -> bool {
         let mut changed = false;
         if tight {
-            ui.horizontal(|ui| {
-                changed |= self.filter_cell(ui, Slot::Text, fs);
+            // Two equal columns (`columns`, not a Grid): every field then
+            // takes the width its label left behind, so both columns end at
+            // the same x and nothing truncates. A Grid sizes to content, and
+            // the tracker cell (136 px) plus the filter cell (150 px) came to
+            // more than the 312 px the card has at 360 px wide.
+            changed |= self.filter_cell(ui, Slot::Text, fs, true);
+            ui.columns(2, |c| {
+                changed |= self.filter_cell(&mut c[0], Slot::Seeds, fs, true);
+                changed |= self.filter_cell(&mut c[1], Slot::Size, fs, true);
             });
-            ui.horizontal(|ui| {
-                changed |= self.filter_cell(ui, Slot::Seeds, fs);
-                ui.add_space(SP4);
-                changed |= self.filter_cell(ui, Slot::Size, fs);
-            });
-            ui.horizontal(|ui| {
-                changed |= self.filter_cell(ui, Slot::Year, fs);
-                ui.add_space(SP4);
-                changed |= self.filter_cell(ui, Slot::Tracker, fs);
+            ui.columns(2, |c| {
+                changed |= self.filter_cell(&mut c[0], Slot::Year, fs, true);
+                changed |= self.filter_cell(&mut c[1], Slot::Tracker, fs, true);
             });
             if self.filters_dirty() {
                 ui.horizontal(|ui| self.reset_filters(ui));
@@ -123,7 +131,7 @@ impl App {
         } else {
             ui.horizontal_wrapped(|ui| {
                 for slot in ALL_SLOTS {
-                    changed |= self.filter_cell(ui, slot, fs);
+                    changed |= self.filter_cell(ui, slot, fs, false);
                     ui.add_space(SP3);
                 }
                 if self.filters_dirty() {
@@ -214,9 +222,18 @@ impl App {
                 // Health chips wrap on their own; the batch group is parked at
                 // the right edge on a wide window and given its own row when
                 // narrow, where a right-to-left child would push the chips off.
-                ui.horizontal_wrapped(|ui| {
+                // Health chips: on a phone the caption gets its own line, so
+                // every chip line starts at the card's left edge instead of
+                // the wrapped second line starting under the caption's x.
+                if tight {
                     lbl(ui, "Health", self.pal.dim, fs);
-                    ui.add_space(SP2);
+                    ui.add_space(SP1);
+                }
+                ui.horizontal_wrapped(|ui| {
+                    if !tight {
+                        lbl(ui, "Health", self.pal.dim, fs);
+                        ui.add_space(SP2);
+                    }
                     for hf in [
                         Hlth::All,
                         Hlth::Hot,

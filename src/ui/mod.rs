@@ -65,6 +65,13 @@ pub(crate) fn narrow(width: f32) -> bool {
     width < NARROW_W
 }
 
+/// Width for a floating window: the screen minus its own side margins, capped
+/// at `max`. A window that opens wider than the screen loses its right edge,
+/// including the close button, on every phone.
+pub(crate) fn window_width(ctx: &egui::Context) -> f32 {
+    (ctx.content_rect().width() - 2.0 * SP6).max(280.0)
+}
+
 /// Standard panel corner radius (px).
 pub(crate) const PANEL_RADIUS: f32 = R_MD;
 /// Standard panel side margin (px, i8 for egui Margin).
@@ -527,17 +534,22 @@ impl eframe::App for App {
                             lbl(ui, e.lines().next().unwrap_or(e), self.pal.red, 12.0);
                         }
                     }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        lbl(
-                            ui,
-                            // The list is a hint, but it has to be a true one:
-                            // every shortcut named here is bound, and Ctrl +/-/0
-                            // is the one people reach for when text looks small.
-                            "Keys: Arrows · Enter · D · F · M · Esc · Ctrl+F · Ctrl+R · Ctrl +/-",
-                            self.pal.dim,
-                            11.5,
-                        );
-                    });
+                    // The shortcut list is a keyboard hint; at phone width it
+                    // overlapped the status text and was clipped mid-word, and
+                    // a touch device has no keys to press anyway.
+                    if !narrow(ui.available_width()) {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            lbl(
+                                ui,
+                                // The list is a hint, but it has to be a true one:
+                                // every shortcut named here is bound, and Ctrl +/-/0
+                                // is the one people reach for when text looks small.
+                                "Keys: Arrows · Enter · D · F · M · Esc · Ctrl+F · Ctrl+R · Ctrl +/-",
+                                self.pal.dim,
+                                11.5,
+                            );
+                        });
+                    }
                 });
             });
 
@@ -575,10 +587,12 @@ impl eframe::App for App {
                 .collapsible(false)
                 .resizable(true)
                 // Wide enough that each section keeps one line at the default
-                // font size; the height follows the content up to a cap.
-                .default_width(1000.0)
-                .min_width(720.0)
-                .max_height(760.0)
+                // font size; the height follows the content up to a cap. The
+                // phone width wins over both, or the window opens wider than
+                // the screen and its right half is unreachable.
+                .default_width(window_width(&ctx).min(1000.0))
+                .min_width(window_width(&ctx).min(720.0))
+                .max_height((ctx.content_rect().height() - 90.0).max(240.0))
                 .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
                 .frame(
                     egui::Frame::NONE
@@ -596,7 +610,7 @@ impl eframe::App for App {
                 .show(&ctx, |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt("settings_scroll")
-                        .max_height(540.0)
+                        .max_height((ctx.content_rect().height() - 200.0).max(160.0))
                         .show(ui, |ui| self.draw_settings_panel(ui));
                 });
             if !open {
