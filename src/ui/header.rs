@@ -61,13 +61,25 @@ impl App {
         });
     }
 
-    /// Narrow: the controls take the first row, the tabs the second, so every
-    /// label keeps its full text and each control keeps a tappable width.
+    /// Narrow: three rows — logo with the status dot, then the two controls,
+    /// then the tabs. One row for all of it needs ~385 px (measured: the theme
+    /// picker clamps at 110 and the wordmark + version pill take the rest), so
+    /// at 360 the closing "X" was painted under the combo box.
     fn header_narrow(&mut self, ui: &mut egui::Ui) {
         ui.add_space(SP1);
         ui.horizontal(|ui| {
             self.header_logo(ui);
-            self.header_right(ui);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(SP4);
+                self.header_dot(ui);
+            });
+        });
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.add_space(SP4);
+            self.header_theme(ui);
+            ui.add_space(SP4);
+            self.header_settings(ui);
         });
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
@@ -162,93 +174,100 @@ impl App {
 
     /// Theme picker, Settings and the Jackett status dot, right-aligned.
     fn header_right(&mut self, ui: &mut egui::Ui) {
-        // Right side controls
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(SP4);
-
-            // Jackett connection status dot
-            if let Some(ok) = self.net.jackett_ok {
-                let (col, tip) = if ok {
-                    (self.pal.green, "Jackett connected")
-                } else {
-                    (self.pal.red, "Jackett unreachable — check Settings")
-                };
-                ui.add(svg_image(SvgIcon::Circle, ICON_SM, col))
-                    .on_hover_text(tip);
-                ui.add_space(SP3);
-            } else {
-                ui.add(svg_image(SvgIcon::CircleDot, ICON_SM, self.pal.dim))
-                    .on_hover_text("Checking Jackett…");
-                ui.add_space(SP3);
-            }
-
-            let sa = self.ui.show_settings;
-            let set_col = if sa { self.pal.accent } else { self.pal.sub };
-            // Same one-widget pattern as the header tabs: the gear is
-            // inside the button, so the pill frames icon + label together
-            // instead of floating beside a text-only button.
-            if icon_text_tab(
-                ui,
-                SvgIcon::Settings,
-                "Settings",
-                set_col,
-                sa,
-                self.pal.accent,
-            )
-            .clicked()
-            {
-                self.set_settings_open(!self.ui.show_settings);
-            }
+            self.header_dot(ui);
+            self.header_settings(ui);
             ui.add_space(SP4);
-
-            // Theme picker — width adapts to available space so it
-            // never pushes past the window edge at narrow widths.
-            let ac = self.cfg.theme.accent_color();
-            let theme_w = ui.available_width().clamp(110.0, 155.0);
-            egui::ComboBox::from_id_salt("theme_cb")
-                .selected_text(
-                    RichText::new(self.cfg.theme.name())
-                        .font(FontId::proportional(13.0))
-                        .color(ac),
-                )
-                .width(theme_w)
-                .show_ui(ui, |ui| {
-                    ui.label(RichText::new("─ Dark ─").size(11.0).color(self.pal.dim));
-                    for t in Theme::all().iter().filter(|t| !t.is_light()) {
-                        let col = t.accent_color();
-                        let on = &self.cfg.theme == t;
-                        if ui
-                            .add(egui::Button::selectable(
-                                on,
-                                RichText::new(format!("  {}", t.name()))
-                                    .font(FontId::proportional(13.0))
-                                    .color(col),
-                            ))
-                            .clicked()
-                        {
-                            self.set_theme(t.clone());
-                        }
-                    }
-                    ui.add_space(SP1);
-                    ui.label(RichText::new("─ Light ─").size(11.0).color(self.pal.dim));
-                    for t in Theme::all().iter().filter(|t| t.is_light()) {
-                        let col = t.accent_color();
-                        let on = &self.cfg.theme == t;
-                        if ui
-                            .add(egui::Button::selectable(
-                                on,
-                                RichText::new(format!("  {}", t.name()))
-                                    .font(FontId::proportional(13.0))
-                                    .color(col),
-                            ))
-                            .clicked()
-                        {
-                            self.set_theme(t.clone());
-                        }
-                    }
-                });
+            self.header_theme(ui);
             ui.add_space(SP4);
         });
+    }
+
+    /// Jackett connection status dot.
+    fn header_dot(&mut self, ui: &mut egui::Ui) {
+        if let Some(ok) = self.net.jackett_ok {
+            let (col, tip) = if ok {
+                (self.pal.green, "Jackett connected")
+            } else {
+                (self.pal.red, "Jackett unreachable — check Settings")
+            };
+            ui.add(svg_image(SvgIcon::Circle, ICON_SM, col))
+                .on_hover_text(tip);
+        } else {
+            ui.add(svg_image(SvgIcon::CircleDot, ICON_SM, self.pal.dim))
+                .on_hover_text("Checking Jackett…");
+        }
+        ui.add_space(SP3);
+    }
+
+    /// The Settings pill: the gear is inside the button, so the pill frames
+    /// icon and label together instead of floating beside a text-only button.
+    fn header_settings(&mut self, ui: &mut egui::Ui) {
+        let sa = self.ui.show_settings;
+        let set_col = if sa { self.pal.accent } else { self.pal.sub };
+        if icon_text_tab(
+            ui,
+            SvgIcon::Settings,
+            "Settings",
+            set_col,
+            sa,
+            self.pal.accent,
+        )
+        .clicked()
+        {
+            self.set_settings_open(!self.ui.show_settings);
+        }
+        ui.add_space(SP4);
+    }
+
+    /// Theme picker. The width adapts to the space left in its row, so the
+    /// control never pushes past the window edge at narrow widths.
+    fn header_theme(&mut self, ui: &mut egui::Ui) {
+        let ac = self.cfg.theme.accent_color();
+        let theme_w = ui.available_width().clamp(110.0, 155.0);
+        egui::ComboBox::from_id_salt("theme_cb")
+            .selected_text(
+                RichText::new(self.cfg.theme.name())
+                    .font(FontId::proportional(13.0))
+                    .color(ac),
+            )
+            .width(theme_w)
+            .show_ui(ui, |ui| {
+                ui.label(RichText::new("─ Dark ─").size(11.0).color(self.pal.dim));
+                for t in Theme::all().iter().filter(|t| !t.is_light()) {
+                    let col = t.accent_color();
+                    let on = &self.cfg.theme == t;
+                    if ui
+                        .add(egui::Button::selectable(
+                            on,
+                            RichText::new(format!("  {}", t.name()))
+                                .font(FontId::proportional(13.0))
+                                .color(col),
+                        ))
+                        .clicked()
+                    {
+                        self.set_theme(t.clone());
+                    }
+                }
+                ui.add_space(SP1);
+                ui.label(RichText::new("─ Light ─").size(11.0).color(self.pal.dim));
+                for t in Theme::all().iter().filter(|t| t.is_light()) {
+                    let col = t.accent_color();
+                    let on = &self.cfg.theme == t;
+                    if ui
+                        .add(egui::Button::selectable(
+                            on,
+                            RichText::new(format!("  {}", t.name()))
+                                .font(FontId::proportional(13.0))
+                                .color(col),
+                        ))
+                        .clicked()
+                    {
+                        self.set_theme(t.clone());
+                    }
+                }
+            });
     }
 }
 

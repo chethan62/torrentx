@@ -348,7 +348,7 @@ impl App {
                 .open(&mut open)
                 .resizable(true)
                 .collapsible(false)
-                .default_width(560.0)
+                .default_width(window_width(ui.ctx()).min(560.0))
                 .show(ui.ctx(), |ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut p.filter)
