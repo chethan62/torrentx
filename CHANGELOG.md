@@ -4,7 +4,7 @@ All notable changes to TorrentX are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [18.7.0] — 2026-10-28
 
 ### Added
 - **Two native sources — searching no longer requires Jackett.** `apibay` (The Pirate Bay's public

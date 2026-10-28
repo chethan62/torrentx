@@ -45,6 +45,15 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="18.7.0" date="2026-10-28">
+      <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.7.0</url>
+      <description>
+        <ul>
+          <li>Phone-width layout: the header, pickers, filter cells and category chips reflow instead of clipping, and the filter card folds behind a toggle</li>
+          <li>The detail panel opens as a full-width overlay on a narrow window; Settings and the file chooser stay inside the screen</li>
+        </ul>
+      </description>
+    </release>
     <release version="18.6.25" date="2026-10-25">
       <url type="details">https://github.com/chethan62/torrentx/releases/tag/v18.6.25</url>
       <description>
