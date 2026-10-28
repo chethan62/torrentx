@@ -7,6 +7,13 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Results grouped by infohash.** The same torrent listed by five indexers is now
+  one row: the best-seeded copy survives and the Tracker cell reads `knaben +2`
+  (hover lists them, the detail panel has an "Also on" line). Exact where the
+  name-based merge is not — it joins the same release even when a tracker appends
+  its own tag, and it never merges two different torrents that share a title.
+  Rows without a magnet or a `btih` pass through untouched. Grouping runs before
+  name dedupe, so a merged row keeps the other trackers instead of losing them.
 - **Send to qBittorrent.** The row menu and the detail panel hand a magnet to a
   qBittorrent Web API: `qbittorrent_url`, `qbittorrent_user` and
   `qbittorrent_pass` in Settings (an empty URL hides the action). Works with the

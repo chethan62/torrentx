@@ -100,6 +100,16 @@ impl App {
                 if let Some(t) = &r.tracker {
                     grid_row(ui, "Tracker", t, self.pal.sub, &self.pal, fs);
                 }
+                if !r.also_on.is_empty() {
+                    grid_row(
+                        ui,
+                        "Also on",
+                        &r.also_on.join(", "),
+                        self.pal.accent,
+                        &self.pal,
+                        fs,
+                    );
+                }
                 if let Some(s) = r.size {
                     grid_row(ui, "Size", &fmt_size(s), self.pal.sub, &self.pal, fs);
                 }
