@@ -49,6 +49,18 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: python3 build_torrentx.py
 
+      # .deb and .rpm from the same binary the AppImage wraps. nfpm is one static
+      # Go binary that writes both, so neither dpkg-dev nor rpmbuild is needed.
+      - name: Build .deb and .rpm
+        env:
+          TX_VERSION: ${{ github.ref_name }}
+        run: |
+          curl -fsSL https://github.com/goreleaser/nfpm/releases/download/v2.48.0/nfpm_2.48.0_Linux_x86_64.tar.gz \
+            | sudo tar xz -C /usr/local/bin nfpm
+          TX_VERSION="${TX_VERSION#v}" nfpm pkg --config packaging/nfpm.yaml --packager deb --target dist/
+          TX_VERSION="${TX_VERSION#v}" nfpm pkg --config packaging/nfpm.yaml --packager rpm --target dist/
+          ls -l dist/
+
       - name: Package raw binary + checksums
         run: |
           cd target/release
