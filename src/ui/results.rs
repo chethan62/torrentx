@@ -48,6 +48,15 @@ fn table_viewport_h(available: f32) -> f32 {
 /// Every width is at least [`COL_MIN_W`], because `Column::exact` under a
 /// column's `at_least` makes egui_extras panic (`min > max`) — which is exactly
 /// how the first attempt at this crashed at 412 pt.
+/// Width the action column gets at phone width. It gives up its own width
+/// before the data columns do: below ~326 pt three 32 pt buttons plus Name's
+/// floor no longer fit, and a clipped Actions header reads as a bug while a
+/// slightly tight icon row does not.
+fn phone_action_w(avail: f32) -> f32 {
+    let data = 78.0 + 62.0 + COL_MIN_W; // size + seeds + Name's floor
+    ACTION_COL_W_PHONE.min((avail - data).max(48.0))
+}
+
 fn phone_col_widths(avail: f32, action_w: f32) -> (f32, f32, f32) {
     let size_w = 78.0;
     let seeds_w = 62.0;
@@ -91,8 +100,11 @@ impl App {
         // Name plus a horizontal scrollbar, every title cut off. Keep the three
         // that answer "what is it, how big, how alive" and let Name take the rest.
         let phone = crate::ui::narrow(ui.available_width());
+        let scroll_bar_w = ui.spacing().scroll.bar_inner_margin
+            + ui.spacing().scroll.bar_outer_margin
+            + ui.spacing().scroll.bar_width;
         let action_w = if phone {
-            ACTION_COL_W_PHONE
+            phone_action_w(ui.available_width() - scroll_bar_w)
         } else {
             ACTION_COL_W
         };
@@ -152,9 +164,6 @@ impl App {
         // fresh config still fills the window; once `name` has a stored width the
         // table is Excel-exact and may leave space on the right.
         let mut widths = self.ui.col_w.clone();
-        let scroll_bar_w = ui.spacing().scroll.bar_inner_margin
-            + ui.spacing().scroll.bar_outer_margin
-            + ui.spacing().scroll.bar_width;
         if phone {
             // Stored widths are a desktop preference ("Excel-exact"); applied to
             // a 412 pt window they overflow it and clip every title, so phone
@@ -956,14 +965,16 @@ mod viewport_tests {
     /// sit under the minimum, because that panics inside egui_extras.
     #[test]
     fn phone_columns_fit_the_window_and_respect_the_minimum() {
-        for avail in [330.0, 360.5, 374.5, 480.0, 700.0] {
-            let (name, size, seeds) = phone_col_widths(avail, ACTION_COL_W_PHONE);
+        for avail in [300.0, 308.0, 322.0, 330.0, 360.5, 374.5, 480.0, 700.0] {
+            let action = phone_action_w(avail);
+            let (name, size, seeds) = phone_col_widths(avail, action);
             assert!(name >= COL_MIN_W, "name {name} at {avail}");
             assert!(size >= COL_MIN_W && seeds >= COL_MIN_W, "at {avail}");
+            assert!(action >= 48.0, "action {action} at {avail}");
             assert!(
-                name + size + seeds + ACTION_COL_W_PHONE <= avail,
+                name + size + seeds + action <= avail,
                 "columns overflow {avail}: {}",
-                name + size + seeds + ACTION_COL_W_PHONE
+                name + size + seeds + action
             );
         }
     }

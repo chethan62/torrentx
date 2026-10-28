@@ -15,7 +15,9 @@ versions follow [SemVer](https://semver.org/).
   opens the panel — and the horizontal bar is gone. `phone_col_widths` has a
   test pinning both constraints: no column under `COL_MIN_W` (below that
   `Column::exact` panics inside egui_extras) and the sum never exceeding the
-  available width.
+  available width. Under ~326 pt the Actions column gives up its own width first
+  (`phone_action_w`), so at 360 pt the header still reads `Actions` instead of
+  `Actio`.
 - **Android: the app no longer draws under the status bar.** egui-winit publishes
   safe-area insets on iOS only, so on a phone the header sat behind the clock and
   notification icons. The frame now reserves that strip (and the gesture strip at
