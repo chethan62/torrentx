@@ -976,6 +976,16 @@ pub(crate) fn failed_note(failed: &[String]) -> String {
     format!("  ·  {n} failed: {}{more}", shown.join(", "))
 }
 
+/// Phone-width status bar: the count only. The named list is what pushes the
+/// line past 360 px, and a label clipped mid-word reads as a broken app.
+pub(crate) fn failed_note_short(failed: &[String]) -> String {
+    if failed.is_empty() {
+        String::new()
+    } else {
+        format!("  ·  {} failed", failed.len())
+    }
+}
+
 /// Fetch one indexer and append its rows. Err is a message for the UI.
 fn fetch_into(
     ctx: &SearchCtx,
@@ -2178,6 +2188,11 @@ mod tests {
         assert_eq!(
             failed_note(&["eztv".into(), "1337x".into()]),
             "  ·  2 failed: 1337x, eztv"
+        );
+        assert_eq!(super::failed_note_short(&[]), "");
+        assert_eq!(
+            super::failed_note_short(&["eztv".into(), "1337x".into()]),
+            "  ·  2 failed"
         );
         assert_eq!(
             failed_note(&["d".into(), "c".into(), "b".into(), "a".into(), "e".into()]),

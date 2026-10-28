@@ -65,11 +65,27 @@ pub(crate) fn narrow(width: f32) -> bool {
     width < NARROW_W
 }
 
+/// Failed-indexer note for the status bar: named on a desktop, counted on a
+/// phone, where three indexer names alone overran the line.
+pub(crate) fn status_failed_note(failed: &[String], phone: bool) -> String {
+    if phone {
+        crate::jackett::failed_note_short(failed)
+    } else {
+        crate::jackett::failed_note(failed)
+    }
+}
+
 /// Width for a floating window: the screen minus its own side margins, capped
 /// at `max`. A window that opens wider than the screen loses its right edge,
 /// including the close button, on every phone.
 pub(crate) fn window_width(ctx: &egui::Context) -> f32 {
-    (ctx.content_rect().width() - 2.0 * SP6).max(280.0)
+    window_width_for(ctx.content_rect().width())
+}
+
+/// The arithmetic behind `window_width`, split out so it is testable without a
+/// live `Context`.
+pub(crate) fn window_width_for(screen_w: f32) -> f32 {
+    (screen_w - 2.0 * SP6).max(280.0)
 }
 
 /// Standard panel corner radius (px).
@@ -451,6 +467,10 @@ impl eframe::App for App {
                     .inner_margin(margin(SP4, SP2)),
             )
             .show(ui, |ui| {
+                // Read the bar's width BEFORE any label is drawn: `narrow()`
+                // against the width left over after the status text hid the
+                // shortcut hint on an 864 px desktop window.
+                let bar_w = ui.available_width();
                 ui.horizontal_centered(|ui| {
                     match &state {
                         SearchState::Idle => {
@@ -486,8 +506,10 @@ impl eframe::App for App {
                             } else {
                                 String::new()
                             };
-                            let failed =
-                                crate::jackett::failed_note(&lock_or_recover(&self.search.failed));
+                            let failed = status_failed_note(
+                                &lock_or_recover(&self.search.failed),
+                                narrow(bar_w),
+                            );
                             lbl(
                                 ui,
                                 &format!(
@@ -517,8 +539,10 @@ impl eframe::App for App {
                             } else {
                                 String::new()
                             };
-                            let failed =
-                                crate::jackett::failed_note(&lock_or_recover(&self.search.failed));
+                            let failed = status_failed_note(
+                                &lock_or_recover(&self.search.failed),
+                                narrow(bar_w),
+                            );
                             lbl(
                                 ui,
                                 &format!(
@@ -537,7 +561,7 @@ impl eframe::App for App {
                     // The shortcut list is a keyboard hint; at phone width it
                     // overlapped the status text and was clipped mid-word, and
                     // a touch device has no keys to press anyway.
-                    if !narrow(ui.available_width()) {
+                    if !narrow(bar_w) {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             lbl(
                                 ui,
@@ -636,5 +660,32 @@ impl eframe::App for App {
             });
 
         self.draw_toasts(&ctx);
+    }
+}
+
+#[cfg(test)]
+mod breakpoint_tests {
+    use super::*;
+
+    /// The one breakpoint every screen asks about. Pinned at both ends: a phone
+    /// in portrait must reflow, and the app's default desktop window must not.
+    #[test]
+    fn the_breakpoint_separates_phones_from_desktop_windows() {
+        assert!(narrow(360.0), "360 px is a phone in portrait");
+        assert!(narrow(412.0), "412 px is a phone in portrait");
+        assert!(
+            !narrow(NARROW_W),
+            "the breakpoint itself is the wide layout"
+        );
+        assert!(!narrow(864.0), "the saved desktop window stays wide");
+        assert!(!narrow(1300.0));
+    }
+
+    /// A floating window must never be wider than the screen it opens on.
+    #[test]
+    fn a_window_is_never_wider_than_its_screen() {
+        // A 300 px screen minus the margins is under the floor, so the floor wins.
+        assert_eq!(window_width_for(300.0), 280.0, "clamped to the floor");
+        assert_eq!(window_width_for(1400.0), 1400.0 - 2.0 * SP6);
     }
 }
