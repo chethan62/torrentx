@@ -46,6 +46,11 @@ pub(crate) struct TorrentResult {
     pub(crate) magnet_uri: Option<String>,
     pub(crate) link: Option<String>,
     pub(crate) details: Option<String>,
+    /// Other trackers that carry the same infohash. Derived by
+    /// [`group_by_infohash`], never parsed from a feed, so it is skipped in both
+    /// directions of serde.
+    #[serde(skip)]
+    pub(crate) also_on: Vec<String>,
 }
 
 // ─── App state types ───────────────────────────────────────────────────────
@@ -497,6 +502,71 @@ pub(crate) fn dedupe_best_seeded(rows: Vec<TorrentResult>) -> Vec<TorrentResult>
     keep.into_iter().map(|i| rows[i].clone()).collect()
 }
 
+/// The `btih` value out of a magnet link, lowercased — "this is the same
+/// torrent, whatever tracker listed it".
+///
+/// Base32 is left as-is: indexers that emit base32 all emit the same base32, so
+/// it still compares equal, and decoding 32 chars to hex buys nothing here.
+pub(crate) fn info_hash(magnet: &str) -> Option<String> {
+    let rest = magnet.split("xt=urn:btih:").nth(1)?;
+    let v = rest.split('&').next().unwrap_or_default().trim();
+    (!v.is_empty()).then(|| v.to_ascii_lowercase())
+}
+
+/// One row per torrent, however many trackers carry it: the best-seeded copy
+/// survives and keeps the other trackers in `also_on`.
+///
+/// Name-based dedupe cannot merge "Show.S01.1080p-GRP" listed by two trackers
+/// when one of them appends its own tag, and it *must not* merge two different
+/// torrents that happen to share a name. The infohash is exact on both counts.
+/// Rows with no magnet (or no `btih`) pass through untouched.
+pub(crate) fn group_by_infohash(rows: Vec<TorrentResult>) -> Vec<TorrentResult> {
+    let mut best: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut trackers: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    let mut dropped: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    for (i, r) in rows.iter().enumerate() {
+        let Some(h) = r.magnet_uri.as_deref().and_then(info_hash) else {
+            continue;
+        };
+        let name = r.tracker.clone().unwrap_or_else(|| "—".to_string());
+        let seen = trackers.entry(h.clone()).or_default();
+        if !seen.contains(&name) {
+            seen.push(name);
+        }
+        match best.get(&h) {
+            Some(&j) if rows[j].seeders.unwrap_or(0) >= r.seeders.unwrap_or(0) => {
+                dropped.insert(i);
+            }
+            Some(&j) => {
+                // A better-seeded copy replaces the one seen earlier: drop `j`,
+                // keep `i`. (Dropping `i` here kept the first-seen row and threw
+                // the best-seeded one away — the test below caught exactly that.)
+                dropped.insert(j);
+                best.insert(h, i);
+            }
+            None => {
+                best.insert(h, i);
+            }
+        }
+    }
+    let mut out = Vec::with_capacity(rows.len());
+    for (i, mut r) in rows.into_iter().enumerate() {
+        if dropped.contains(&i) {
+            continue;
+        }
+        if let Some(h) = r.magnet_uri.as_deref().and_then(info_hash) {
+            let own = r.tracker.clone().unwrap_or_default();
+            r.also_on = trackers
+                .get(&h)
+                .map(|v| v.iter().filter(|t| **t != own).cloned().collect())
+                .unwrap_or_default();
+        }
+        out.push(r);
+    }
+    out
+}
+
 /// Sortable key for the date formats feeds actually emit: RFC 3339
 /// (`2024-05-01T10:20:30+00:00`), a bare `2024-05-01`, and RFC 2822/RFC 1123
 /// (`Tue, 07 May 2024 10:20:30 +0000`, which is what Jackett's torznab `pubDate`
@@ -917,6 +987,7 @@ fn append_results(
         let mut v = (**r).clone();
         v.append(&mut add);
         if dedupe {
+            v = group_by_infohash(v);
             v = dedupe_best_seeded(v);
         }
         let n = v.len();
@@ -1595,6 +1666,83 @@ mod tests {
         assert_eq!(validate_jackett_url("  http://localhost:9117  "), None);
     }
 
+    fn hashed(title: &str, tracker: &str, hash: &str, seeds: u32) -> TorrentResult {
+        TorrentResult {
+            title: title.into(),
+            tracker: Some(tracker.into()),
+            seeders: Some(seeds),
+            peers: Some(1),
+            size: Some(1),
+            magnet_uri: Some(format!("magnet:?xt=urn:btih:{hash}&dn=x")),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_same_infohash_from_three_trackers_is_one_row() {
+        let rows = vec![
+            hashed("Show S01 1080p-GRP", "apibay", "aa11", 5),
+            hashed("Show.S01.1080p-GRP", "knaben", "AA11", 900),
+            hashed("Show S01 1080p GRP", "other", "aa11", 40),
+        ];
+        let out = super::group_by_infohash(rows);
+        assert_eq!(out.len(), 1, "one torrent, three listings");
+        // The most-seeded copy survives — that is the one worth downloading.
+        assert_eq!(out[0].tracker.as_deref(), Some("knaben"));
+        assert_eq!(out[0].also_on.len(), 2);
+        assert!(out[0].also_on.contains(&"apibay".to_string()));
+        assert!(out[0].also_on.contains(&"other".to_string()));
+    }
+
+    #[test]
+    fn different_infohashes_with_the_same_title_stay_separate() {
+        // The exact case name-based dedupe gets wrong: two different torrents,
+        // one title.
+        let rows = vec![
+            hashed("Big Buck Bunny 1080p", "a", "bb22", 10),
+            hashed("Big Buck Bunny 1080p", "b", "cc33", 20),
+        ];
+        let out = super::group_by_infohash(rows);
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|r| r.also_on.is_empty()));
+    }
+
+    #[test]
+    fn rows_without_a_magnet_or_hash_pass_through() {
+        let rows = vec![
+            TorrentResult {
+                title: "No magnet".into(),
+                tracker: Some("a".into()),
+                ..Default::default()
+            },
+            TorrentResult {
+                title: "Link only".into(),
+                tracker: Some("b".into()),
+                magnet_uri: Some("magnet:?dn=no-hash".into()),
+                ..Default::default()
+            },
+        ];
+        let out = super::group_by_infohash(rows);
+        assert_eq!(out.len(), 2, "nothing to group on, nothing merged");
+        assert!(out.iter().all(|r| r.also_on.is_empty()));
+    }
+
+    #[test]
+    fn info_hash_parses_the_btih_field() {
+        assert_eq!(
+            super::info_hash("magnet:?xt=urn:btih:ABCDEF&dn=x").as_deref(),
+            Some("abcdef")
+        );
+        // base32 stays base32, just lowercased: equal values still compare equal.
+        assert_eq!(
+            super::info_hash("magnet:?xt=urn:btih:abcdefghijklmnopqrstuvwxyz234567").as_deref(),
+            Some("abcdefghijklmnopqrstuvwxyz234567")
+        );
+        assert_eq!(super::info_hash("magnet:?dn=x"), None);
+        assert_eq!(super::info_hash("https://example.org/x.torrent"), None);
+        assert_eq!(super::info_hash("magnet:?xt=urn:btih:&dn=x"), None);
+    }
+
     #[test]
     fn dedupe_keeps_the_best_seeded_copy() {
         let row = |title: &str, seeds: u32, tracker: &str| TorrentResult {
@@ -1831,6 +1979,67 @@ mod tests {
         assert!(err.contains("Unexpected response from Jackett"), "{err}");
         assert!(!err.contains("SECRETKEY123"), "the API key leaked: {err}");
         assert!(!err.contains("apikey"), "the query string leaked: {err}");
+    }
+
+    /// End to end through the real fetch path: one torrent listed by two
+    /// indexers must arrive as one row that names the other indexer.
+    #[test]
+    fn one_infohash_from_two_indexers_arrives_as_one_row() {
+        use super::{SearchCtx, fetch_into};
+        use std::net::TcpListener;
+        use std::sync::{Arc, Mutex};
+
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            for _ in 0..2 {
+                let Ok((mut s, _)) = l.accept() else { return };
+                let mut buf = [0u8; 2048];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                // Same torrent, same infohash, two indexers, different seed counts.
+                let seeds = if req.contains("/beta/") { 900 } else { 5 };
+                let tracker = if req.contains("/beta/") {
+                    "beta"
+                } else {
+                    "alpha"
+                };
+                let body = format!(
+                    r#"{{"Results":[{{"Title":"Show S01 1080p-GRP","Tracker":"{tracker}","Seeders":{seeds},"Peers":3,"Size":1000,"MagnetUri":"magnet:?xt=urn:btih:aa11&dn=x"}}],"Indexers":[]}}"#
+                );
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = s.write_all(head.as_bytes());
+                let _ = s.write_all(body.as_bytes());
+                let _ = s.flush();
+            }
+        });
+
+        let ctx = SearchCtx {
+            url: format!("http://127.0.0.1:{port}"),
+            key: "k".into(),
+            query: "show".into(),
+            cat: "All".into(),
+            timeout: 5,
+            dedupe: true,
+        };
+        let results = Arc::new(Mutex::new(Arc::new(vec![])));
+        let count = Arc::new(Mutex::new(0usize));
+        fetch_into(&ctx, "alpha", &results, &count).unwrap();
+        fetch_into(&ctx, "beta", &results, &count).unwrap();
+
+        let rows = (**lock_or_recover(&results)).clone();
+        assert_eq!(rows.len(), 1, "one torrent → one row");
+        assert_eq!(rows[0].tracker.as_deref(), Some("beta"), "best-seeded wins");
+        assert_eq!(rows[0].also_on, vec!["alpha".to_string()]);
+        assert_eq!(
+            *lock_or_recover(&count),
+            1,
+            "the count agrees with the table"
+        );
     }
 
     /// The aggregate route reports a failed indexer inside a 200 body. Reading

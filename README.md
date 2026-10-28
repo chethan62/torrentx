@@ -51,6 +51,7 @@ Results stream in per tracker instead of arriving all at once at the end:
 - Two built-in sources, `apibay` and `knaben` — Jackett is a source, not a requirement
 - Your own indexers as files: one JSON definition per site in `~/.config/torrentx/indexers/`
 - Results stream in per tracker; the status bar names any tracker that failed
+- **Same torrent on several trackers is one row** — grouped by infohash, best-seeded copy shown, `Tracker +2` names the rest
 - Deduplication across trackers (search and RSS), search history with per-item delete
 
 **Results and filtering**

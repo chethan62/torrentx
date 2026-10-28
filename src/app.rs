@@ -7,7 +7,7 @@
 use crate::config::{Config, Favorite, save_cfg};
 use crate::jackett::{
     Hlth, SearchState, SortCol, SortDir, TorrentResult, cat_col, dedupe_best_seeded, fmt_size,
-    is_magnet, now_str, pub_date_key, pub_year, set_err, start_search, time_ago,
+    group_by_infohash, is_magnet, now_str, pub_date_key, pub_year, set_err, start_search, time_ago,
 };
 use crate::lock_or_recover;
 use crate::rss::{FeedStatus, RssFeedConfig, RssItem, start_rss_fetch};
@@ -315,6 +315,7 @@ mod view_tests {
             magnet_uri: Some(format!("magnet:?xt=urn:btih:{}", "a".repeat(40))),
             link: None,
             details: None,
+            also_on: Vec::new(),
         }
     }
 
@@ -1331,7 +1332,7 @@ impl App {
             return;
         }
         let mut g = lock_or_recover(&self.search.results);
-        let deduped = dedupe_best_seeded((**g).clone());
+        let deduped = dedupe_best_seeded(group_by_infohash((**g).clone()));
         if deduped.len() == g.len() {
             return;
         }

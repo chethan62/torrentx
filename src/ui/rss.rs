@@ -22,6 +22,7 @@ impl App {
             && let Some(item) = feed.items.get(di).cloned()
         {
             self.ui.detail_row = Some(TorrentResult {
+                also_on: Vec::new(),
                 title: item.title.clone(),
                 magnet_uri: item.magnet.clone(),
                 link: item.link.clone(),

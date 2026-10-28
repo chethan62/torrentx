@@ -14,14 +14,29 @@ pub(crate) fn draw_cell_content(
     // Leading padding is the caller's cell inset (see CELL_PAD_X in results.rs).
     match c {
         TableCol::Tracker => {
-            ui.add(
+            // Grouped by infohash: "Tracker +2" and the rest on hover. The count
+            // is worth a column cell of its own only when it is not 1.
+            let own = r.tracker.as_deref().unwrap_or("—");
+            let text = if r.also_on.is_empty() {
+                own.to_string()
+            } else {
+                format!("{} +{}", own, r.also_on.len())
+            };
+            let resp = ui.add(
                 egui::Label::new(
-                    RichText::new(r.tracker.as_deref().unwrap_or("—"))
+                    RichText::new(text)
                         .font(FontId::proportional(fsz - 1.0))
-                        .color(pal.sub),
+                        .color(if r.also_on.is_empty() {
+                            pal.sub
+                        } else {
+                            pal.accent
+                        }),
                 )
                 .truncate(),
             );
+            if !r.also_on.is_empty() {
+                resp.on_hover_text(format!("Also on: {}", r.also_on.join(", ")));
+            }
         }
         TableCol::Size => {
             ui.label(
