@@ -112,9 +112,23 @@ cargo apk build --lib          # -> target/debug/apk/torrentx.apk (~85 MB, debug
 ```
 
 `--lib` is required: the package has both a `cdylib` (what Android loads) and the
-desktop `bin`, and cargo-apk refuses a package that mixes the two. A **release**
-APK additionally needs a keystore in
-`[package.metadata.android.signing.release]` — deliberately not committed here.
+desktop `bin`, and cargo-apk refuses a package that mixes the two.
+
+A **release** APK needs a signing key. It is read from the environment, never from
+this repo (`cargo-apk` checks these before `Cargo.toml`):
+
+```bash
+# one-time; back the keystore up — losing it means no in-place updates
+keytool -genkeypair -keystore ~/.config/torrentx/torrentx-release.jks \
+  -storetype PKCS12 -alias torrentx -keyalg RSA -keysize 4096 -validity 10000 \
+  -dname "CN=TorrentX, O=chethan62, C=IN"
+printf 'export CARGO_APK_RELEASE_KEYSTORE=%s\nexport CARGO_APK_RELEASE_KEYSTORE_PASSWORD=%s\n' \
+  ~/.config/torrentx/torrentx-release.jks <password> > ~/.config/torrentx/signing.env
+chmod 600 ~/.config/torrentx/signing.env ~/.config/torrentx/torrentx-release.jks
+
+./scripts/build-apk.sh          # sources signing.env; 13 MB signed release APK
+./scripts/build-apk.sh debug    # debug-signed, ~85 MB
+```
 
 On the device the native sources (apibay, knaben) and definition files work; the
 player does not (it shells out to mpv/vlc/webtorrent), and the tray, desktop
