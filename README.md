@@ -16,9 +16,14 @@ Native egui — no Electron, no browser, ~17 MB AppImage.
 
 ## Screenshots
 
-Results table with the detail panel open. 19 themes ship — 16 dark, 3 light — switching instantly.
+A search with the detail panel open: per-tracker rows, health bands, and the magnet/file list for the
+selected release. 19 themes ship — 16 dark, 3 light — switching instantly.
 
-<img width="880" alt="TorrentX — results table with the detail panel open (Tokyo Night)" src="docs/screenshots/dark.png">
+<img width="880" alt="TorrentX — results for a search with the detail panel open" src="docs/screenshots/results-detail.png">
+
+Results stream in per tracker instead of arriving all at once at the end:
+
+<img width="880" alt="TorrentX — results appearing per tracker as each one answers" src="docs/screenshots/streaming.gif">
 
 <details>
 <summary>Light theme (Catppuccin Latte)</summary>
