@@ -9,9 +9,13 @@
 
 ## Screenshots
 
-| Dark (Tokyo Night) | Light (Catppuccin Latte) |
-|--------------------|--------------------------|
-| ![Dark theme — Tokyo Night](docs/screenshots/dark.png) | ![Light theme — Catppuccin Latte](docs/screenshots/light.png) |
+**Dark — Tokyo Night**
+
+<img width="880" alt="TorrentX — dark theme (Tokyo Night)" src="docs/screenshots/dark.png">
+
+**Light — Catppuccin Latte**
+
+<img width="880" alt="TorrentX — light theme (Catppuccin Latte)" src="docs/screenshots/light.png">
 
 *19 themes total — 16 dark + 3 light, instant switching.*
 
