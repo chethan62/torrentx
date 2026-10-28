@@ -141,13 +141,59 @@ a desktop window — set a smaller window/`ui_scale` for now.
 
 ## Setup
 
-1. Launch TorrentX
-2. Click ⚙ **Settings**
-3. Enter your Jackett URL (default: `http://localhost:9117`) and API Key
-4. Start searching
+**Preconditions:** Linux x86-64 with a desktop session (X11 or Wayland), `curl`, and write access to
+`~/Applications` — or pass your own `INSTALL_DIR`. Jackett is optional: the built-in `apibay` and
+`knaben` sources search without it.
+
+1. **Install it** — one command: resolves the latest release, verifies it against the release's
+   `sha256sums.txt`, and drops the AppImage in `~/Applications`. Re-running it upgrades in place.
+
+   ```bash
+   curl -fsSL \
+     https://github.com/chethan62/torrentx/raw/main/scripts/install.sh \
+     | sh
+   ```
+
+   Elsewhere: `… | INSTALL_DIR=/opt/tx sh` — the variable has to sit on the **`sh`** side of the pipe.
+2. **Launch it**:
+
+   ```bash
+   ~/Applications/TorrentX.AppImage
+   ```
+3. Click ⚙ **Settings**
+4. Enter your Jackett URL (default: `http://localhost:9117`) and API Key
+5. Start searching
 
 📖 **Full documentation**: [GUIDE.md](GUIDE.md) — installation, filters,
 RSS, settings reference, config file, troubleshooting, and privacy notes.
+
+## Usage
+
+1. **Search** — type a query and press `Enter`. Rows appear per tracker as each one answers; the
+   status bar names any tracker that failed.
+2. **Narrow it** — set Category and Indexer, then `Filters` (text, min seeds, max GB, year, tracker,
+   health) and the category chips. Click a header to sort, drag a column separator to resize.
+3. **Inspect** — click a row: the detail panel shows tracker, size, ratio, health, the magnet and the
+   file list.
+4. **Act on the selection** — `M` opens the magnet, `P` streams it (mpv or vlc, via
+   `webtorrent-cli`), `F` saves it to Favorites.
+5. **Come back later** — Favorites and RSS are their own tabs; `Esc` closes the panel and `Ctrl+R`
+   re-runs the last search.
+
+| Key | Does |
+| --- | --- |
+| `↑` `↓` | Move the selection |
+| `Enter` / `M` | Open the magnet for the selected row |
+| `D` | Toggle the detail panel |
+| `F` | Favorite the selected row |
+| `P` | Stream the selected row (needs `webtorrent-cli` on `PATH`) |
+| `Esc` | Close the detail panel / clear the query |
+| `Ctrl+F` | Focus the search field |
+| `Ctrl+A` / `Ctrl+C` | Select all visible rows / copy the magnet |
+| `Ctrl+R` | Re-run the last search |
+| `Ctrl` `+` / `−` / `0` | Scale the interface up / down / back to 100% |
+
+Shortcuts don't fire while you're typing in a field.
 
 ## Tech
 
