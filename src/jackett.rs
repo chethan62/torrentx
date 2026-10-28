@@ -530,9 +530,15 @@ pub(crate) fn group_by_infohash(rows: Vec<TorrentResult>) -> Vec<TorrentResult> 
             continue;
         };
         let name = r.tracker.clone().unwrap_or_else(|| "—".to_string());
+        // Accumulate every name this *row* already carries, not just its own
+        // tracker: the pipeline appends one indexer at a time, and when a later,
+        // better-seeded row replaces the survivor the names it held would
+        // otherwise go with it (order beta,gamma,alpha lost gamma).
         let seen = trackers.entry(h.clone()).or_default();
-        if !seen.contains(&name) {
-            seen.push(name);
+        for t in std::iter::once(&name).chain(r.also_on.iter()) {
+            if !seen.contains(t) {
+                seen.push(t.clone());
+            }
         }
         match best.get(&h) {
             Some(&j) if rows[j].seeders.unwrap_or(0) >= r.seeders.unwrap_or(0) => {
@@ -1979,6 +1985,78 @@ mod tests {
         assert!(err.contains("Unexpected response from Jackett"), "{err}");
         assert!(!err.contains("SECRETKEY123"), "the API key leaked: {err}");
         assert!(!err.contains("apikey"), "the query string leaked: {err}");
+    }
+
+    /// The pipeline appends one indexer at a time, so grouping runs on a partial
+    /// set each round. The surviving row must end up naming *all* the others, not
+    /// just the one that arrived second.
+    #[test]
+    fn appending_three_indexers_keeps_every_other_tracker() {
+        use super::{TorrentResult, append_results};
+        use std::sync::{Arc, Mutex};
+        let results = Arc::new(Mutex::new(Arc::new(Vec::<TorrentResult>::new())));
+        let count = Arc::new(Mutex::new(0usize));
+        for (tracker, seeds) in [("alpha", 812u32), ("beta", 410), ("gamma", 36)] {
+            let row = TorrentResult {
+                title: "Show S06E05 1080p".into(),
+                tracker: Some(tracker.into()),
+                seeders: Some(seeds),
+                magnet_uri: Some("magnet:?xt=urn:btih:aa11&dn=x".into()),
+                ..Default::default()
+            };
+            append_results(&results, &count, vec![row], true);
+        }
+        let rows = (**lock_or_recover(&results)).clone();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].tracker.as_deref(), Some("alpha"));
+        let mut also = rows[0].also_on.clone();
+        also.sort();
+        assert_eq!(also, vec!["beta".to_string(), "gamma".to_string()]);
+    }
+
+    /// The fan-out answers in whatever order the trackers do, so every
+    /// permutation has to end with the same row and the same set of others —
+    /// including the case where the best-seeded copy arrives last.
+    #[test]
+    fn the_arrival_order_does_not_change_the_merged_row() {
+        use super::{TorrentResult, append_results};
+        use std::sync::{Arc, Mutex};
+        let seeds = [("alpha", 812u32), ("beta", 470), ("gamma", 96)];
+        let mut orders = 0;
+        for a in 0..3 {
+            for b in 0..3 {
+                for c in 0..3 {
+                    if a == b || b == c || a == c {
+                        continue;
+                    }
+                    orders += 1;
+                    let results = Arc::new(Mutex::new(Arc::new(Vec::<TorrentResult>::new())));
+                    let count = Arc::new(Mutex::new(0usize));
+                    for i in [a, b, c] {
+                        let (tracker, n) = seeds[i];
+                        let row = TorrentResult {
+                            title: "Show S06E05 1080p".into(),
+                            tracker: Some(tracker.into()),
+                            seeders: Some(n),
+                            magnet_uri: Some("magnet:?xt=urn:btih:aa11&dn=x".into()),
+                            ..Default::default()
+                        };
+                        append_results(&results, &count, vec![row], true);
+                    }
+                    let rows = (**lock_or_recover(&results)).clone();
+                    assert_eq!(rows.len(), 1, "order {a}{b}{c}");
+                    assert_eq!(rows[0].tracker.as_deref(), Some("alpha"), "order {a}{b}{c}");
+                    let mut also = rows[0].also_on.clone();
+                    also.sort();
+                    assert_eq!(
+                        also,
+                        vec!["beta".to_string(), "gamma".to_string()],
+                        "order {a}{b}{c} lost a tracker"
+                    );
+                }
+            }
+        }
+        assert_eq!(orders, 6);
     }
 
     /// End to end through the real fetch path: one torrent listed by two
