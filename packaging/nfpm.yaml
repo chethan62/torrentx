@@ -1,0 +1,41 @@
+# .deb / .rpm packaging for the release workflow (nfpm builds both from here).
+name: torrentx
+arch: amd64
+platform: linux
+version: ${TX_VERSION}
+section: net
+priority: optional
+maintainer: chethan62 <chethan62@users.noreply.github.com>
+description: |
+  Torrent search client for Jackett.
+  Native egui window over your Jackett indexers (or the two sources built in),
+  with results streaming in per tracker, filters, favourites, RSS and a detail
+  panel. No Electron, no browser.
+vendor: chethan62
+homepage: https://github.com/chethan62/torrentx
+license: MIT OR Apache-2.0
+# The release binary links only libgcc/libm/libc — winit, xkbcommon and ALSA come
+# in statically — so there is no library list to declare.
+contents:
+  - src: target/release/torrentx
+    dst: /usr/bin/torrentx
+  - src: AppDir/torrentx.desktop
+    dst: /usr/share/applications/torrentx.desktop
+  - src: AppDir/torrentx.png
+    dst: /usr/share/icons/hicolor/256x256/apps/torrentx.png
+  - src: AppDir/torrentx.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/torrentx.svg
+  - src: assets/io.github.chethan62.torrentx.metainfo.xml
+    dst: /usr/share/metainfo/io.github.chethan62.torrentx.metainfo.xml
+  - src: LICENSE
+    dst: /usr/share/doc/torrentx/LICENSE
+  - src: LICENSE-MIT
+    dst: /usr/share/doc/torrentx/LICENSE-MIT
+  - src: LICENSE-APACHE
+    dst: /usr/share/doc/torrentx/LICENSE-APACHE
+  - src: assets/NotoSansCJKjp-subset.LICENSE.txt
+    dst: /usr/share/doc/torrentx/NotoSansCJKjp-subset.LICENSE.txt
+  - src: assets/Lucide.ISC.LICENSE.txt
+    dst: /usr/share/doc/torrentx/Lucide.ISC.LICENSE.txt
+  - src: docs/licenses.md
+    dst: /usr/share/doc/torrentx/licenses.md

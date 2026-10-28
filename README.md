@@ -131,8 +131,14 @@ chmod +x TorrentX-*-x86_64.AppImage
 | Platform | File | Size |
 |----------|------|------|
 | Linux (AppImage) | `TorrentX-<version>-x86_64.AppImage` | ~17 MB |
+| Debian / Ubuntu | `torrentx_<version>_amd64.deb` | ~18 MB |
+| Fedora / openSUSE | `torrentx-<version>-1.x86_64.rpm` | ~18 MB |
 | Linux (binary) | `torrentx-v<version>-x86_64-linux.tar.gz` | ~17 MB |
 | Windows (x64) | `TorrentX-<version>-windows-x64.zip` | ~14 MB (static CRT) |
+
+The `.deb`/`.rpm` put the binary in `/usr/bin`, with the desktop entry, icon and metainfo, so the app
+appears in the launcher. They are **built on Ubuntu 24.04**, so they need glibc ≥ 2.39 — on anything
+older (Debian 12, Ubuntu 22.04) use the AppImage, which carries its own runtime.
 
 Windows builds are compiled, packaged and **launched** on a Windows runner in CI
 (`.github/workflows/windows-native.yml`), but have not been driven by hand on Windows hardware —
