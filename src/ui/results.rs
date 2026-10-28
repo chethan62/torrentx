@@ -213,13 +213,16 @@ impl App {
         // are overridden above, and using them here would keep the table wider
         // than the window and bring the horizontal bar back.
         let base_w: f32 = widths.iter().sum::<f32>() + action_w;
-        // Phone: fit the scroll area, so no horizontal bar. Desktop keeps the
-        // Excel-exact width and scrolls.
-        let table_w = if phone {
-            base_w.max(viewport_w - scroll_bar_w)
-        } else {
-            base_w.max(viewport_w)
-        };
+        // Size to the scroll area, not the panel: the vertical bar takes its own
+        // room out of the inner width, so a table equal to `viewport_w` came out
+        // a bar-width too wide and the horizontal bar showed on every window
+        // where the columns happened to fit. `base_w` wider than that is real
+        // overflow and still scrolls.
+        // egui_extras adds ~36 pt of its own padding/bar reserve to the width it
+        // is given, so a table sized to the inner width came out wider and drew
+        // the horizontal bar (measured: inner 1290.9, content 1313.0). Size it to
+        // the inner width minus that reserve; `base_w` above it still scrolls.
+        let table_w = base_w.max(viewport_w - scroll_bar_w - HSCROLL_ROOM);
         // The table needs a bar you can see and grab. egui's default
         // `ScrollStyle::floating()` draws a dormant 2px line in the handle colour
         // (here: the border colour) that only grows while hovered, so a table

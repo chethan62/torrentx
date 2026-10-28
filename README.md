@@ -28,6 +28,11 @@ Results stream in per tracker instead of arriving all at once at the end:
 
 <img width="880" alt="TorrentX — results appearing per tracker as each one answers" src="docs/screenshots/streaming.gif">
 
+The same release listed by several indexers is one row: `alpha +2` means two more trackers carry it,
+and hovering names them.
+
+<img width="880" alt="TorrentX — one row per infohash, the Tracker column showing alpha +2" src="docs/screenshots/hash-groups.png">
+
 <details>
 <summary>Light theme (Catppuccin Latte)</summary>
 
