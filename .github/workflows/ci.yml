@@ -101,6 +101,57 @@ jobs:
       - name: Licences + advisories (cargo-deny)
         run: cargo deny --all-features check licenses advisories bans sources
 
+  # Runs the suite 20x to catch the order-dependent, timing-sensitive tests that
+  # a single green run cannot see. One test passed on every push and failed in
+  # the wild because it read a state a few microseconds before it settled (PR
+  # #65); that class only shows up under repetition.
+  #
+  # Deliberately NOT part of the required `build + test + clippy` check: a flaky
+  # test should be visible and fail this job, not block every merge on a rerun.
+  flake-check:
+    name: flake check (20x)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install system deps (egui/winit)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libasound2-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxcb1-dev libssl-dev pkg-config
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # Build once; the 20 passes below then only run the binaries. `cargo test`
+      # still checks freshness, which costs nothing after this warmed the tree.
+      - name: Build tests
+        run: cargo test --all-targets --no-run
+
+      - name: Run the suite 20x
+        run: |
+          for i in $(seq 1 20); do
+            printf '::group::run %s/20\n' "$i"
+            if ! cargo test --all-targets; then
+              echo "::error::test suite failed on run $i of 20 — investigate as a flake"
+              exit 1
+            fi
+            echo '::endgroup::'
+          done
+          echo "flake check: 20/20 clean"
+
   # The Windows claim is proven by .github/workflows/windows-native.yml, which
   # builds natively on a Windows runner and asserts a window appears. The mingw
   # cross-compile job that used to live here added no signal on top of that (it
