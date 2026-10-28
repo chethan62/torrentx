@@ -20,6 +20,9 @@ fn cell_rect(ui: &egui::Ui) -> egui::Rect {
 
 /// Width of the trailing Actions column (5 icon buttons + gaps).
 const ACTION_COL_W: f32 = 190.0;
+/// Phone width: the row drops Copy and Detail (a tap on the row opens the
+/// panel), so three buttons fit in this instead of five.
+const ACTION_COL_W_PHONE: f32 = 124.0;
 /// Narrowest a column can be dragged, and the widest (Excel clamps to 255 chars).
 const COL_MIN_W: f32 = 60.0;
 const COL_MAX_W: f32 = 900.0;
@@ -36,6 +39,20 @@ const COL_HANDLE_H: f32 = 30.0;
 /// negative height, which panics in its layout pass (`Negative size: [0.0 -20.0]`).
 fn table_viewport_h(available: f32) -> f32 {
     (available - HSCROLL_ROOM).max(1.0)
+}
+
+/// Widths for the three columns the phone layout keeps — `(name, size, seeds)` —
+/// fitted to `avail` so the table cannot come out wider than the scroll area: a
+/// wider table brings back the horizontal bar and clips every title.
+///
+/// Every width is at least [`COL_MIN_W`], because `Column::exact` under a
+/// column's `at_least` makes egui_extras panic (`min > max`) — which is exactly
+/// how the first attempt at this crashed at 412 pt.
+fn phone_col_widths(avail: f32, action_w: f32) -> (f32, f32, f32) {
+    let size_w = 78.0;
+    let seeds_w = 62.0;
+    let name_w = (avail - size_w - seeds_w - action_w).max(COL_MIN_W);
+    (name_w, size_w, seeds_w)
 }
 
 impl App {
@@ -70,20 +87,36 @@ impl App {
 
         let mut new_sort: Option<(SortCol, bool)> = None;
 
+        // A 412 pt window cannot hold the stored column set: the table would be
+        // Name plus a horizontal scrollbar, every title cut off. Keep the three
+        // that answer "what is it, how big, how alive" and let Name take the rest.
+        let phone = crate::ui::narrow(ui.available_width());
+        let action_w = if phone {
+            ACTION_COL_W_PHONE
+        } else {
+            ACTION_COL_W
+        };
+
         // Visible columns in user-configured order
         let cols: Vec<TableCol> = self
             .cfg
             .col_order
             .iter()
             .filter_map(|n| TableCol::from_name(n))
-            .filter(|c| match c {
-                TableCol::Name | TableCol::Seeds => true,
-                TableCol::Tracker => col_shown.0,
-                TableCol::Size => col_shown.1,
-                TableCol::Leech => col_shown.2,
-                TableCol::Ratio => col_shown.3,
-                TableCol::Health => col_shown.4,
-                TableCol::Date => col_shown.5,
+            .filter(|c| {
+                if phone {
+                    matches!(c, TableCol::Name | TableCol::Size | TableCol::Seeds)
+                } else {
+                    match c {
+                        TableCol::Name | TableCol::Seeds => true,
+                        TableCol::Tracker => col_shown.0,
+                        TableCol::Size => col_shown.1,
+                        TableCol::Leech => col_shown.2,
+                        TableCol::Ratio => col_shown.3,
+                        TableCol::Health => col_shown.4,
+                        TableCol::Date => col_shown.5,
+                    }
+                }
             })
             .collect();
 
@@ -119,7 +152,24 @@ impl App {
         // fresh config still fills the window; once `name` has a stored width the
         // table is Excel-exact and may leave space on the right.
         let mut widths = self.ui.col_w.clone();
-        let base_now: f32 = widths.iter().sum::<f32>() + ACTION_COL_W;
+        let scroll_bar_w = ui.spacing().scroll.bar_inner_margin
+            + ui.spacing().scroll.bar_outer_margin
+            + ui.spacing().scroll.bar_width;
+        if phone {
+            // Stored widths are a desktop preference ("Excel-exact"); applied to
+            // a 412 pt window they overflow it and clip every title, so phone
+            // width fits the three columns it keeps to the viewport instead.
+            let (name_w, size_w, seeds_w) = phone_col_widths(viewport_w - scroll_bar_w, action_w);
+            for (i, c) in cols.iter().enumerate() {
+                widths[i] = match c {
+                    TableCol::Name => name_w,
+                    TableCol::Size => size_w,
+                    TableCol::Seeds => seeds_w,
+                    _ => widths[i],
+                };
+            }
+        }
+        let base_now: f32 = widths.iter().sum::<f32>() + action_w;
         if !self.cfg.col_widths.contains_key(TableCol::Name.key())
             && let Some(i) = cols.iter().position(|c| *c == TableCol::Name)
             && (viewport_w - base_now) > 0.0
@@ -144,8 +194,17 @@ impl App {
         // the stored widths put every handle in the wrong place, which is why the
         // lines looked draggable and were not. Filled by the header closure.
         let mut col_rects: Vec<egui::Rect> = Vec::with_capacity(cols.len());
-        let base_w: f32 = self.ui.col_w.iter().sum::<f32>() + ACTION_COL_W;
-        let table_w = base_w.max(viewport_w);
+        // `widths`, not the stored self.ui.col_w: on a phone the stored widths
+        // are overridden above, and using them here would keep the table wider
+        // than the window and bring the horizontal bar back.
+        let base_w: f32 = widths.iter().sum::<f32>() + action_w;
+        // Phone: fit the scroll area, so no horizontal bar. Desktop keeps the
+        // Excel-exact width and scrolls.
+        let table_w = if phone {
+            base_w.max(viewport_w - scroll_bar_w)
+        } else {
+            base_w.max(viewport_w)
+        };
         // The table needs a bar you can see and grab. egui's default
         // `ScrollStyle::floating()` draws a dormant 2px line in the handle colour
         // (here: the border colour) that only grows while hovered, so a table
@@ -165,51 +224,84 @@ impl App {
         // Hand-formatted closure body — #[rustfmt::skip] keeps the compact
         // single-level indentation instead of rustfmt's +1 level reflow.
         #[rustfmt::skip]
-        let sa_out = egui::ScrollArea::both()
+        // Phone width fits the columns to the window, so a horizontal bar there
+        // is pure noise (and it reappeared no matter how the reserve was
+        // computed — the scroll area's own margins differ from available_width).
+        let sa = if phone {
+            egui::ScrollArea::vertical()
+        } else {
+            egui::ScrollArea::both()
+        };
+        let sa_out = sa
             .id_salt("results_scroll")
             .auto_shrink([false, true])
             .show(ui, |ui| {
-        // Content keeps the normal widget fills; only the bars use `dim`.
-        ui.visuals_mut().widgets.inactive.bg_fill = inactive_before;
-        ui.visuals_mut().widgets.hovered.bg_fill = hovered_before;
-        // Both bounds: a min_width alone leaves the table free to report a
-        // narrower content rect, so the ScrollArea never saw the overflow and
-        // never drew its bar. With a definite width the columns (all exact) fit
-        // exactly and the scroll area measures the real width.
-        ui.set_min_width(table_w);
-        ui.set_max_width(table_w);
-        ui.set_max_height(viewport_h);
-        let mut tb = TableBuilder::new(ui)
-            .striped(false)
-            .resizable(false)
-            .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
-        // The Name column is the flexible one (absorbs window slack); all
-        // other data columns are fixed-width. Actions is a normal resizable
-        // column — NOT remainder — because egui pins a trailing remainder
-        // column to fill all leftover space, which makes its separator
-        // undraggable once moved (the stuck-drag bug).
-        // Actions holds up to 5 icon buttons (32px each + gaps ≈ 190px), so
-        // its floor must stay high; the Name remainder shrinks to absorb
-        // narrow width. egui_extras 0.36 hardcodes hscroll OFF → columns clip
-        // past the viewport, but every column is user-resizable.
-        // Every column has an owned, exact width: no remainder, so nothing
-        // compensates for a resize. egui_extras' own drag handles are off — this
-        // file draws its own at the boundaries below the table body.
-        for (i, _c) in cols.iter().enumerate() {
-            tb = tb.column(
-                Column::exact(widths.get(i).copied().unwrap_or(120.0))
-                    .at_least(COL_MIN_W)
-                    .clip(true),
-            );
-        }
-        tb = tb.column(Column::exact(ACTION_COL_W).at_least(150.0).clip(true)); // Actions
-        tb.header(30.0, |mut header| {
-            new_sort = self.results_header(&mut header, &cols, &pal, fsz, &s_col, &s_dir, &mut col_rects);
-        })
-        .body(|mut body| {
-            self.results_rows(&mut body, page_s, base, &cols, &pal, rh, fsz, sel, det_open, &mut actions);
-        });
-        }); // end ScrollArea::both
+                // Content keeps the normal widget fills; only the bars use `dim`.
+                ui.visuals_mut().widgets.inactive.bg_fill = inactive_before;
+                ui.visuals_mut().widgets.hovered.bg_fill = hovered_before;
+                // Both bounds: a min_width alone leaves the table free to report a
+                // narrower content rect, so the ScrollArea never saw the overflow and
+                // never drew its bar. With a definite width the columns (all exact) fit
+                // exactly and the scroll area measures the real width.
+                ui.set_min_width(table_w);
+                ui.set_max_width(table_w);
+                ui.set_max_height(viewport_h);
+                let mut tb = TableBuilder::new(ui)
+                    .striped(false)
+                    .resizable(false)
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
+                // The Name column is the flexible one (absorbs window slack); all
+                // other data columns are fixed-width. Actions is a normal resizable
+                // column — NOT remainder — because egui pins a trailing remainder
+                // column to fill all leftover space, which makes its separator
+                // undraggable once moved (the stuck-drag bug).
+                // Actions holds up to 5 icon buttons (32px each + gaps ≈ 190px), so
+                // its floor must stay high; the Name remainder shrinks to absorb
+                // narrow width. egui_extras 0.36 hardcodes hscroll OFF → columns clip
+                // past the viewport, but every column is user-resizable.
+                // Every column has an owned, exact width: no remainder, so nothing
+                // compensates for a resize. egui_extras' own drag handles are off — this
+                // file draws its own at the boundaries below the table body.
+                for (i, _c) in cols.iter().enumerate() {
+                    tb = tb.column(
+                        Column::exact(widths.get(i).copied().unwrap_or(120.0))
+                            .at_least(COL_MIN_W)
+                            .clip(true),
+                    );
+                }
+                // Column::at_least must not exceed Column::exact, or egui_extras panics.
+                tb = tb.column(
+                    Column::exact(action_w)
+                        .at_least(action_w.min(150.0))
+                        .clip(true),
+                ); // Actions
+                tb.header(30.0, |mut header| {
+                    new_sort = self.results_header(
+                        &mut header,
+                        &cols,
+                        &pal,
+                        fsz,
+                        &s_col,
+                        &s_dir,
+                        &mut col_rects,
+                    );
+                })
+                .body(|mut body| {
+                    self.results_rows(
+                        &mut body,
+                        page_s,
+                        base,
+                        &cols,
+                        &pal,
+                        rh,
+                        fsz,
+                        sel,
+                        det_open,
+                        phone,
+                        &mut actions,
+                    );
+                });
+            }); // end ScrollArea::both
         ui.spacing_mut().scroll = style_before;
         ui.visuals_mut().widgets.inactive.bg_fill = inactive_before;
         ui.visuals_mut().widgets.hovered.bg_fill = hovered_before;
@@ -469,6 +561,7 @@ impl App {
         fsz: f32,
         sel: Option<usize>,
         det_open: bool,
+        phone: bool,
         actions: &mut Vec<(usize, &'static str)>,
     ) {
         self.ui.hovered = None;
@@ -661,7 +754,10 @@ impl App {
                         {
                             actions.push((i, "mag"));
                         }
-                        if has_mag && svg_btn(ui, SvgIcon::Copy, "Copy magnet link", pal.sub) {
+                        if has_mag
+                            && !phone
+                            && svg_btn(ui, SvgIcon::Copy, "Copy magnet link", pal.sub)
+                        {
                             actions.push((i, "copy"));
                         }
                         if has_link
@@ -686,16 +782,18 @@ impl App {
                         ) {
                             actions.push((i, "fav"));
                         }
-                        if svg_btn(
-                            ui,
-                            SvgIcon::Info,
-                            "Detail panel (D)",
-                            if is_sel && det_open {
-                                pal.accent
-                            } else {
-                                pal.sub
-                            },
-                        ) {
+                        if !phone
+                            && svg_btn(
+                                ui,
+                                SvgIcon::Info,
+                                "Detail panel (D)",
+                                if is_sel && det_open {
+                                    pal.accent
+                                } else {
+                                    pal.sub
+                                },
+                            )
+                        {
                             actions.push((i, "info"));
                         }
                         let cell_id = egui::Id::unique(("rowhov", gi));
@@ -852,6 +950,23 @@ fn attach_row_menu(
 #[cfg(test)]
 mod viewport_tests {
     use super::*;
+
+    /// The phone column set must fit the window — a single pixel of overflow
+    /// brings back the horizontal bar (measured at 412 pt) — and no column may
+    /// sit under the minimum, because that panics inside egui_extras.
+    #[test]
+    fn phone_columns_fit_the_window_and_respect_the_minimum() {
+        for avail in [330.0, 360.5, 374.5, 480.0, 700.0] {
+            let (name, size, seeds) = phone_col_widths(avail, ACTION_COL_W_PHONE);
+            assert!(name >= COL_MIN_W, "name {name} at {avail}");
+            assert!(size >= COL_MIN_W && seeds >= COL_MIN_W, "at {avail}");
+            assert!(
+                name + size + seeds + ACTION_COL_W_PHONE <= avail,
+                "columns overflow {avail}: {}",
+                name + size + seeds + ACTION_COL_W_PHONE
+            );
+        }
+    }
 
     /// A short window (detail panel open) must not produce a negative height:
     /// that is what panicked in egui's layout pass.

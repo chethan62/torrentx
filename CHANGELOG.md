@@ -7,6 +7,15 @@ versions follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **Phone width: the results table now fits the window.** At 412 pt it kept the
+  stored desktop column widths, so it overflowed and showed a horizontal
+  scrollbar with every title clipped to `Slow Hors…`. Under the 720 pt
+  breakpoint it now keeps Name, Seeds and Size fitted to the scroll area (Name
+  takes the remainder), drops the Copy and Detail row buttons — a tap on the row
+  opens the panel — and the horizontal bar is gone. `phone_col_widths` has a
+  test pinning both constraints: no column under `COL_MIN_W` (below that
+  `Column::exact` panics inside egui_extras) and the sum never exceeding the
+  available width.
 - **Android: the app no longer draws under the status bar.** egui-winit publishes
   safe-area insets on iOS only, so on a phone the header sat behind the clock and
   notification icons. The frame now reserves that strip (and the gesture strip at
