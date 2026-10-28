@@ -236,6 +236,13 @@ impl eframe::App for App {
                 });
             }
         }
+        // Drain the qBittorrent send result (worker thread → toast).
+        if let Ok(res) = self.net.qbt_rx.try_recv() {
+            match res {
+                Ok(()) => self.toast("Sent to qBittorrent", self.pal.green),
+                Err(e) => self.toast(&e, self.pal.red),
+            }
+        }
         if let Ok(Some(new)) = self.net.update_rx.try_recv() {
             self.toast(&format!("Update available: {new}"), self.pal.accent);
         }

@@ -63,6 +63,7 @@ Results stream in per tracker instead of arriving all at once at the end:
 **Playback and picking**
 
 - Detail panel: seeder/leecher ratio bar, health, magnet copy/open, `.torrent` download, file list
+- **Send to qBittorrent** — one click hands the magnet to your client's Web API (URL/user/pass in Settings)
 - Direct play — stream to **mpv** or **vlc** through `webtorrent-cli`, with an episode picker for packs
 - Favourites with timestamps; RSS feeds (Jackett Torznab) with 10-minute auto-refresh
 

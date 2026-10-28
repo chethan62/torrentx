@@ -849,6 +849,24 @@ impl App {
                             self.toast("Opening magnet…", self.pal.accent);
                         }
                     }
+                    "qb" => {
+                        if let (Some(m), Some(q)) = (
+                            r.magnet_uri.clone(),
+                            crate::qbittorrent::Qbt::from_cfg(&self.cfg),
+                        ) {
+                            self.toast("Sending to qBittorrent…", self.pal.accent);
+                            let tx = self.net.qbt_tx.clone();
+                            std::thread::spawn(move || {
+                                let res = q.add_magnet(&m);
+                                let _ = tx.send(res);
+                                // The UI loop parks between events; without this the
+                                // toast waits for the user to move the mouse.
+                                crate::wake_ui();
+                            });
+                        } else if r.magnet_uri.is_some() {
+                            self.toast("Set a qBittorrent URL in Settings first", self.pal.sub);
+                        }
+                    }
                     "copy" => {
                         if let Some(m) = &r.magnet_uri {
                             ui.ctx().copy_text(m.clone());
@@ -955,6 +973,9 @@ fn attach_row_menu(
         item(ui, "Copy name", "name");
         if r.link.is_some() {
             item(ui, "Download .torrent", "dl");
+        }
+        if r.magnet_uri.is_some() && r.magnet_uri.as_deref().is_some_and(is_magnet) {
+            item(ui, "Send to qBittorrent", "qb");
         }
         if r.magnet_uri.is_some() {
             item(ui, "Open magnet in browser", "mag");

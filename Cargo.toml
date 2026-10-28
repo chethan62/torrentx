@@ -26,6 +26,7 @@ egui_extras = { version = "0.37", features = ["default", "svg"] }
 # rustls, not native-tls: the Android build cross-compiles without a system
 # OpenSSL to link against, and one TLS stack for both targets is one less
 # difference to debug. The cost is that enterprise MITM roots are not trusted.
+form_urlencoded = "1"
 reqwest = { version = "0.13", default-features = false, features = [
     "blocking",
     "json",

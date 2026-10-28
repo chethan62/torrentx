@@ -633,6 +633,10 @@ pub(crate) struct NetState {
     pub(crate) update_checked: bool,
     pub(crate) update_tx: std::sync::mpsc::Sender<Option<String>>,
     pub(crate) update_rx: std::sync::mpsc::Receiver<Option<String>>,
+    /// Result of the last "send to qBittorrent" attempt: `Ok`/`Err` message,
+    /// handed back from the worker thread so the toast renders on the UI thread.
+    pub(crate) qbt_tx: std::sync::mpsc::Sender<Result<(), String>>,
+    pub(crate) qbt_rx: std::sync::mpsc::Receiver<Result<(), String>>,
     pub(crate) jackett_ok: Option<bool>,
 }
 
@@ -641,6 +645,7 @@ impl Default for NetState {
         let (indexers_handle, indexers_rx) =
             std::sync::mpsc::channel::<Option<crate::jackett::IndexerCatalogue>>();
         let (update_tx, update_rx) = std::sync::mpsc::channel::<Option<String>>();
+        let (qbt_tx, qbt_rx) = std::sync::mpsc::channel::<Result<(), String>>();
         Self {
             indexers: crate::sources::native_ids(),
             catalogue: vec![],
@@ -656,6 +661,8 @@ impl Default for NetState {
             update_checked: false,
             update_tx,
             update_rx,
+            qbt_tx,
+            qbt_rx,
             jackett_ok: None,
         }
     }
