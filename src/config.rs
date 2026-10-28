@@ -316,7 +316,7 @@ fn save_to(p: &std::path::Path, c: &Config) -> Result<(), String> {
     // Write a sibling temp file and rename over the config: a plain fs::write
     // truncates first, so an interrupted save (kill, power loss) would leave an
     // unparseable config behind — which used to be replaced by defaults.
-    let tmp = p.with_extension("json.tmp");
+    let tmp = crate::unique_tmp(p);
     // Write through a File so the bytes can be fsync'd BEFORE the rename: on a
     // crash the renamed name must never resolve to an empty file (ext4 with
     // data=writeback will do exactly that without the barrier), and the rename
