@@ -34,7 +34,7 @@ Everything you need to run and use TorrentX effectively.
 **From source**:
 
 ```bash
-cargo build --release   # Rust 1.82+
+cargo build --release   # Rust 1.85+ (edition 2024)
 # Binary at target/release/torrentx
 ```
 
@@ -366,11 +366,11 @@ Deliberate, not bugs — each line says what to do instead.
 - **Direct play needs `webtorrent-cli` on `PATH`** and outbound BitTorrent. On a
   network that blocks tracker/DHT ports the picker reports
   "the torrent's peers are unreachable" instead of hanging.
-- **Windows**: the `.exe` cross-compiles in CI and also builds *and launches* on a
-  real Windows runner (`.github/workflows/windows-native.yml` — a window titled
-  TorrentX appears, the config lands in `%APPDATA%`), but nothing is published for
-  it and no interactive pass (menus, playback, pickers) has been done. Releases
-  ship Linux only.
+- **Windows**: published since 18.7.0 as `TorrentX-<version>-windows-x64.zip`
+  (static CRT). It is compiled, packaged and launched on a real Windows runner in
+  CI (`.github/workflows/windows-native.yml` — a window titled TorrentX appears,
+  the config lands in `%APPDATA%`), but no interactive pass (menus, playback,
+  pickers) has been driven by hand there, so treat the exe as tested by CI only.
 
 ## Troubleshooting
 
