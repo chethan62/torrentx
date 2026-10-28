@@ -1103,6 +1103,10 @@ impl App {
 
     /// Fire a desktop notification when a search completes while the window
     /// is hidden (minimized to tray). No-op on failure / missing daemon.
+    #[cfg(target_os = "android")]
+    pub(crate) fn notify_search_done(&mut self) {}
+
+    #[cfg(not(target_os = "android"))]
     pub(crate) fn notify_search_done(&mut self) {
         let n = *lock_or_recover(&self.search.count);
         let q = self.search.last_query.clone();

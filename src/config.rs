@@ -140,9 +140,13 @@ pub(crate) fn cfg_path() -> std::path::PathBuf {
     if let Some(p) = CONFIG_OVERRIDE.get() {
         return p.clone();
     }
-    let d = dirs_next::config_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("torrentx");
+    // Android has no XDG config dir, and the process cwd is "/" (unwritable),
+    // so the config goes in the app's private storage instead.
+    #[cfg(target_os = "android")]
+    let base = crate::android_data_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    #[cfg(not(target_os = "android"))]
+    let base = dirs_next::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    let d = base.join("torrentx");
     let _ = fs::create_dir_all(&d);
     d.join("config.json")
 }
