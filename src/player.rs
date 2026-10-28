@@ -266,11 +266,22 @@ fn download_metadata(
     cancel: &Cancel,
     deadline: std::time::Instant,
 ) -> Option<PathBuf> {
-    let dir = torrents_dir();
-    std::fs::create_dir_all(&dir).ok()?;
+    let cache = torrents_dir();
+    std::fs::create_dir_all(&cache).ok()?;
+    // Each attempt downloads into its OWN directory, and the result is moved
+    // into the cache afterwards. Attribution then needs no timestamp guess: a
+    // `.torrent` in this directory was written by this run. Two pickers open at
+    // once already share the cache (`metadata_in_flight < 2`), and "modified
+    // since the run started" handed one torrent back as the other's — which is
+    // also how two tests in one process poisoned each other (the CI flake job
+    // caught it: run 2 of 20, `runs` = 1 instead of 2).
+    static ATTEMPT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let stamp = ATTEMPT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let work = cache.join(format!(".dl-{}-{stamp}", std::process::id()));
+    std::fs::create_dir_all(&work).ok()?;
     let mut child = Command::new("webtorrent")
         .args(["downloadmeta", magnet])
-        .current_dir(&dir)
+        .current_dir(&work)
         .env("NO_COLOR", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -294,25 +305,44 @@ fn download_metadata(
                 // A killed child may have left a partial .torrent: never hand it
                 // back as if it were real.
                 if killed {
+                    let _ = std::fs::remove_dir_all(&work);
                     return None;
                 }
                 break;
             }
         }
     }
-    // downloadmeta names the file after the infohash, so look for exactly that
-    // first — the cache holds other torrents and "newest wins" could hand back
-    // the previous pick.
+    let picked = pick_metadata(&work, magnet, started);
+    let out = picked.map(|src| {
+        let dest = cache.join(src.file_name().unwrap_or_default());
+        // A rename onto another filesystem fails; the file is still valid where
+        // it landed, so hand that path back rather than reporting no metadata.
+        if std::fs::rename(&src, &dest).is_ok() {
+            dest
+        } else {
+            src
+        }
+    });
+    let _ = std::fs::remove_dir_all(&work);
+    out
+}
+
+/// The `.torrent` a `downloadmeta` run left in its own work directory: the exact
+/// infohash name when it is there, else the newest real file this run wrote.
+fn pick_metadata(
+    dir: &std::path::Path,
+    magnet: &str,
+    started: std::time::SystemTime,
+) -> Option<PathBuf> {
     if let Some(hash) = magnet_hash(magnet) {
         let want = dir.join(format!("{hash}.torrent"));
         if std::fs::metadata(&want).is_ok_and(|m| m.len() > 64) {
             return Some(want);
         }
     }
-    // Fallback for a name we did not predict: only a file this run wrote counts.
-    // "Newest wins" alone handed back the previous pick's torrent (and 46-byte
-    // stubs), so the picker listed the wrong film's files.
-    std::fs::read_dir(&dir)
+    // Fallback for a name we did not predict. The directory is this run's alone,
+    // so the timestamp filter is only belt-and-braces against a stray file.
+    std::fs::read_dir(dir)
         .ok()?
         .flatten()
         .map(|e| e.path())
