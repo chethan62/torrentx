@@ -56,6 +56,15 @@ impl App {
     /// (the history dropdown is positioned against it).
     fn search_query_row(&mut self, ui: &mut egui::Ui, fs: f32, busy: bool) -> egui::Rect {
         let mut bar_rect = egui::Rect::NOTHING;
+        // Phone width: the long placeholder truncates mid-word, and a 132 px
+        // button eats the room the field needs, so both give way.
+        let tight = narrow(ui.available_width());
+        let btn_w = if tight { 96.0 } else { SEARCH_BTN_W };
+        let hint = if tight {
+            "Search torrents…"
+        } else {
+            "Search torrents — movies, shows, games, software, anime…"
+        };
         ui.horizontal(|ui| {
             // Every gap in these two rows is an explicit token: egui would add its
             // own item_spacing around each add_space, so the same SP4 produced 12 px
@@ -63,12 +72,12 @@ impl App {
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.spacing_mut().interact_size.y = ROW1_H;
             ui.add_space(SP4);
-            let field_w = (ui.available_width() - SEARCH_BTN_W - SP3 - SP4).max(160.0);
+            let field_w = (ui.available_width() - btn_w - SP3 - SP4).max(140.0);
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.search.query)
                     .id(egui::Id::unique("q"))
                     .desired_width(field_w)
-                    .hint_text("Search torrents — movies, shows, games, software, anime…")
+                    .hint_text(hint)
                     .font(FontId::proportional(fs + 2.0))
                     // Room for the in-field clear button (always reserved, or the
                     // field would change height the moment text appears).
@@ -151,7 +160,7 @@ impl App {
                         self.pal.accent
                     })
                     .corner_radius(R_MD)
-                    .min_size(Vec2::new(SEARCH_BTN_W, ROW1_H)),
+                    .min_size(Vec2::new(btn_w, ROW1_H)),
                 )
                 .clicked()
             {
@@ -168,44 +177,50 @@ impl App {
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.spacing_mut().interact_size.y = ROW2_H;
             ui.add_space(SP4);
-            lbl(ui, "Category", self.pal.dim, 11.0);
-            ui.add_space(SP2);
-            egui::ComboBox::from_id_salt("cat_cb")
-                .selected_text(RichText::new(&self.search.cat).font(FontId::proportional(fs)))
-                .width(COMBO_W)
-                .show_ui(ui, |ui| {
-                    for &c in CATS {
-                        ui.selectable_value(
-                            &mut self.search.cat,
-                            c.into(),
-                            RichText::new(c).font(FontId::proportional(fs)),
-                        );
-                    }
-                });
+            // Label + picker are ONE atom in the wrapping row: as separate
+            // items the label could wrap to the line below its own picker.
+            ui.horizontal(|ui| {
+                lbl(ui, "Category", self.pal.dim, 11.0);
+                ui.add_space(SP2);
+                egui::ComboBox::from_id_salt("cat_cb")
+                    .selected_text(RichText::new(&self.search.cat).font(FontId::proportional(fs)))
+                    .width(COMBO_W)
+                    .show_ui(ui, |ui| {
+                        for &c in CATS {
+                            ui.selectable_value(
+                                &mut self.search.cat,
+                                c.into(),
+                                RichText::new(c).font(FontId::proportional(fs)),
+                            );
+                        }
+                    });
+            });
 
             // Indexer picker (from Jackett's configured indexers)
             ui.add_space(SP4);
-            lbl(ui, "Indexer", self.pal.dim, 11.0);
-            ui.add_space(SP2);
-            egui::ComboBox::from_id_salt("idx_cb")
-                .selected_text(RichText::new(&self.net.indexer).font(FontId::proportional(fs)))
-                .width(COMBO_W)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.net.indexer,
-                        "All".into(),
-                        RichText::new("All").font(FontId::proportional(fs)),
-                    );
-                    for idx in &self.net.indexers {
+            ui.horizontal(|ui| {
+                lbl(ui, "Indexer", self.pal.dim, 11.0);
+                ui.add_space(SP2);
+                egui::ComboBox::from_id_salt("idx_cb")
+                    .selected_text(RichText::new(&self.net.indexer).font(FontId::proportional(fs)))
+                    .width(COMBO_W)
+                    .show_ui(ui, |ui| {
                         ui.selectable_value(
                             &mut self.net.indexer,
-                            idx.clone(),
-                            RichText::new(idx).font(FontId::proportional(fs)),
+                            "All".into(),
+                            RichText::new("All").font(FontId::proportional(fs)),
                         );
-                    }
-                })
-                .response
-                .on_hover_text("Search one indexer instead of all");
+                        for idx in &self.net.indexers {
+                            ui.selectable_value(
+                                &mut self.net.indexer,
+                                idx.clone(),
+                                RichText::new(idx).font(FontId::proportional(fs)),
+                            );
+                        }
+                    })
+                    .response
+                    .on_hover_text("Search one indexer instead of all");
+            });
 
             // Which indexers the "All" fan-out covers, plus the catalogue. A
             // compact "8/9" chip opens a small window: a menu popup closes on

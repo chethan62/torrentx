@@ -715,9 +715,9 @@ fn viewport_for(minimized: bool, saved: Option<[f32; 2]>) -> egui::ViewportBuild
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("TorrentX")
         .with_inner_size([1300.0, 800.0])
-        // Min width tuned so the header right-side controls + search bar
-        // still fit without clipping on small screens (1280x720 laptops).
-        .with_min_inner_size([820.0, 560.0]);
+        // 360x520 is a phone in portrait; the layout reflows at NARROW_W, and a
+        // desktop window may be dragged down to the same shape to check it.
+        .with_min_inner_size([360.0, 520.0]);
     if minimized {
         viewport = viewport.with_visible(false);
     }
