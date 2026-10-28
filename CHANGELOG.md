@@ -6,6 +6,15 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Android: the app no longer draws under the status bar.** egui-winit publishes
+  safe-area insets on iOS only, so on a phone the header sat behind the clock and
+  notification icons. The frame now reserves that strip (and the gesture strip at
+  the bottom) from `android_inset_top` / `android_inset_bottom` in the config, in
+  points: 40 and 16, measured with `dumpsys window` on a 1080x2376 density-480
+  device (status bar 120 px, navigation 48 px). Verified on that device: header
+  text starts at y=141 px, below the 120 px status bar.
+
 ## [18.7.0] — 2026-10-28
 
 ### Added
