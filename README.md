@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/github/license/chethan62/torrentx)](LICENSE)
 [![Guide](https://img.shields.io/badge/docs-user%20guide-blue)](GUIDE.md)
 
-# Screenshots
+## Screenshots
 
 **Dark — Tokyo Night**
 
