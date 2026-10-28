@@ -6,6 +6,23 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.7.1] — 2026-10-28
+
+### Added
+- **`.deb` and `.rpm` packages.** The release job builds both with nfpm from the
+  same binary the AppImage wraps: `/usr/bin/torrentx`, the desktop entry, the PNG
+  and SVG icons, the AppStream metainfo and the licences under
+  `/usr/share/doc/torrentx`. Built on the Ubuntu 24.04 runner, so they need
+  glibc ≥ 2.39; older distributions keep the AppImage. Verified by installing
+  both in `debian:stable` and `fedora:latest` and running `torrentx --version`.
+
+### Changed
+- **README rewritten around what the app does**, not around its themes: a
+  platform table, a requirements table marking Jackett/`webtorrent-cli`/mpv as
+  optional, one install command with the `INSTALL_DIR`/`sudo` cases collapsed,
+  a working custom-indexer example, a `curl | sh` caveat and a disclaimer. The
+  Android and licence material moved to `docs/android.md` and `docs/licenses.md`.
+
 ### Fixed
 - **Phone width: the results table now fits the window.** At 412 pt it kept the
   stored desktop column widths, so it overflowed and showed a horizontal
