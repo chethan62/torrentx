@@ -682,6 +682,10 @@ pub(crate) fn csv_picks<'a>(
 pub(crate) struct UiState {
     pub(crate) tab: crate::jackett::Tab,
     pub(crate) show_settings: bool,
+    /// Filters panel on a phone: `None` = auto (open on a desktop, folded away
+    /// at phone width so the results table keeps the screen), `Some` = the
+    /// user's own choice, kept while the window stays narrow.
+    pub(crate) filters_open: Option<bool>,
     pub(crate) key_vis: bool,
     pub(crate) selected: Option<usize>,
     pub(crate) detail_open: bool,
@@ -780,6 +784,7 @@ impl Default for UiState {
         Self {
             tab: crate::jackett::Tab::Search,
             show_settings: false,
+            filters_open: None,
             key_vis: false,
             selected: None,
             detail_open: false,
