@@ -56,6 +56,17 @@ pub(crate) struct Config {
     /// Column display order (names of TableCol), left to right.
     #[serde(default)]
     pub(crate) col_order: Vec<String>,
+    /// Android only: status-bar height in points, used when the platform
+    /// reports no safe-area inset (egui-winit publishes those on iOS alone).
+    /// Measured with `dumpsys window` on a 1080x2376 / density-480 phone, where
+    /// the status bar is 120 px and the gesture strip 48 px (= 40 and 16 pt).
+    /// Point values, so it needs no scaling: tune it to your phone's own
+    /// status-bar height if the header still sits under the clock.
+    #[serde(default = "default_android_inset_top")]
+    pub(crate) android_inset_top: f32,
+    /// Android only: gesture/navigation strip height in points (see above).
+    #[serde(default = "default_android_inset_bottom")]
+    pub(crate) android_inset_bottom: f32,
     /// Check GitHub for a newer release at startup (opt-out for privacy).
     #[serde(default = "default_true")]
     pub(crate) check_updates: bool,
@@ -102,6 +113,8 @@ impl Default for Config {
             rss_refresh_secs: default_rss_refresh(),
             accent: None,
             col_order: default_col_order(),
+            android_inset_top: default_android_inset_top(),
+            android_inset_bottom: default_android_inset_bottom(),
             check_updates: true,
             player: default_player(),
             last_tab: None,
@@ -290,6 +303,14 @@ pub(crate) fn clamp_scale(v: f32) -> f32 {
 
 fn default_ui_scale() -> f32 {
     1.0
+}
+
+fn default_android_inset_top() -> f32 {
+    40.0
+}
+
+fn default_android_inset_bottom() -> f32 {
+    16.0
 }
 
 fn default_rss_refresh() -> u64 {

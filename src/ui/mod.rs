@@ -457,6 +457,37 @@ impl eframe::App for App {
             }
         }
 
+        // ── OS safe area ─────────────────────────────────────────────────
+        // Android and iOS give the app the whole screen and paint the status
+        // bar / gesture strip on top of it. Without reserving that strip the
+        // header is drawn underneath the clock and notification icons
+        // (measured on a phone: "TorrentX" sat behind the status bar). The
+        // insets are zero on a desktop window, so this costs nothing there.
+        let safe = ctx.input(|i| i.safe_area_insets()).0;
+        // egui-winit publishes real insets on iOS only, so Android reports 0 and
+        // the header was drawn under the clock (measured on the phone). The
+        // configured heights are the fallback there, in points; both are 0 on a
+        // desktop window, so nothing changes off mobile.
+        let (top, bottom) = if safe.top > 0.0 || safe.bottom > 0.0 {
+            (safe.top, safe.bottom)
+        } else if cfg!(target_os = "android") {
+            (self.cfg.android_inset_top, self.cfg.android_inset_bottom)
+        } else {
+            (0.0, 0.0)
+        };
+        if bottom > 0.0 {
+            egui::Panel::bottom("safe_bottom")
+                .exact_size(bottom)
+                .frame(egui::Frame::NONE.fill(self.pal.bg))
+                .show(ui, |_| {});
+        }
+        if top > 0.0 {
+            egui::Panel::top("safe_top")
+                .exact_size(top)
+                .frame(egui::Frame::NONE.fill(self.pal.bg))
+                .show(ui, |_| {});
+        }
+
         // ── Status bar ───────────────────────────────────────────────────
         egui::Panel::bottom("sb")
             .default_size(26.0)
