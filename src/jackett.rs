@@ -2012,7 +2012,23 @@ mod tests {
         assert_eq!(*count.lock().unwrap(), 1);
         assert_eq!(*state.lock().unwrap(), SearchState::Searching);
         assert!(wait(2), "both indexers must land");
-        assert_eq!(*state.lock().unwrap(), SearchState::Done);
+        // Then WAIT for Done instead of reading it once: the last row is
+        // appended by its worker, but the state flips only after the parent
+        // thread joins every handle, so `count == 2` can be observed a few
+        // microseconds before `Done` (measured: a CI run asserting immediately
+        // read `Searching`). Polling an eventual state is deterministic; the
+        // ordering proof above is the `count == 1 && Searching` pair.
+        let wait_done = || {
+            let t0 = Instant::now();
+            while Instant::now() - t0 < Duration::from_secs(5) {
+                if matches!(*lock_or_recover(&state), SearchState::Done) {
+                    return true;
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+            false
+        };
+        assert!(wait_done(), "the search must reach Done, not Error or hang");
         assert_eq!(results.lock().unwrap().len(), 2);
     }
 
