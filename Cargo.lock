@@ -4319,6 +4319,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_extras",
+ "form_urlencoded",
  "log",
  "notify-rust",
  "open",

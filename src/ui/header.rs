@@ -297,6 +297,41 @@ impl App {
     fn settings_connection(&mut self, ui: &mut egui::Ui) {
         // Sections read as headings over their controls (an inline
         // heading made every row start at a different x).
+        lbl(ui, "QBITTORRENT", self.pal.sub, 12.0);
+        ui.add_space(SP2);
+        ui.horizontal_wrapped(|ui| {
+            ui.add_space(SP1);
+            lbl(ui, "URL", self.pal.sub, 12.0);
+            ui.add(
+                egui::TextEdit::singleline(&mut self.cfg.qbittorrent_url)
+                    .desired_width(ui.available_width().clamp(SETTINGS_URL_MIN, SETTINGS_URL_W))
+                    .hint_text("http://localhost:8080 — empty hides Send to qBittorrent")
+                    .font(FontId::monospace(12.0)),
+            );
+            ui.add_space(SP3);
+            lbl(ui, "User", self.pal.sub, 12.0);
+            ui.add(
+                egui::TextEdit::singleline(&mut self.cfg.qbittorrent_user)
+                    .desired_width(90.0)
+                    .font(FontId::monospace(12.0)),
+            );
+            ui.add_space(SP3);
+            lbl(ui, "Password", self.pal.sub, 12.0);
+            ui.add(
+                egui::TextEdit::singleline(&mut self.cfg.qbittorrent_pass)
+                    .desired_width(ui.available_width().clamp(SETTINGS_KEY_MIN, SETTINGS_KEY_W))
+                    .password(!self.ui.key_vis)
+                    .font(FontId::monospace(12.0)),
+            );
+            if ui
+                .small_button(if self.ui.key_vis { "hide" } else { "show" })
+                .clicked()
+            {
+                self.ui.key_vis = !self.ui.key_vis;
+            }
+        });
+        ui.add_space(SP4);
+
         lbl(ui, "CONNECTION", self.pal.sub, 12.0);
         ui.add_space(SP2);
         ui.horizontal_wrapped(|ui| {

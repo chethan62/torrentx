@@ -11,6 +11,14 @@ pub(crate) const ROW_HEIGHT_ROOMY: f32 = 56.0;
 pub(crate) struct Config {
     pub(crate) jackett_url: String,
     pub(crate) api_key: String,
+    /// qBittorrent Web API root. Empty = the "Send to qBittorrent" action is
+    /// hidden; it is the only client wired up (one stable HTTP API beats three).
+    #[serde(default)]
+    pub(crate) qbittorrent_url: String,
+    #[serde(default = "default_qbt_user")]
+    pub(crate) qbittorrent_user: String,
+    #[serde(default)]
+    pub(crate) qbittorrent_pass: String,
     pub(crate) history: Vec<String>,
     pub(crate) favorites: Vec<Favorite>,
     pub(crate) theme: Theme,
@@ -91,6 +99,9 @@ impl Default for Config {
         Self {
             jackett_url: "http://localhost:9117".into(),
             api_key: String::new(),
+            qbittorrent_url: String::new(),
+            qbittorrent_user: default_qbt_user(),
+            qbittorrent_pass: String::new(),
             history: vec![],
             favorites: vec![],
             theme: Theme::TokyoNight,
@@ -303,6 +314,10 @@ pub(crate) fn clamp_scale(v: f32) -> f32 {
 
 fn default_ui_scale() -> f32 {
     1.0
+}
+
+fn default_qbt_user() -> String {
+    "admin".to_string()
 }
 
 fn default_android_inset_top() -> f32 {

@@ -6,6 +6,17 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Send to qBittorrent.** The row menu and the detail panel hand a magnet to a
+  qBittorrent Web API: `qbittorrent_url`, `qbittorrent_user` and
+  `qbittorrent_pass` in Settings (an empty URL hides the action). Works with the
+  4.x and 5.x API shapes — 4.x answers `200 Ok.` to `auth/login`, 5.x answers
+  `204` with an empty body and names the cookie `QBT_SID_<port>` instead of
+  `SID`, both handled. Verified against a real qBittorrent 5.3 in a container:
+  the magnet lands with the right infohash. Unit tests cover the request shape
+  (form encoding of the magnet, `Referer`, session cookie carried to
+  `torrents/add`) and the wrong-password path.
+
 ## [18.7.1] — 2026-10-28
 
 ### Added

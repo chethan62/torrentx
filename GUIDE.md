@@ -287,6 +287,7 @@ your API key). All fields are managed by the UI; the notable ones:
 | `rss_feeds`, `rss_refresh_secs` | RSS tab |
 | `check_updates` | startup release check |
 | `last_tab`, `win_size` | session restore |
+| `qbittorrent_url`, `qbittorrent_user`, `qbittorrent_pass` | qBittorrent Web UI root (e.g. `http://localhost:8080`), user and password — empty URL hides Send to qBittorrent |
 | `android_inset_top`, `android_inset_bottom` | Android only: status-bar / gesture-strip height in points, used when the platform reports no safe-area inset (default 40 and 16, measured at density 480) |
 | `install_id` | anonymous UUID for bug reports (never sent anywhere) |
 

@@ -7,6 +7,7 @@ mod config;
 mod indexers;
 mod jackett;
 mod player;
+mod qbittorrent;
 mod rss;
 mod sources;
 mod themes;

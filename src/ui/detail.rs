@@ -308,6 +308,25 @@ impl App {
                 self.toast("Opening magnet…", self.pal.accent);
             }
             ui.add_space(SP2);
+            if crate::qbittorrent::Qbt::from_cfg(&self.cfg).is_some()
+                && wide_icon_btn(
+                    ui,
+                    SvgIcon::Download,
+                    "Send to qBittorrent",
+                    self.pal.accent,
+                )
+            {
+                let q = crate::qbittorrent::Qbt::from_cfg(&self.cfg).unwrap();
+                let m = r.magnet_uri.clone().unwrap_or_default();
+                let tx = self.net.qbt_tx.clone();
+                self.toast("Sending to qBittorrent…", self.pal.accent);
+                std::thread::spawn(move || {
+                    let res = q.add_magnet(&m);
+                    let _ = tx.send(res);
+                    crate::wake_ui();
+                });
+            }
+            ui.add_space(SP2);
             if wide_icon_btn(ui, SvgIcon::Copy, "Copy Magnet Link", self.pal.sub) {
                 ui.ctx().copy_text(mc);
                 self.toast("Copied", self.pal.green);
