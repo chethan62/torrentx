@@ -84,6 +84,11 @@ pub(crate) struct Def {
     pub(crate) body: Option<String>,
     #[serde(default)]
     pub(crate) content_type: Option<String>,
+    /// Headers sent with every request — where an API key goes. A value of the
+    /// form `${VAR}` is read from the environment at request time, so the key
+    /// need not be written into the file.
+    #[serde(default)]
+    pub(crate) headers: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     pub(crate) rows: Option<String>,
     pub(crate) fields: Fields,
@@ -278,10 +283,45 @@ fn json_escape(s: &str) -> String {
     out
 }
 
-/// The request a definition describes: `(url, Some((body, content-type)))` for a
-/// POST, `(url, None)` for a GET.
-fn request_parts(def: &Def, query: &str) -> (String, Option<(String, String)>) {
-    let url = def.url.replace("{q}", &crate::jackett::urlenc(query));
+/// Everything a definition asks for, with `{q}` already substituted and header
+/// secrets resolved. Split out from `fetch` so it can be tested without a network.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Req {
+    pub(crate) url: String,
+    /// `Some((body, content-type))` for a POST.
+    pub(crate) post: Option<(String, String)>,
+    pub(crate) headers: Vec<(String, String)>,
+}
+
+/// `${VAR}` in a header value is replaced from the environment. A missing
+/// variable is an error naming the variable — never its value, and never a
+/// request that goes out with a literal `${VAR}` and fails as a mystery 401.
+fn resolve(value: &str) -> Result<String, String> {
+    let mut out = String::with_capacity(value.len());
+    let mut rest = value;
+    // Forward-only scan: several `${VAR}`s work, and an expansion that itself
+    // contains `${` is never re-expanded.
+    while let Some(start) = rest.find("${") {
+        let Some(len) = rest[start + 2..].find('}') else {
+            break;
+        };
+        let name = &rest[start + 2..start + 2 + len];
+        let real =
+            std::env::var(name).map_err(|_| format!("environment variable {} is not set", name))?;
+        out.push_str(&rest[..start]);
+        out.push_str(&real);
+        rest = &rest[start + 3 + len..];
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+/// The request a definition describes, or the reason it cannot be made.
+fn request(def: &Def, query: &str) -> Result<Req, String> {
+    // A key belongs in a header, but sites that take it in the query string
+    // exist; resolving the url too keeps those keys out of the file as well.
+    let url = resolve(&def.url.replace("{q}", &crate::jackett::urlenc(query)))
+        .map_err(|e| format!("{}: {e}", def.id))?;
     let is_post = def
         .method
         .as_deref()
@@ -294,7 +334,14 @@ fn request_parts(def: &Def, query: &str) -> (String, Option<(String, String)>) {
                 .unwrap_or_else(|| "application/json".to_string()),
         )
     });
-    (url, post)
+    let mut headers = Vec::with_capacity(def.headers.len() + 1);
+    for (k, v) in &def.headers {
+        headers.push((
+            k.clone(),
+            resolve(v).map_err(|e| format!("{}: {e}", def.id))?,
+        ));
+    }
+    Ok(Req { url, post, headers })
 }
 
 /// One request: `{q}` is substituted, the body is parsed by the definition.
@@ -305,15 +352,18 @@ pub(crate) fn fetch(
     cat: &str,
     timeout: u64,
 ) -> Result<Vec<TorrentResult>, String> {
-    let (url, post) = request_parts(def, query);
+    let r = request(def, query)?;
     let client = crate::jackett::shared_client();
-    let req = match post {
+    let mut req = match r.post {
         Some((body, ct)) => client
-            .post(&url)
+            .post(&r.url)
             .header(reqwest::header::CONTENT_TYPE, ct)
             .body(body),
-        None => client.get(&url),
+        None => client.get(&r.url),
     };
+    for (k, v) in &r.headers {
+        req = req.header(k, v);
+    }
     let body = req
         .timeout(std::time::Duration::from_secs(timeout.min(30)))
         .send()
@@ -348,6 +398,48 @@ mod tests {
         assert_eq!(d.label(), "EZTV (API)");
         assert_eq!(d.category.as_deref(), Some("TV"));
         assert!(d.url.contains("{q}"), "a search url needs a {{q}} slot");
+    }
+
+    #[test]
+    fn a_key_can_live_in_the_environment_not_the_file() {
+        // SAFETY: the test binary sets this once, before any reader exists, and
+        // nothing else in this module touches the environment.
+        unsafe { std::env::set_var("TX_TEST_KEY", "s3cret") };
+        let mut d = eztv();
+        d.headers
+            .insert("X-Api-Key".to_string(), "${TX_TEST_KEY}".to_string());
+        // …and the sites that want the key in the query string, too.
+        d.url = "https://api.example/v1?apikey=${TX_TEST_KEY}&q={q}".to_string();
+
+        let r = request(&d, "a b").expect("both references resolve");
+        assert_eq!(
+            r.headers,
+            vec![("X-Api-Key".to_string(), "s3cret".to_string())],
+            "the header carries the secret, not the {{VAR}} text"
+        );
+        assert!(
+            r.url.ends_with("apikey=s3cret&q=a+b"),
+            "url resolved and {{q}} still encoded: {}",
+            r.url
+        );
+
+        // A missing variable fails loudly and names the variable — the message
+        // is what a user pastes into an issue, so it must never hold a secret.
+        d.headers
+            .insert("X-Api-Key".to_string(), "${TX_NO_SUCH_VAR}".to_string());
+        let err = request(&d, "x").expect_err("unset variable is an error");
+        assert!(err.contains("TX_NO_SUCH_VAR"), "names it: {err}");
+        assert!(err.contains("eztv-api"), "and the definition: {err}");
+        assert!(!err.contains("s3cret"), "never the secret: {err}");
+
+        // Two references in one value, and an expansion containing `${` is not
+        // re-expanded (that would be an injection, not a convenience).
+        unsafe { std::env::set_var("TX_DOLLAR", "${TX_TEST_KEY}") };
+        assert_eq!(
+            resolve("${TX_TEST_KEY}-${TX_DOLLAR}").unwrap(),
+            "s3cret-${TX_TEST_KEY}"
+        );
+        assert_eq!(resolve("plain").unwrap(), "plain", "nothing to resolve");
     }
 
     #[test]
@@ -424,7 +516,8 @@ mod tests {
         d.method = Some("post".into());
         d.body = Some(r#"{"query":"{q}","size":100}"#.into());
         d.url = "https://api.example/v1".into();
-        let (url, post) = request_parts(&d, "say \"hi\" \\ now");
+        let r = request(&d, "say \"hi\" \\ now").expect("no headers, no env");
+        let (url, post) = (r.url, r.post);
         assert_eq!(
             url, "https://api.example/v1",
             "no {{q}} in the url, so it is untouched"
@@ -443,17 +536,17 @@ mod tests {
     #[test]
     fn only_a_post_definition_with_a_body_sends_one() {
         let mut d = eztv();
-        assert!(request_parts(&d, "x").1.is_none(), "GET by default");
+        assert!(request(&d, "x").unwrap().post.is_none(), "GET by default");
         d.method = Some("POST".into());
         assert!(
-            request_parts(&d, "x").1.is_none(),
+            request(&d, "x").unwrap().post.is_none(),
             "a method without a body template stays a GET"
         );
         d.body = Some("q={q}".into());
         d.content_type = Some("application/x-www-form-urlencoded".into());
-        let (_, post) = request_parts(&d, "a b");
+        let r = request(&d, "a b").unwrap();
         assert_eq!(
-            post.expect("body").1,
+            r.post.unwrap().1,
             "application/x-www-form-urlencoded",
             "a content type can be set"
         );

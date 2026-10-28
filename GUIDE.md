@@ -117,6 +117,25 @@ A definition is one JSON file in `~/.config/torrentx/indexers/<id>.json`
   software in one answer. It uses the same matching as the built-in `knaben`, so
   "Movies / HD" lands in Movies and "PC / Unix" in Software.
 
+### Keys and other headers
+
+`headers` sends a fixed set of headers with every request — where an API key goes.
+A value containing `${VAR}` is read from the **environment** when the request is
+made, so the key never has to be written into the file. A variable that is not
+set is an error naming the variable (never its value), instead of a request that
+goes out with a literal `${VAR}` and fails as a mystery 401. `${VAR}` also works
+inside `url`, for the sites that take the key as a query parameter.
+
+```json
+{ "id": "keyed-site", "url": "https://api.example/v1/search?q={q}",
+  "headers": { "Authorization": "Bearer ${EXAMPLE_API_KEY}" }, "rows": "results",
+  "fields": { "title": "name", "magnet": "magnet", "seeders": "seeders" } }
+```
+
+Start the app with the key in its environment (e.g. `EXAMPLE_API_KEY=… torrentx`,
+or set it in your shell profile). Keys are read per request, so no restart is
+needed after a rotation.
+
 A POST definition for knaben — the same source the app ships natively, written as
 a file, as the worked example of the format:
 

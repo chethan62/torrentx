@@ -30,6 +30,13 @@ versions follow [SemVer](https://semver.org/).
   604 seeds, all badged **TV**. GUIDE gained a "Your own indexers" section, and the
   "Jackett only" limitation now says Jackett is optional (Prowlarr still unsupported;
   the definition mechanism is JSON-only, so an HTML site still needs Jackett).
+- **Definitions can carry an API key.** `headers` sends fixed headers with every
+  request, and a `${VAR}` value is read from the environment at request time — in
+  `url` as well as in a header, for sites that take the key as a query parameter.
+  A missing variable is an error naming the variable and never its value, so the
+  failure is fixable instead of a mystery 401. Substitution is a single forward
+  scan: several references in one value work, and an expansion containing `${` is
+  not re-expanded (that would be injection, not convenience).
 - **Definitions can POST — knaben is now expressible as a file.** `method: "POST"`
   plus a `body` template (and an optional `content_type`, `application/json` by
   default) covers every JSON API that wants a body instead of a query string.
