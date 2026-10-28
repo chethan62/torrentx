@@ -39,8 +39,13 @@ versions follow [SemVer](https://semver.org/).
   Android-absent dependencies, the config directory moves to the app's private
   storage (there is no XDG dir on a phone), and TLS moved to rustls with bundled
   Mozilla roots — cross-compiling native-tls would need an OpenSSL for the NDK.
-  Measured: stripped debug APK 84.7 MB, `arm64-v8a`, minSdk 26 / targetSdk 34,
-  package `org.chethan.torrentx`, INTERNET permission, `android_main` exported.
+  Release signing is set up through `CARGO_APK_RELEASE_KEYSTORE` /
+  `_PASSWORD` (cargo-apk reads those before `Cargo.toml`), so no key or password
+  is in the tree; `scripts/build-apk.sh` sources `~/.config/torrentx/signing.env`
+  and builds. Measured: release APK **12.7 MB** signed with `CN=TorrentX`
+  (SHA-256 `406f42fa…`, `debuggable=false`), debug APK 84.7 MB, both `arm64-v8a`,
+  minSdk 26 / targetSdk 34, package `org.chethan.torrentx`, INTERNET permission,
+  `android_main` exported.
   **Not run on a device yet** — no phone was reachable (no wireless debugging),
   so install/runtime behaviour is unverified beyond the package being structurally
   valid and signed.
