@@ -199,6 +199,37 @@ impl App {
         fs: f32,
         view: Option<&crate::app::ResultsView>,
     ) {
+        let tight = narrow(ui.available_width());
+        // Phone: the five filter cells plus the chips are ~150 px of a 520 px
+        // screen, which left the results table nothing at all (measured: 291
+        // results, no row on screen). They fold behind a toggle there.
+        let open = self.ui.filters_open.unwrap_or(!tight);
+        if tight {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.add_space(SP4);
+                let dirty = self.filters_dirty();
+                let col = if dirty { self.pal.accent } else { self.pal.sub };
+                if ui
+                    .add(egui::Button::selectable(
+                        open,
+                        RichText::new(if dirty { "Filters · on" } else { "Filters" })
+                            .font(FontId::proportional(fs - 1.0))
+                            .color(col),
+                    ))
+                    .on_hover_text("Show or hide the result filters")
+                    .clicked()
+                {
+                    self.ui.filters_open = Some(!open);
+                }
+                ui.add_space(SP4);
+                self.select_group(ui, fs, view);
+            });
+            ui.add_space(SP2);
+        }
+        if !open {
+            return;
+        }
         egui::Frame::NONE
             .fill(self.pal.surface)
             .corner_radius(PANEL_RADIUS)
@@ -206,7 +237,6 @@ impl App {
             .inner_margin(margin(PANEL_MARGIN_X as f32, SP3))
             .outer_margin(margin(PANEL_MARGIN_X as f32, 0.0))
             .show(ui, |ui| {
-                let tight = narrow(ui.available_width());
                 // Track whether any filter input changed this frame so we can
                 // drop batch selections whose indices went stale. TextEdit
                 // responses report .changed() — no per-frame string clones.
@@ -273,10 +303,8 @@ impl App {
                         });
                     }
                 });
-                if tight {
-                    ui.add_space(SP1);
-                    ui.horizontal(|ui| self.select_group(ui, fs, view));
-                }
+                // narrow: the Select group lives in the toggle row above,
+                // so it is not drawn twice inside the card.
             });
     }
 }
