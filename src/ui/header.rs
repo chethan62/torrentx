@@ -33,182 +33,222 @@ impl App {
                     .stroke(Stroke::new(1.0_f32, self.pal.border)),
             )
             .show(ui, |ui| {
-                ui.horizontal_centered(|ui| {
-                    ui.add_space(MARGIN_DEFAULT + 2.0);
-                    // Logo + tabs wrap onto a second line at narrow widths so
-                    // the right-side controls never get clipped (overflow fix).
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 2.0;
-                        // Logo
-                        ui.label(
-                            RichText::new("Torrent")
-                                .font(FontId::monospace(16.0))
-                                .strong()
-                                .color(self.pal.text),
-                        );
-                        ui.label(
-                            RichText::new("X")
-                                .font(FontId::monospace(16.0))
-                                .strong()
-                                .color(self.pal.accent),
-                        );
-                        egui::Frame::NONE
-                            .fill(tint(self.pal.accent, 28))
-                            .corner_radius(R_LG)
-                            .inner_margin(margin(SP2, SP1))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    RichText::new(env!("CARGO_PKG_VERSION"))
-                                        .size(11.0)
-                                        .color(self.pal.accent),
-                                );
-                            });
-                        ui.add_space(SP5);
-                        ui.separator();
-                        ui.add_space(SP3);
-
-                        // Tabs (SVG icon + label)
-                        for (icon, label, tip, tab) in [
-                            (SvgIcon::Search, "Search", "Search torrents", Tab::Search),
-                            (SvgIcon::Star, "Favorites", "Saved torrents", Tab::Favorites),
-                            (SvgIcon::Rss, "RSS", "RSS feed reader", Tab::Rss),
-                            (SvgIcon::Info, "About", "About TorrentX", Tab::About),
-                        ] {
-                            let active = self.ui.tab == tab;
-                            let badge = if tab == Tab::Favorites && !self.cfg.favorites.is_empty() {
-                                format!(" {}", self.cfg.favorites.len())
-                            } else if tab == Tab::Search {
-                                let n = *lock_or_recover(&self.search.count);
-                                if n > 0 {
-                                    format!(" {n}")
-                                } else {
-                                    String::new()
-                                }
-                            } else {
-                                String::new()
-                            };
-                            let col = if active {
-                                self.pal.accent
-                            } else {
-                                self.pal.sub
-                            };
-                            // One widget for icon + label: clicking the
-                            // symbol switches tabs too, not just the text.
-                            let clicked = icon_text_tab(
-                                ui,
-                                icon,
-                                &format!("{label}{badge}"),
-                                col,
-                                active,
-                                self.pal.accent,
-                            )
-                            .on_hover_text(tip)
-                            .clicked();
-                            if clicked && self.ui.tab != tab {
-                                if tab != Tab::Favorites {
-                                    self.ui.fav_search.clear();
-                                }
-                                self.set_tab(tab);
-                                self.close_detail();
-                                // Clear cross-tab hover/selection state so a
-                                // stale row highlight never bleeds into the
-                                // newly shown tab's table.
-                                self.ui.hovered = None;
-                                self.rss.rss_detail = None;
-                            }
-                            ui.add_space(SP1);
-                        }
-                    }); // end horizontal_wrapped (logo + tabs wrap at narrow widths)
-
-                    // Right side controls
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(SP4);
-
-                        // Jackett connection status dot
-                        if let Some(ok) = self.net.jackett_ok {
-                            let (col, tip) = if ok {
-                                (self.pal.green, "Jackett connected")
-                            } else {
-                                (self.pal.red, "Jackett unreachable — check Settings")
-                            };
-                            ui.add(svg_image(SvgIcon::Circle, ICON_SM, col))
-                                .on_hover_text(tip);
-                            ui.add_space(SP3);
-                        } else {
-                            ui.add(svg_image(SvgIcon::CircleDot, ICON_SM, self.pal.dim))
-                                .on_hover_text("Checking Jackett…");
-                            ui.add_space(SP3);
-                        }
-
-                        let sa = self.ui.show_settings;
-                        let set_col = if sa { self.pal.accent } else { self.pal.sub };
-                        // Same one-widget pattern as the header tabs: the gear is
-                        // inside the button, so the pill frames icon + label together
-                        // instead of floating beside a text-only button.
-                        if icon_text_tab(
-                            ui,
-                            SvgIcon::Settings,
-                            "Settings",
-                            set_col,
-                            sa,
-                            self.pal.accent,
-                        )
-                        .clicked()
-                        {
-                            self.set_settings_open(!self.ui.show_settings);
-                        }
-                        ui.add_space(SP4);
-
-                        // Theme picker — width adapts to available space so it
-                        // never pushes past the window edge at narrow widths.
-                        let ac = self.cfg.theme.accent_color();
-                        let theme_w = ui.available_width().clamp(110.0, 155.0);
-                        egui::ComboBox::from_id_salt("theme_cb")
-                            .selected_text(
-                                RichText::new(self.cfg.theme.name())
-                                    .font(FontId::proportional(13.0))
-                                    .color(ac),
-                            )
-                            .width(theme_w)
-                            .show_ui(ui, |ui| {
-                                ui.label(RichText::new("─ Dark ─").size(11.0).color(self.pal.dim));
-                                for t in Theme::all().iter().filter(|t| !t.is_light()) {
-                                    let col = t.accent_color();
-                                    let on = &self.cfg.theme == t;
-                                    if ui
-                                        .add(egui::Button::selectable(
-                                            on,
-                                            RichText::new(format!("  {}", t.name()))
-                                                .font(FontId::proportional(13.0))
-                                                .color(col),
-                                        ))
-                                        .clicked()
-                                    {
-                                        self.set_theme(t.clone());
-                                    }
-                                }
-                                ui.add_space(SP1);
-                                ui.label(RichText::new("─ Light ─").size(11.0).color(self.pal.dim));
-                                for t in Theme::all().iter().filter(|t| t.is_light()) {
-                                    let col = t.accent_color();
-                                    let on = &self.cfg.theme == t;
-                                    if ui
-                                        .add(egui::Button::selectable(
-                                            on,
-                                            RichText::new(format!("  {}", t.name()))
-                                                .font(FontId::proportional(13.0))
-                                                .color(col),
-                                        ))
-                                        .clicked()
-                                    {
-                                        self.set_theme(t.clone());
-                                    }
-                                }
-                            });
-                        ui.add_space(SP4);
-                    });
-                });
+                // The wrapped logo row and the right-to-left control block
+                // cannot share one line once the window is phone-width: the
+                // right-hand layout was left ~0 px and the tab labels clipped
+                // to "arch". Below NARROW_W they get a row each.
+                if narrow(ui.available_width()) {
+                    self.header_narrow(ui);
+                } else {
+                    self.header_wide(ui);
+                }
             });
+    }
+
+    /// Wide: logo, tabs and the right-hand controls share one row.
+    fn header_wide(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_centered(|ui| {
+            ui.add_space(MARGIN_DEFAULT + 2.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                self.header_logo(ui);
+                ui.add_space(SP5);
+                ui.separator();
+                ui.add_space(SP3);
+                self.header_tabs(ui);
+            });
+            self.header_right(ui);
+        });
+    }
+
+    /// Narrow: the controls take the first row, the tabs the second, so every
+    /// label keeps its full text and each control keeps a tappable width.
+    fn header_narrow(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(SP1);
+        ui.horizontal(|ui| {
+            self.header_logo(ui);
+            self.header_right(ui);
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 2.0;
+            ui.add_space(SP2);
+            self.header_tabs(ui);
+        });
+        ui.add_space(SP1);
+    }
+
+    /// Wordmark + version pill.
+    fn header_logo(&mut self, ui: &mut egui::Ui) {
+        // Logo
+        ui.label(
+            RichText::new("Torrent")
+                .font(FontId::monospace(16.0))
+                .strong()
+                .color(self.pal.text),
+        );
+        ui.label(
+            RichText::new("X")
+                .font(FontId::monospace(16.0))
+                .strong()
+                .color(self.pal.accent),
+        );
+        egui::Frame::NONE
+            .fill(tint(self.pal.accent, 28))
+            .corner_radius(R_LG)
+            .inner_margin(margin(SP2, SP1))
+            .show(ui, |ui| {
+                ui.label(
+                    RichText::new(env!("CARGO_PKG_VERSION"))
+                        .size(11.0)
+                        .color(self.pal.accent),
+                );
+            });
+    }
+
+    /// The four tabs, shared by both header shapes.
+    fn header_tabs(&mut self, ui: &mut egui::Ui) {
+        // Tabs (SVG icon + label)
+        for (icon, label, tip, tab) in [
+            (SvgIcon::Search, "Search", "Search torrents", Tab::Search),
+            (SvgIcon::Star, "Favorites", "Saved torrents", Tab::Favorites),
+            (SvgIcon::Rss, "RSS", "RSS feed reader", Tab::Rss),
+            (SvgIcon::Info, "About", "About TorrentX", Tab::About),
+        ] {
+            let active = self.ui.tab == tab;
+            let badge = if tab == Tab::Favorites && !self.cfg.favorites.is_empty() {
+                format!(" {}", self.cfg.favorites.len())
+            } else if tab == Tab::Search {
+                let n = *lock_or_recover(&self.search.count);
+                if n > 0 {
+                    format!(" {n}")
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+            let col = if active {
+                self.pal.accent
+            } else {
+                self.pal.sub
+            };
+            // One widget for icon + label: clicking the
+            // symbol switches tabs too, not just the text.
+            let clicked = icon_text_tab(
+                ui,
+                icon,
+                &format!("{label}{badge}"),
+                col,
+                active,
+                self.pal.accent,
+            )
+            .on_hover_text(tip)
+            .clicked();
+            if clicked && self.ui.tab != tab {
+                if tab != Tab::Favorites {
+                    self.ui.fav_search.clear();
+                }
+                self.set_tab(tab);
+                self.close_detail();
+                // Clear cross-tab hover/selection state so a
+                // stale row highlight never bleeds into the
+                // newly shown tab's table.
+                self.ui.hovered = None;
+                self.rss.rss_detail = None;
+            }
+            ui.add_space(SP1);
+        }
+    }
+
+    /// Theme picker, Settings and the Jackett status dot, right-aligned.
+    fn header_right(&mut self, ui: &mut egui::Ui) {
+        // Right side controls
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_space(SP4);
+
+            // Jackett connection status dot
+            if let Some(ok) = self.net.jackett_ok {
+                let (col, tip) = if ok {
+                    (self.pal.green, "Jackett connected")
+                } else {
+                    (self.pal.red, "Jackett unreachable — check Settings")
+                };
+                ui.add(svg_image(SvgIcon::Circle, ICON_SM, col))
+                    .on_hover_text(tip);
+                ui.add_space(SP3);
+            } else {
+                ui.add(svg_image(SvgIcon::CircleDot, ICON_SM, self.pal.dim))
+                    .on_hover_text("Checking Jackett…");
+                ui.add_space(SP3);
+            }
+
+            let sa = self.ui.show_settings;
+            let set_col = if sa { self.pal.accent } else { self.pal.sub };
+            // Same one-widget pattern as the header tabs: the gear is
+            // inside the button, so the pill frames icon + label together
+            // instead of floating beside a text-only button.
+            if icon_text_tab(
+                ui,
+                SvgIcon::Settings,
+                "Settings",
+                set_col,
+                sa,
+                self.pal.accent,
+            )
+            .clicked()
+            {
+                self.set_settings_open(!self.ui.show_settings);
+            }
+            ui.add_space(SP4);
+
+            // Theme picker — width adapts to available space so it
+            // never pushes past the window edge at narrow widths.
+            let ac = self.cfg.theme.accent_color();
+            let theme_w = ui.available_width().clamp(110.0, 155.0);
+            egui::ComboBox::from_id_salt("theme_cb")
+                .selected_text(
+                    RichText::new(self.cfg.theme.name())
+                        .font(FontId::proportional(13.0))
+                        .color(ac),
+                )
+                .width(theme_w)
+                .show_ui(ui, |ui| {
+                    ui.label(RichText::new("─ Dark ─").size(11.0).color(self.pal.dim));
+                    for t in Theme::all().iter().filter(|t| !t.is_light()) {
+                        let col = t.accent_color();
+                        let on = &self.cfg.theme == t;
+                        if ui
+                            .add(egui::Button::selectable(
+                                on,
+                                RichText::new(format!("  {}", t.name()))
+                                    .font(FontId::proportional(13.0))
+                                    .color(col),
+                            ))
+                            .clicked()
+                        {
+                            self.set_theme(t.clone());
+                        }
+                    }
+                    ui.add_space(SP1);
+                    ui.label(RichText::new("─ Light ─").size(11.0).color(self.pal.dim));
+                    for t in Theme::all().iter().filter(|t| t.is_light()) {
+                        let col = t.accent_color();
+                        let on = &self.cfg.theme == t;
+                        if ui
+                            .add(egui::Button::selectable(
+                                on,
+                                RichText::new(format!("  {}", t.name()))
+                                    .font(FontId::proportional(13.0))
+                                    .color(col),
+                            ))
+                            .clicked()
+                        {
+                            self.set_theme(t.clone());
+                        }
+                    }
+                });
+            ui.add_space(SP4);
+        });
     }
 }
 

@@ -49,6 +49,22 @@ pub(crate) const SETTINGS_SMALL_W: f32 = 40.0;
 pub(crate) const RSS_FORM_W: f32 = 260.0;
 /// Favorites search input width (px).
 pub(crate) const FAV_SEARCH_W: f32 = 220.0;
+/// Below this the header, search bar and filter cells stack instead of sharing
+/// a row. One breakpoint, in one place, so the header, the search bar and the
+/// filter cells cannot disagree about when to reflow.
+///
+/// It is the width the five filter cells actually need (measured ~720 px of
+/// available space) plus slack: the cells are label+field pairs that must not
+/// split, so they cannot wrap on their own, and a breakpoint below their real
+/// width would let the row run off the right edge. A phone in portrait sits far
+/// below it; a desktop window sits far above it.
+pub(crate) const NARROW_W: f32 = 760.0;
+
+/// True when the window is phone-width (or a very narrow desktop window).
+pub(crate) fn narrow(width: f32) -> bool {
+    width < NARROW_W
+}
+
 /// Standard panel corner radius (px).
 pub(crate) const PANEL_RADIUS: f32 = R_MD;
 /// Standard panel side margin (px, i8 for egui Margin).
