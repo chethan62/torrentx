@@ -677,7 +677,7 @@ fn store_indexers(url: &str, key: &str, body: &str) {
     {
         return;
     }
-    let tmp = path.with_extension("xml.tmp");
+    let tmp = crate::unique_tmp(&path);
     if std::fs::write(&tmp, body).is_ok() {
         let _ = std::fs::rename(&tmp, &path);
     }

@@ -177,6 +177,24 @@ pub(crate) fn lock_or_recover<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGua
 
 /// Open a URL/URI only if its scheme is safe. Indexer-supplied strings are
 /// untrusted — never hand file:// or arbitrary schemes to xdg-open.
+/// A sibling temp path for an atomic write, unique per call.
+///
+/// A fixed `.tmp` name is shared scratch: two writers (the launch fetch and a
+/// Settings refresh, two config saves) open the SAME file, interleave their
+/// writes and one renames the other's half-written bytes into place. The pid
+/// and a counter make each writer's scratch its own. Nothing depends on the
+/// name: the file is renamed or removed within the call.
+pub(crate) fn unique_tmp(p: &std::path::Path) -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, Ordering::Relaxed);
+    let name = p
+        .file_name()
+        .map(|f| f.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    p.with_file_name(format!(".{name}.{}-{n}.tmp", std::process::id()))
+}
+
 pub(crate) fn safe_open(s: impl AsRef<str>) -> bool {
     let t = s.as_ref().trim();
     if safe_scheme(t) {
@@ -1291,5 +1309,24 @@ mod ui_scale_tests {
         // Platform without a native value: capture once.
         assert_eq!(next_base(None, 0.0, 1.5), 1.5);
         assert_eq!(next_base(None, 1.5, 1.8), 1.5);
+    }
+}
+
+#[cfg(test)]
+mod tmp_tests {
+    use super::unique_tmp;
+
+    /// Two writers must never share scratch: the whole point is that one writer
+    /// cannot rename or truncate the other's half-written bytes.
+    #[test]
+    fn every_temp_path_is_its_own_file_beside_its_target() {
+        let target = std::path::Path::new("/tmp/torrentx/config.json");
+        let a = unique_tmp(target);
+        let b = unique_tmp(target);
+        assert_ne!(a, b, "two calls returned the same scratch file");
+        assert_eq!(a.parent(), target.parent(), "scratch must be a sibling");
+        // Hidden and .tmp-suffixed so a `*.json` / `*.xml` glob never sees it.
+        let name = a.file_name().unwrap().to_string_lossy();
+        assert!(name.starts_with('.') && name.ends_with(".tmp"), "{name}");
     }
 }
