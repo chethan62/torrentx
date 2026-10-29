@@ -2,7 +2,7 @@
 
 **Torrent search for the desktop, in Rust.** One window over your Jackett indexers *or* the two
 sources built in (`apibay`, `knaben`), with results streaming in per tracker as each one answers.
-Native egui — no Electron, no browser, ~17 MB AppImage.
+Native egui — no Electron, no browser, and a ~17 MB AppImage.
 
 [![Release](https://img.shields.io/github/v/release/chethan62/torrentx?label=latest)](https://github.com/chethan62/torrentx/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/chethan62/torrentx/ci.yml?branch=main&label=CI)](https://github.com/chethan62/torrentx/actions/workflows/ci.yml)
@@ -155,7 +155,7 @@ treat the exe as tested-by-CI only. No macOS build exists.
 
 > **On `curl | sh`:** the checksum comes from the same release as the binary, so it catches a
 > corrupted download, not a compromised release. If that matters to you, use the manual path above,
-> or build from source.
+> or build it from source.
 
 ## Setup
 
@@ -282,4 +282,4 @@ dependency allow-list) is listed in [docs/licenses.md](docs/licenses.md).
 
 TorrentX is a **search client**. It hosts no content and distributes nothing: it queries indexers
 you configure and hands you a magnet link. What you do with a result is your responsibility —
-downloading copyrighted material without permission is illegal in most jurisdictions.
+downloading copyrighted material without permission breaks copyright law in most jurisdictions.
