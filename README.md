@@ -33,6 +33,9 @@ and hovering names them.
 
 <img width="880" alt="TorrentX — one row per infohash, the Tracker column showing alpha +2" src="docs/screenshots/hash-groups.png">
 
+<sub>Shot against a stub Jackett: live indexers rarely list the same torrent on page 1, so the `+2` is
+easier to see than to catch.</sub>
+
 <details>
 <summary>Light theme (Catppuccin Latte)</summary>
 
