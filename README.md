@@ -24,7 +24,7 @@ panel becomes an overlay — so the same build runs on a phone.
 |---|---|
 | <img width="640" alt="TorrentX — results for a search with the detail panel open" src="docs/screenshots/results-detail.png"> | <img width="190" alt="TorrentX at phone width — results, filters and pagination stacked" src="docs/screenshots/phone-width.png"> |
 
-Results stream in per tracker instead of arriving all at once at the end:
+Results stream in per tracker, not all at once at the end:
 
 <img width="880" alt="TorrentX — results appearing per tracker as each one answers" src="docs/screenshots/streaming.gif">
 
