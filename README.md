@@ -155,7 +155,7 @@ treat the exe as tested-by-CI only. No macOS build exists.
 
 > **On `curl | sh`:** the checksum comes from the same release as the binary, so it catches a
 > corrupted download, not a compromised release. If that matters to you, use the manual path above,
-> or build it from source.
+> or build from source with cargo.
 
 ## Setup
 
