@@ -45,6 +45,12 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="18.8.0" date="2026-10-29">
+      <description>
+        <p>Results grouped by infohash: the same torrent from several indexers is one row, and the Tracker cell names the others.</p>
+        <p>Send a magnet to qBittorrent from the row menu or the detail panel.</p>
+      </description>
+    </release>
     <release version="18.7.1" date="2026-10-28">
       <description>
         <p>Distribution packages: .deb and .rpm in every release.</p>
