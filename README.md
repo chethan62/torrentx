@@ -33,7 +33,7 @@ and hovering names them.
 
 <img width="880" alt="TorrentX — one row per infohash, the Tracker column showing alpha +2" src="docs/screenshots/hash-groups.png">
 
-<sub>Stub Jackett: live indexers rarely overlap.</sub>
+<sub>Stub Jackett: overlaps are rare.</sub>
 
 <details>
 <summary>Light theme (Catppuccin Latte)</summary>
