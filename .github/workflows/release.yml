@@ -251,3 +251,18 @@ jobs:
             dist/*-mac.dmg
             dist/sha256sums-macos.txt
 
+
+  # Instant cask bump. The tap pins a sha256, so it can only move once the .dmg
+  # exists — this fires right after the release is published. The tap also polls
+  # hourly, which catches a dispatch that never lands; this is only the fast path.
+  # Needs TAP_TOKEN: a token with write access to chethan62/homebrew-tap.
+  bump-cask:
+    name: bump the cask
+    needs: [build-macos]
+    if: startsWith(github.ref, 'refs/tags/v') && needs.build-macos.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the tap to re-pin
+        env:
+          GH_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: gh api -X POST repos/chethan62/homebrew-tap/dispatches -f event_type=release
