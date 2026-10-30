@@ -1131,6 +1131,35 @@ versions follow [SemVer](https://semver.org/).
   favorites, RSS feeds, batch magnets, CSV export, tray, update checker
 
 [18.8.0]: https://github.com/chethan62/torrentx/releases/tag/v18.8.0
+[18.7.1]: https://github.com/chethan62/torrentx/releases/tag/v18.7.1
+[18.7.0]: https://github.com/chethan62/torrentx/releases/tag/v18.7.0
+[18.6.25]: https://github.com/chethan62/torrentx/releases/tag/v18.6.25
+[18.6.24]: https://github.com/chethan62/torrentx/releases/tag/v18.6.24
+[18.6.23]: https://github.com/chethan62/torrentx/releases/tag/v18.6.23
+[18.6.22]: https://github.com/chethan62/torrentx/releases/tag/v18.6.22
+[18.6.21]: https://github.com/chethan62/torrentx/releases/tag/v18.6.21
+[18.6.20]: https://github.com/chethan62/torrentx/releases/tag/v18.6.20
+[18.6.19]: https://github.com/chethan62/torrentx/releases/tag/v18.6.19
+[18.6.18]: https://github.com/chethan62/torrentx/releases/tag/v18.6.18
+[18.6.17]: https://github.com/chethan62/torrentx/releases/tag/v18.6.17
+[18.6.16]: https://github.com/chethan62/torrentx/releases/tag/v18.6.16
+[18.6.15]: https://github.com/chethan62/torrentx/releases/tag/v18.6.15
+[18.6.14]: https://github.com/chethan62/torrentx/releases/tag/v18.6.14
+[18.6.13]: https://github.com/chethan62/torrentx/releases/tag/v18.6.13
+[18.6.12]: https://github.com/chethan62/torrentx/releases/tag/v18.6.12
+[18.6.11]: https://github.com/chethan62/torrentx/releases/tag/v18.6.11
+[18.6.10]: https://github.com/chethan62/torrentx/releases/tag/v18.6.10
+[18.6.9]: https://github.com/chethan62/torrentx/releases/tag/v18.6.9
+[18.6.8]: https://github.com/chethan62/torrentx/releases/tag/v18.6.8
+[18.6.6]: https://github.com/chethan62/torrentx/releases/tag/v18.6.6
+[18.6.5]: https://github.com/chethan62/torrentx/releases/tag/v18.6.5
+[18.6.4]: https://github.com/chethan62/torrentx/releases/tag/v18.6.4
+[18.6.3]: https://github.com/chethan62/torrentx/releases/tag/v18.6.3
+[18.6.2]: https://github.com/chethan62/torrentx/releases/tag/v18.6.2
+[18.6.1]: https://github.com/chethan62/torrentx/releases/tag/v18.6.1
+[18.6.0]: https://github.com/chethan62/torrentx/releases/tag/v18.6.0
+[18.5.1]: https://github.com/chethan62/torrentx/releases/tag/v18.5.1
+[18.5.0]: https://github.com/chethan62/torrentx/releases/tag/v18.5.0
 [18.4.1]: https://github.com/chethan62/torrentx/releases/tag/v18.4.1
 [18.4.0]: https://github.com/chethan62/torrentx/releases/tag/v18.4.0
 [18.3.1]: https://github.com/chethan62/torrentx/releases/tag/v18.3.1
