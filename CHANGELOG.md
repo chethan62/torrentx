@@ -6,13 +6,22 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.9.0] — 2026-10-30
+
 ### Added
 - **A macOS build — `TorrentX-<version>-arm64-mac.dmg`.** `TorrentX.app` with an
   `Info.plist`, ad-hoc signed (Apple silicon refuses to start an unsigned
-  executable) and packed with `hdiutil` on a `macos-14` runner. The job mounts the
-  dmg it just wrote and runs `--version` from inside it, so the artefact is checked
-  rather than assumed; `ci.yml` also compiles macOS on every PR. Not notarised —
-  first open needs right-click → Open (`xattr -d com.apple.quarantine`).
+  executable) and packed with `hdiutil` on a `macos-latest` runner. The job mounts
+  the dmg it just wrote and runs `--version` from inside it, so the artefact is
+  checked rather than assumed; `ci.yml` also compiles macOS on every PR. Not
+  notarised — first open needs right-click → Open (`xattr -d com.apple.quarantine`).
+- **Homebrew cask.** `brew install --cask chethan62/tap/torrentx`. The tap pins the
+  version and sha256 and installs the cask on a macOS runner to prove the pin is
+  right, and re-pins itself hourly in case a release slips past.
+- **A cask bump the moment a release lands.** Publishing dispatches to the tap, so
+  a new version reaches `brew` in minutes instead of up to an hour. Pre-release
+  tags (`v18.9.0-rc.1`) are marked as such, so they never become "latest" and
+  never reach cask users.
 
 
 ## [18.8.0] — 2026-10-29
@@ -1137,6 +1146,7 @@ versions follow [SemVer](https://semver.org/).
 - First public release: Jackett/Torznab search, 19 themes, filters, sorting,
   favorites, RSS feeds, batch magnets, CSV export, tray, update checker
 
+[18.9.0]: https://github.com/chethan62/torrentx/releases/tag/v18.9.0
 [18.8.0]: https://github.com/chethan62/torrentx/releases/tag/v18.8.0
 [18.7.1]: https://github.com/chethan62/torrentx/releases/tag/v18.7.1
 [18.7.0]: https://github.com/chethan62/torrentx/releases/tag/v18.7.0
