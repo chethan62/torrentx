@@ -6,6 +6,15 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **A macOS build — `TorrentX-<version>-arm64-mac.dmg`.** `TorrentX.app` with an
+  `Info.plist`, ad-hoc signed (Apple silicon refuses to start an unsigned
+  executable) and packed with `hdiutil` on a `macos-14` runner. The job mounts the
+  dmg it just wrote and runs `--version` from inside it, so the artefact is checked
+  rather than assumed; `ci.yml` also compiles macOS on every PR. Not notarised —
+  first open needs right-click → Open (`xattr -d com.apple.quarantine`).
+
+
 ## [18.8.0] — 2026-10-29
 
 ### Added
