@@ -247,6 +247,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
+          # A hyphenated tag (v18.9.0-rc.1) must not become "latest": the cask
+          # bump resolves /releases/latest, so an rc would ship to every cask user.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             dist/*-mac.dmg
             dist/sha256sums-macos.txt
