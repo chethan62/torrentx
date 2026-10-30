@@ -10,8 +10,14 @@ cargo fmt --all --check
 cargo build --all-targets
 cargo test --all-targets
 cargo clippy --all-targets --all-features -- -D warnings
-./scripts/ui-standards.sh          # must print: ui-standards: ok
+./scripts/ui-standards.sh                              # must print: ui-standards: ok
+cargo deny --all-features check licenses advisories bans sources
+cargo audit
 ```
+
+`cargo deny` and `cargo audit` are not interchangeable: deny treats `unsound` as a
+warn-level advisory kind, so it prints `advisories ok` for an advisory that audit
+reports. Run both.
 
 ## UI rules
 
@@ -28,10 +34,18 @@ cargo clippy --all-targets --all-features -- -D warnings
 - Screenshots are evidence: include before/after images in the PR body for any
   visual change.
 
+## Start with a good first issue
+
+Issues labelled [`good first issue`](https://github.com/chethan62/torrentx/labels/good%20first%20issue)
+are scoped to one file or one workflow step and say what "done" looks like —
+comment on one to claim it. If nothing is there, a bug report with a reproduction
+is just as welcome as a patch.
+
 ## Everything goes through a pull request
 
-`main` is protected by a ruleset with no bypass: a direct `git push` is rejected with
-`GH013 … Changes must be made through a pull request`. Branch, open a PR, let the run go green, merge.
+`main` is protected by a ruleset that requires a pull request: a direct `git push` is
+rejected with `GH013 … Changes must be made through a pull request`. Branch, open a PR,
+let the run go green, merge.
 
 This started as a rule for docs only — a README commit pushed straight to `main` cannot be reviewed
 afterwards, and giving it a review record later costs a revert plus a re-land. GitHub cannot scope a
