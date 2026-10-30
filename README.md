@@ -158,6 +158,40 @@ The `.dmg` holds a `TorrentX.app` built on an Apple-silicon runner, ad-hoc signe
 it — **not notarised**, so the first open needs right-click → Open (or
 `xattr -d com.apple.quarantine`). No Apple Developer ID is involved, so expect that Gatekeeper prompt.
 
+<details>
+<summary>Installing on macOS, by hand (there is no installer script)</summary>
+
+```bash
+# latest release tag, from the /releases/latest redirect (no API, no rate limit)
+ver=$(curl -sI https://github.com/chethan62/torrentx/releases/latest \
+        | grep -i '^location:' | sed 's|.*/tag/v||' | tr -d '\r')
+base=https://github.com/chethan62/torrentx/releases/latest/download
+curl -LO "$base/TorrentX-$ver-arm64-mac.dmg"
+curl -LO "$base/sha256sums-macos.txt"
+shasum -a 256 -c sha256sums-macos.txt
+open "TorrentX-$ver-arm64-mac.dmg"        # then drag TorrentX into /Applications
+```
+
+No drag-and-drop? The same two steps from the terminal:
+
+```bash
+hdiutil attach -nobrowse "TorrentX-$ver-arm64-mac.dmg"
+cp -R /Volumes/TorrentX*/TorrentX.app /Applications/
+hdiutil detach /Volumes/TorrentX*
+```
+
+First launch is refused until Gatekeeper is told otherwise — right-click → **Open**, or:
+
+```bash
+xattr -d com.apple.quarantine /Applications/TorrentX.app
+```
+
+That prompt exists because the bundle is ad-hoc signed rather than notarised; Apple silicon still
+requires *a* signature, which is why it must not be stripped before copying.
+
+</details>
+
+
 > **On `curl | sh`:** the checksum comes from the same release as the binary, so it catches a
 > corrupted download, not a compromised release. If that matters to you, use the manual path above,
 > or build from source with cargo.
