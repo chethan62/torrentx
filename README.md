@@ -144,6 +144,7 @@ chmod +x TorrentX-*-x86_64.AppImage
 | Fedora / openSUSE | `torrentx-<version>-1.x86_64.rpm` | ~18 MB |
 | Linux (binary) | `torrentx-v<version>-x86_64-linux.tar.gz` | ~17 MB |
 | Windows (x64) | `TorrentX-<version>-windows-x64.zip` | ~14 MB (static CRT) |
+| macOS (Apple silicon) | `TorrentX-<version>-arm64-mac.dmg` | ~14 MB |
 
 The `.deb`/`.rpm` put the binary in `/usr/bin`, with the desktop entry, icon and metainfo, so the app
 appears in the launcher. They are **built on Ubuntu 24.04**, so they need glibc ≥ 2.39 — on anything
@@ -151,7 +152,11 @@ older (Debian 12, Ubuntu 22.04) use the AppImage, which carries its own runtime.
 
 Windows builds are compiled, packaged and **launched** on a Windows runner in CI
 (`.github/workflows/windows-native.yml`), but have not been driven by hand on Windows hardware —
-treat the exe as tested-by-CI only. No macOS build exists.
+treat the exe as tested-by-CI only.
+
+The `.dmg` holds a `TorrentX.app` built on an Apple-silicon runner, ad-hoc signed so macOS will start
+it — **not notarised**, so the first open needs right-click → Open (or
+`xattr -d com.apple.quarantine`). No Apple Developer ID is involved, so expect that Gatekeeper prompt.
 
 > **On `curl | sh`:** the checksum comes from the same release as the binary, so it catches a
 > corrupted download, not a compromised release. If that matters to you, use the manual path above,
@@ -254,7 +259,7 @@ in [docs/android.md](docs/android.md).
 | Linux x86-64 (X11 / Wayland) | **Supported** — AppImage + tarball in every release |
 | Android (arm64) | **Builds and runs** from the same source; the APK is not published — see [docs/android.md](docs/android.md). Player, tray, notifications and the single-instance socket are desktop-only |
 | Windows x64 | **Published** as a static-CRT zip; launches in CI, not hand-tested on Windows |
-| macOS | **Not supported** — no build, no CI job |
+| macOS (arm64) | **Published** — `.dmg` built on every release; compiles on every PR. Ad-hoc signed, not notarised (right-click → Open on first launch) |
 
 ## Tech
 
