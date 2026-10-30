@@ -3,6 +3,9 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Lets the packaging half be proven without cutting a release: a dispatch run
+  # builds every artefact (downloadable from the run) and skips publishing.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,6 +16,9 @@ env:
 jobs:
   build-linux:
     name: Linux binary + AppImage
+    # Packaging is versioned from the tag (nfpm rejects a branch name), so a
+    # dispatch run builds only the macOS job below.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -81,6 +87,7 @@ jobs:
   # the same binary windows-native.yml proves launches.
   build-windows:
     name: Windows binary (x64)
+    if: github.event_name == 'push'
     # Serialised behind the Linux job: both publish to the same release, and two
     # action-gh-release runs racing to create it is a 422 waiting to happen.
     needs: build-linux
@@ -136,3 +143,107 @@ jobs:
           files: |
             dist/TorrentX-*-windows-x64.zip
             dist/sha256sums-windows.txt
+
+  # A bare binary is not a Mac app: Finder needs a bundle with an Info.plist, and
+  # Apple silicon refuses to start an unsigned arm64 executable, so the bundle is
+  # ad-hoc signed (`codesign -s -`). That is enough to run locally and NOT enough
+  # for Gatekeeper — this is deliberately not notarised, so first open needs
+  # right-click → Open (or `xattr -d com.apple.quarantine`). Notarisation needs an
+  # Apple Developer ID in the repo secrets, which does not exist.
+  build-macos:
+    name: macOS app + .dmg
+    needs: [build-linux]
+    # `always()` so a dispatch run still builds: there build-linux is skipped, and
+    # a plain `needs` would skip this job with it.
+    if: always() && (github.event_name == 'workflow_dispatch' || needs.build-linux.result == 'success')
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-release-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-release-cargo-
+
+      - name: Build (release)
+        run: cargo build --release
+
+      # Version comes from the tag on a release; a dispatch run has only a branch
+      # name, so it takes the crate version instead of shipping `TorrentX-main.dmg`.
+      - name: Bundle, ad-hoc sign, package .dmg
+        run: |
+          if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+            ver="${GITHUB_REF_NAME#v}"
+          else
+            ver=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+          fi
+          echo "packaging TorrentX $ver"
+
+          app="dist/TorrentX.app"
+          mkdir -p "$app/Contents/MacOS"
+          cp target/release/torrentx "$app/Contents/MacOS/torrentx"
+          cat > "$app/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>TorrentX</string>
+            <key>CFBundleDisplayName</key><string>TorrentX</string>
+            <key>CFBundleIdentifier</key><string>io.github.chethan62.torrentx</string>
+            <key>CFBundleExecutable</key><string>torrentx</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>$ver</string>
+            <key>CFBundleVersion</key><string>$ver</string>
+            <key>NSHighResolutionCapable</key><true/>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+          </dict>
+          </plist>
+          PLIST
+
+          codesign --force --deep --sign - "$app"
+          codesign --verify --strict --verbose=2 "$app"
+
+          hdiutil create -volname "TorrentX $ver" -srcfolder "$app" \
+            -ov -format UDZO "dist/TorrentX-$ver-arm64-mac.dmg"
+          shasum -a 256 dist/*.dmg > dist/sha256sums-macos.txt
+          ls -l dist/ "$app/Contents/MacOS/"
+
+      # The claim is "the .dmg mounts and the binary inside runs", so mount it.
+      - name: Mount the .dmg and run what is inside
+        run: |
+          dmg=$(ls dist/*-mac.dmg)
+          mnt=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg"
+          out=$("$mnt/TorrentX.app/Contents/MacOS/torrentx" --version)
+          hdiutil detach "$mnt"
+          echo "version output: $out"
+          case "$out" in
+            TorrentX\ 18.*) ;;
+            *) echo "::error::unexpected --version output: $out"; exit 1 ;;
+          esac
+
+      - name: Upload the .dmg as a run artefact
+        uses: actions/upload-artifact@v7
+        with:
+          name: torrentx-macos-dmg
+          path: |
+            dist/*-mac.dmg
+            dist/sha256sums-macos.txt
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/*-mac.dmg
+            dist/sha256sums-macos.txt
+
