@@ -160,7 +160,7 @@ jobs:
   # runner, so no app-window test is pretended here.
   macos-build:
     name: macos build (arm64)
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
 

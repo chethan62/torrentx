@@ -156,7 +156,7 @@ jobs:
     # `always()` so a dispatch run still builds: there build-linux is skipped, and
     # a plain `needs` would skip this job with it.
     if: always() && (github.event_name == 'workflow_dispatch' || needs.build-linux.result == 'success')
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
 
