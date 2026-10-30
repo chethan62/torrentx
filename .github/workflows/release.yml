@@ -181,10 +181,17 @@ jobs:
       # name, so it takes the crate version instead of shipping `TorrentX-main.dmg`.
       - name: Bundle, ad-hoc sign, package .dmg
         run: |
+          crate_ver=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
           if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
             ver="${GITHUB_REF_NAME#v}"
+            # A tag cut before the version bump publishes a 18.9.0 dmg whose
+            # binary says 18.8.0, and the cask pins that mismatch.
+            if [ "$ver" != "$crate_ver" ]; then
+              echo "::error::tag is v$ver but Cargo.toml says $crate_ver - bump the version first"
+              exit 1
+            fi
           else
-            ver=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+            ver="$crate_ver"
           fi
           echo "packaging TorrentX $ver"
 
