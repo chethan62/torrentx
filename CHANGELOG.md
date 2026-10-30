@@ -702,8 +702,6 @@ versions follow [SemVer](https://semver.org/).
   `.lock().map(..)` fail the build — both silently drop an update on a poisoned
   mutex.
 
-## [18.6.7] — 2026-10-23
-
 ### Fixed
 - **A poisoned state lock no longer strands the UI.** 21 sites used `if let Ok(...)`
   / `.map(..).unwrap_or(0)`, which silently dropped the update: the status stayed
