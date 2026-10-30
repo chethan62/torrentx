@@ -159,7 +159,19 @@ it — **not notarised**, so the first open needs right-click → Open (or
 `xattr -d com.apple.quarantine`). No Apple Developer ID is involved, so expect that Gatekeeper prompt.
 
 <details>
-<summary>Installing on macOS, by hand (there is no installer script)</summary>
+<summary>Installing on macOS — Homebrew, or by hand</summary>
+
+With Homebrew — this is the one-liner:
+
+```bash
+brew install --cask chethan62/tap/torrentx
+```
+
+Homebrew prompts once to trust the third-party tap (`brew trust --cask chethan62/tap/torrentx` does
+the same non-interactively), and because it fetches without the quarantine attribute the Gatekeeper
+prompt below does not appear.
+
+By hand instead:
 
 ```bash
 # latest release tag, from the /releases/latest redirect (no API, no rate limit)
