@@ -214,7 +214,11 @@ jobs:
 
           hdiutil create -volname "TorrentX $ver" -srcfolder "$app" \
             -ov -format UDZO "dist/TorrentX-$ver-arm64-mac.dmg"
-          shasum -a 256 dist/*.dmg > dist/sha256sums-macos.txt
+          # Bare filenames, like sha256sums.txt on the Linux side: `shasum -c`
+          # resolves each path relative to the file, so a `dist/` prefix makes
+          # every user's check fail with "FAILED open or read".
+          cd dist && shasum -a 256 ./*.dmg > sha256sums-macos.txt && cd ..
+          tail -1 dist/sha256sums-macos.txt
           ls -l dist/ "$app/Contents/MacOS/"
 
       # The claim is "the .dmg mounts and the binary inside runs", so mount it.
