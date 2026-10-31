@@ -60,7 +60,7 @@ eframe = { version = "0.37", default-features = false, features = [
     "wgpu",
 ] }
 winit = "0.30"
-android_logger = "0.14"
+android_logger = "0.15"
 log = "0.4"
 
 [dev-dependencies]
