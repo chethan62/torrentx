@@ -130,46 +130,66 @@ impl App {
                     ),
                     Vec2::splat(box_side),
                 );
+                // A filled square on hover: an unframed glyph gave no feedback at
+                // all, so a click that missed the 10 px icon looked like a dead
+                // button. The whole box_side square is the hit target either way.
+                let hot = ui.rect_contains_pointer(clear_rect);
                 let hit = ui
                     .put(
                         clear_rect,
-                        egui::Button::new(svg_image(SvgIcon::Close, ICON_XS, self.pal.sub))
-                            .fill(Color32::TRANSPARENT)
-                            .frame(false)
-                            .min_size(Vec2::splat(box_side)),
+                        egui::Button::new(svg_image(
+                            SvgIcon::Close,
+                            ICON_SM,
+                            if hot { self.pal.text } else { self.pal.sub },
+                        ))
+                        .fill(if hot {
+                            self.pal.surface2
+                        } else {
+                            Color32::TRANSPARENT
+                        })
+                        .frame(hot)
+                        .corner_radius(R_SM)
+                        .min_size(Vec2::splat(box_side)),
                     )
                     .on_hover_text("Clear search (Esc)");
                 if hit.clicked() {
                     self.clear_search();
+                    // Typing again is the next thing anyone does; without this the
+                    // click leaves the field unfocused and the keystrokes go nowhere.
+                    ui.ctx()
+                        .memory_mut(|m| m.request_focus(egui::Id::unique("q")));
                 }
             }
 
             ui.add_space(SP4);
-            if ui
-                .add_enabled(
-                    !busy,
-                    egui::Button::new(
-                        RichText::new(if busy {
-                            "  Scanning…  "
-                        } else {
-                            "    Search    "
-                        })
-                        .font(FontId::proportional(fs))
-                        .strong()
-                        .color(Color32::WHITE),
-                    )
-                    .fill(if busy {
-                        tint(self.pal.accent, 190)
+            let search_btn = ui.add_enabled(
+                !busy,
+                egui::Button::new(
+                    RichText::new(if busy {
+                        "  Scanning…  "
                     } else {
-                        self.pal.accent
+                        "    Search    "
                     })
-                    .corner_radius(R_MD)
-                    .min_size(Vec2::new(btn_w, ROW1_H)),
+                    .font(FontId::proportional(fs))
+                    .strong()
+                    .color(Color32::WHITE),
                 )
-                .clicked()
-            {
+                .fill(if busy {
+                    tint(self.pal.accent, 190)
+                } else {
+                    self.pal.accent
+                })
+                .corner_radius(R_MD)
+                .min_size(Vec2::new(btn_w, ROW1_H)),
+            );
+            if search_btn.clicked() {
                 self.do_search();
             }
+            // Enabled and disabled say different things: a greyed button with no
+            // hint reads as "broken", not "already searching".
+            search_btn
+                .on_hover_text("Search every enabled indexer (Enter)")
+                .on_disabled_hover_text("A search is already running");
         });
         bar_rect
     }
@@ -247,10 +267,16 @@ impl App {
                         RichText::new("All").font(FontId::proportional(fs)),
                     );
                     for idx in &self.net.indexers {
+                        // Same marker as the picker window: this list mixes Jackett
+                        // indexers with the app's own sources.
+                        let label = match crate::sources::origin_tag(idx) {
+                            Some(t) => format!("{idx}  · {t}"),
+                            None => idx.clone(),
+                        };
                         ui.selectable_value(
                             &mut self.net.indexer,
                             idx.clone(),
-                            RichText::new(idx).font(FontId::proportional(fs)),
+                            RichText::new(label).font(FontId::proportional(fs)),
                         );
                     }
                 })
@@ -459,13 +485,36 @@ impl App {
                         ui.separator();
                         for idx in &all_idx {
                             let mut enabled = !self.cfg.disabled_indexers.iter().any(|d| d == idx);
-                            if ui
-                                .checkbox(
-                                    &mut enabled,
-                                    RichText::new(idx).font(FontId::proportional(fs)),
-                                )
-                                .changed()
-                            {
+                            let tag = crate::sources::origin_tag(idx);
+                            let mut changed = false;
+                            ui.horizontal(|ui| {
+                                changed = ui
+                                    .checkbox(
+                                        &mut enabled,
+                                        RichText::new(idx).font(FontId::proportional(fs)),
+                                    )
+                                    .on_hover_text(match tag {
+                                        Some("built-in") => {
+                                            "Searched by the app itself — no Jackett involved"
+                                        }
+                                        Some(_) => {
+                                            "Your own JSON definition in ~/.config/torrentx/indexers/"
+                                        }
+                                        None => "Configured in Jackett",
+                                    })
+                                    .changed();
+                                // Where a source comes from decides where you fix it,
+                                // so say it here instead of making people guess which
+                                // of three files owns the id.
+                                if let Some(t) = tag {
+                                    ui.label(
+                                        RichText::new(t)
+                                            .font(FontId::proportional(fs - 2.0))
+                                            .color(self.pal.dim),
+                                    );
+                                }
+                            });
+                            if changed {
                                 if enabled {
                                     self.cfg.disabled_indexers.retain(|d| d != idx);
                                 } else if !self.cfg.disabled_indexers.contains(idx) {
