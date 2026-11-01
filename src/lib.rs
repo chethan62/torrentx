@@ -1010,6 +1010,120 @@ pub(crate) fn android_data_dir() -> Option<std::path::PathBuf> {
     ANDROID_APP.get()?.internal_data_path()
 }
 
+const CLI_USAGE: &str = "\
+torrentx — search every configured source without opening the window
+
+  torrentx --search <query> [--indexer <id>] [--cat <name>] [--timeout <secs>]
+
+Prints one JSON array of rows on stdout; per-source counts go to stderr.
+Exit code 2 means the search itself failed (bad flag, no source answered).";
+
+/// The headless search path: same sources and fan-out rules as the GUI, one JSON
+/// array on stdout.
+///
+/// This exists because the window cannot be driven by a script on the platforms
+/// this ships on — egui under KWin Wayland publishes no accessibility tree and no
+/// X window, so injected clicks are no-ops. A CLI is the only honest end-to-end
+/// hook for the search path.
+pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
+    let (mut query, mut indexer, mut cat, mut timeout) = (
+        None::<String>,
+        String::new(),
+        "All".to_string(),
+        None::<u64>,
+    );
+    let mut it = argv.iter().skip(1);
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--search" | "-s" => query = it.next().cloned(),
+            "--indexer" | "-i" => indexer = it.next().cloned().unwrap_or_default(),
+            "--cat" | "-c" => cat = it.next().cloned().unwrap_or_else(|| "All".into()),
+            "--timeout" => timeout = it.next().and_then(|v| v.parse().ok()),
+            "--json" => {}
+            "--help" | "-h" => {
+                println!("{CLI_USAGE}");
+                return Ok(());
+            }
+            other => return Err(format!("unknown argument `{other}`\n\n{CLI_USAGE}")),
+        }
+    }
+    let query = query.ok_or_else(|| format!("--search <query> is required\n\n{CLI_USAGE}"))?;
+    if query.trim().is_empty() {
+        return Err("--search needs a non-empty query".into());
+    }
+
+    let cfg = config::load_cfg();
+    let timeout_s = timeout.unwrap_or(cfg.timeout_secs);
+
+    // Configured indexers come from Jackett; when it is unreachable the native
+    // sources still answer, which is exactly what the GUI does.
+    let configured = jackett::fetch_indexers(&cfg.jackett_url, &cfg.api_key)
+        .map(|c| c.configured)
+        .unwrap_or_else(sources::native_ids);
+    let targets = jackett::search_targets(&indexer, &configured, &cfg.disabled_indexers);
+
+    let ctx = jackett::SearchCtx::new(
+        &cfg.jackett_url,
+        &cfg.api_key,
+        &query,
+        &cat,
+        jackett::indexer_timeout(timeout_s),
+        cfg.dedupe,
+    );
+
+    let mut rows: Vec<jackett::TorrentResult> = Vec::new();
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    let mut failed: Vec<String> = Vec::new();
+    for idx in &targets {
+        match jackett::fetch_rows(&ctx, idx) {
+            Ok(mut r) => {
+                counts.push((idx.clone(), r.len()));
+                rows.append(&mut r);
+            }
+            Err(e) => failed.push(format!("{idx}: {e}")),
+        }
+    }
+    if rows.is_empty() {
+        return Err(format!(
+            "no source returned rows{}",
+            if failed.is_empty() {
+                String::new()
+            } else {
+                format!(" — {}", failed.join("; "))
+            }
+        ));
+    }
+    if cfg.dedupe {
+        rows = jackett::group_by_infohash(rows);
+        rows = jackett::dedupe_best_seeded(rows);
+    }
+
+    let out: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "title": r.title,
+                "tracker": r.tracker,
+                "size": r.size,
+                "seeders": r.seeders,
+                "peers": r.peers,
+                "date": r.publish_date,
+                "magnet": r.magnet_uri,
+                "also_on": r.also_on,
+            })
+        })
+        .collect();
+    let json = serde_json::to_string_pretty(&out).map_err(|e| format!("serialise: {e}"))?;
+    println!("{json}");
+    eprintln!(
+        "{} rows{}{}",
+        rows.len(),
+        jackett::per_source_note(&counts),
+        jackett::failed_note(&failed)
+    );
+    Ok(())
+}
+
 pub fn run_gui() -> eframe::Result<()> {
     run()
 }
@@ -1039,6 +1153,7 @@ fn run() -> eframe::Result<()> {
              OPTIONS:\n  \
              --config <path>   Use an alternate config file (default: ~/.config/torrentx/config.json)\n  \
              --minimized       Start without a window (tray icon only; used by At login)\n  \
+             --search <query>  Search every configured source headless; prints JSON, no window\n  \
              -h, --help        Print this help and exit\n  \
              -V, --version     Print the version and exit\n",
             env!("CARGO_PKG_VERSION")

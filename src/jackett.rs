@@ -4,8 +4,9 @@ use crate::themes::rgb;
 use eframe::egui::Color32;
 use reqwest::blocking::Client;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
 use std::time::Duration;
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -1023,7 +1024,7 @@ pub(crate) fn indexer_timeout(base: u64) -> u64 {
 }
 
 #[derive(Clone)]
-struct SearchCtx {
+pub(crate) struct SearchCtx {
     url: String,
     key: String,
     query: String,
@@ -1033,6 +1034,28 @@ struct SearchCtx {
     /// straggler can append AFTER the settle pass, and an undeduped late row would
     /// make the badge disagree with the table.
     dedupe: bool,
+}
+
+impl SearchCtx {
+    /// Connection parameters for one search. The fan-out builds this from the
+    /// app's settings; the CLI builds it from its own flags.
+    pub(crate) fn new(
+        url: &str,
+        key: &str,
+        query: &str,
+        cat: &str,
+        timeout: u64,
+        dedupe: bool,
+    ) -> Self {
+        Self {
+            url: url.to_string(),
+            key: key.to_string(),
+            query: query.to_string(),
+            cat: cat.to_string(),
+            timeout,
+            dedupe,
+        }
+    }
 }
 
 /// Status-line suffix naming the indexers that failed this search, capped so a
@@ -1063,30 +1086,107 @@ pub(crate) fn failed_note_short(failed: &[String]) -> String {
     }
 }
 
-/// Fetch one indexer and append its rows. Err is a message for the UI.
-fn fetch_into(
-    ctx: &SearchCtx,
-    idx: &str,
-    results: &Arc<Mutex<Arc<Vec<TorrentResult>>>>,
-    count: &Arc<Mutex<usize>>,
-) -> Result<usize, String> {
+/// Per-source row counts, biggest first, capped like the failed note — the
+/// status line has room for three names and then a "+n".
+pub(crate) fn per_source_note(counts: &[(String, usize)]) -> String {
+    if counts.is_empty() {
+        return String::new();
+    }
+    let mut v: Vec<&(String, usize)> = counts.iter().filter(|(_, n)| *n > 0).collect();
+    if v.is_empty() {
+        return String::new();
+    }
+    v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let shown: Vec<String> = v.iter().take(3).map(|(i, n)| format!("{i} {n}")).collect();
+    let more = if v.len() > shown.len() {
+        format!(" +{}", v.len() - shown.len())
+    } else {
+        String::new()
+    };
+    format!("  ·  {}{more}", shown.join(", "))
+}
+
+/// Consecutive connection failures per source, so a walled indexer stops costing
+/// every search. One guard here covers every caller, which is why it is not a
+/// per-widget concern.
+///
+/// ponytail: process-global and reset on restart; per-source backoff with
+/// timestamps if this ever needs to be kinder than "off after three".
+static SOURCE_FAILS: LazyLock<Mutex<HashMap<String, u8>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// How many connection failures in a row switch a source off.
+pub(crate) const DISABLE_AFTER_FAILS: u8 = 3;
+
+/// Is this the site being unreachable or walled, rather than a bad reply? Only
+/// transport-shaped errors count: a parse error or a 4xx says nothing about the
+/// next search.
+pub(crate) fn is_connection_error(msg: &str) -> bool {
+    let m = msg.to_lowercase();
+    [
+        "connection reset",
+        "ssl connection",
+        "connection refused",
+        "connection closed",
+        "cannot reach",
+        "timed out",
+        "network error",
+    ]
+    .iter()
+    .any(|p| m.contains(p))
+}
+
+/// Record one source's result. `None` resets its streak. Returns the id the
+/// first time it crosses [`DISABLE_AFTER_FAILS`], so the caller disables and
+/// persists exactly once instead of on every later failure.
+pub(crate) fn note_source_result(idx: &str, error: Option<&str>) -> Option<String> {
+    let mut m = lock_or_recover(&SOURCE_FAILS);
+    match error {
+        None => {
+            m.remove(idx);
+            None
+        }
+        Some(e) if is_connection_error(e) => {
+            let n = m.entry(idx.to_string()).or_insert(0);
+            *n = n.saturating_add(1);
+            (*n == DISABLE_AFTER_FAILS).then(|| idx.to_string())
+        }
+        Some(_) => {
+            m.remove(idx);
+            None
+        }
+    }
+}
+
+/// How stale the cached catalogue may be before opening the picker re-fetches.
+/// A day was too long: removing an indexer in Jackett left the picker listing it
+/// until the cache file was deleted by hand.
+const OPEN_REFRESH_AFTER: Duration = Duration::from_secs(10 * 60);
+
+/// True when there is no cached catalogue, or it is older than the tolerance, so
+/// opening the picker is a good moment to ask Jackett.
+pub(crate) fn catalogue_stale(url: &str, key: &str) -> bool {
+    let Ok(meta) = std::fs::metadata(indexer_cache_path(url, key)) else {
+        return true;
+    };
+    meta.modified()
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_none_or(|age| age > OPEN_REFRESH_AFTER)
+}
+
+/// What one source returns, with no shared state touched — the fan-out appends
+/// it, and the headless CLI (`--search`) prints it.
+pub(crate) fn fetch_rows(ctx: &SearchCtx, idx: &str) -> Result<Vec<TorrentResult>, String> {
     // A user-defined JSON indexer: one request + a field map, no Jackett. It is
     // checked first so a definition can replace a built-in by id.
     if let Some(def) = crate::indexers::find(idx) {
-        let rows = crate::indexers::fetch(&def, &ctx.query, &ctx.cat, ctx.timeout)?;
-        let n = rows.len();
-        append_results(results, count, rows, ctx.dedupe);
-        crate::wake_ui();
-        return Ok(n);
+        return crate::indexers::fetch(&def, &ctx.query, &ctx.cat, ctx.timeout);
     }
     // A native source (apibay, knaben) has no Jackett behind it: same fan-out,
     // same append/dedupe/wake path, just a different endpoint.
     if crate::sources::is_native(idx) {
-        let rows = crate::sources::fetch(idx, &ctx.query, &ctx.cat, ctx.timeout)?;
-        let n = rows.len();
-        append_results(results, count, rows, ctx.dedupe);
-        crate::wake_ui();
-        return Ok(n);
+        return crate::sources::fetch(idx, &ctx.query, &ctx.cat, ctx.timeout);
     }
     let ep = search_url(&ctx.url, &ctx.key, &ctx.query, &ctx.cat, idx);
     let resp = shared_client()
@@ -1108,8 +1208,7 @@ fn fetch_into(
             e.without_url()
         )
     })?;
-    let n = data.results.len();
-    if n == 0
+    if data.results.is_empty()
         && let Some(bad) = data
             .indexers
             .iter()
@@ -1123,10 +1222,46 @@ fn fetch_into(
             format!("{id}: {msg}")
         });
     }
-    append_results(results, count, data.results, ctx.dedupe);
+    Ok(data.results)
+}
+
+/// Fetch one indexer and append its rows. Err is a message for the UI.
+fn fetch_into(
+    ctx: &SearchCtx,
+    idx: &str,
+    results: &Arc<Mutex<Arc<Vec<TorrentResult>>>>,
+    count: &Arc<Mutex<usize>>,
+) -> Result<usize, String> {
+    let rows = fetch_rows(ctx, idx)?;
+    let n = rows.len();
+    append_results(results, count, rows, ctx.dedupe);
     // Wake the parked UI loop so the rows paint now, not on the next input.
     crate::wake_ui();
     Ok(n)
+}
+
+/// Per-source bookkeeping for one finished source: the row count the status line
+/// shows, and the failure streak that switches a walled indexer off.
+fn record_source(
+    per_source: &Arc<Mutex<Vec<(String, usize)>>>,
+    to_disable: &Arc<Mutex<Vec<String>>>,
+    idx: &str,
+    r: &Result<usize, String>,
+) {
+    match r {
+        Ok(n) => {
+            lock_or_recover(per_source).push((idx.to_string(), *n));
+            note_source_result(idx, None);
+        }
+        Err(e) => {
+            if let Some(id) = note_source_result(idx, Some(e)) {
+                let mut d = lock_or_recover(to_disable);
+                if !d.contains(&id) {
+                    d.push(id);
+                }
+            }
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1143,6 +1278,11 @@ pub(crate) fn start_search(
     epoch: Arc<AtomicU64>,
     answered: Arc<AtomicUsize>,
     failed: Arc<Mutex<Vec<String>>>,
+    // Rows per source, for the status line (which source is thin or dead).
+    per_source: Arc<Mutex<Vec<(String, usize)>>>,
+    // Sources that just crossed the failure threshold; the UI thread, which owns
+    // the config, does the switching off.
+    to_disable: Arc<Mutex<Vec<String>>>,
     dedupe: bool,
     generation: u64,
 ) {
@@ -1167,12 +1307,14 @@ pub(crate) fn start_search(
         // One indexer: the plain request, same as before.
         if targets.len() <= 1 {
             let idx = targets.first().map(String::as_str).unwrap_or("all");
-            match fetch_into(&ctx, idx, &results, &count) {
+            let r = fetch_into(&ctx, idx, &results, &count);
+            record_source(&per_source, &to_disable, idx, &r);
+            match &r {
                 Ok(_) if live() => {
                     *lock_or_recover(&state) = SearchState::Done;
                 }
                 Ok(_) => {}
-                Err(e) if live() => set_err(&state, e),
+                Err(e) if live() => set_err(&state, e.clone()),
                 Err(_) => {}
             }
             answered.fetch_add(1, Ordering::Relaxed);
@@ -1222,19 +1364,22 @@ pub(crate) fn start_search(
         }
         let (mut ok_count, mut first_err) = (0usize, None::<String>);
         for h in handles {
-            match h.join() {
-                Ok((_, Ok(_))) => ok_count += 1,
-                Ok((idx, Err(e))) => {
-                    // Keep the id: "2 indexers failed" without names is the same
-                    // silent failure in a new costume.
-                    let mut f = lock_or_recover(&failed);
-                    if !f.contains(&idx) {
-                        f.push(idx);
+            // A panicking worker is not a source result: it has no id to report.
+            if let Ok((idx, r)) = h.join() {
+                record_source(&per_source, &to_disable, &idx, &r);
+                match r {
+                    Ok(_) => ok_count += 1,
+                    Err(e) => {
+                        // Keep the id: "2 indexers failed" without names is the
+                        // same silent failure in a new costume.
+                        let mut f = lock_or_recover(&failed);
+                        if !f.contains(&idx) {
+                            f.push(idx);
+                        }
+                        drop(f);
+                        first_err.get_or_insert(e);
                     }
-                    drop(f);
-                    first_err.get_or_insert(e);
                 }
-                Err(_) => {}
             }
         }
         if live() {
@@ -1526,10 +1671,11 @@ mod tests {
         CATALOGUE_GROUPS, Hlth, INDEXER_CACHE_TTL, IndexerCatalogue, JackettResponse, SearchState,
         Tab, TorrentResult, asset_prefix, cache_fresh, catalogue_matches, category_id,
         dedupe_best_seeded, dedupe_key, failed_note, find_bin, fmt_size, free_port, group_entries,
-        hlth_lbl, indexer_cache_path, is_magnet, managed_config, managed_root, normalize,
-        parse_indexers_xml, parse_latest_tag, port_open, pub_date_key, pub_year,
-        read_server_config, scrub_indexer_error, search_targets, set_err, start_local, stop_local,
-        time_ago, truncate_magnet, urlenc, user_config, validate_jackett_url,
+        hlth_lbl, indexer_cache_path, is_connection_error, is_magnet, managed_config, managed_root,
+        normalize, note_source_result, parse_indexers_xml, parse_latest_tag, per_source_note,
+        port_open, pub_date_key, pub_year, read_server_config, scrub_indexer_error, search_targets,
+        set_err, start_local, stop_local, time_ago, truncate_magnet, urlenc, user_config,
+        validate_jackett_url,
     };
     use crate::lock_or_recover;
     use std::thread;
@@ -2152,6 +2298,53 @@ mod tests {
     /// Without this, a Cloudflare-blocked tracker is indistinguishable from one
     /// that simply had no results — the failure that hid 1337x/eztv for days.
     #[test]
+    fn per_source_note_names_the_biggest_three_then_counts_the_rest() {
+        let counts = vec![
+            ("knaben".to_string(), 69),
+            ("thepiratebay".to_string(), 100),
+            ("nyaasi".to_string(), 1),
+            ("empty".to_string(), 0),
+            ("yts".to_string(), 16),
+        ];
+        // 0-row sources are noise on a status line, so they are not listed.
+        assert_eq!(
+            per_source_note(&counts),
+            "  ·  thepiratebay 100, knaben 69, yts 16 +1"
+        );
+        assert_eq!(per_source_note(&[]), "");
+        assert_eq!(per_source_note(&[("dead".to_string(), 0)]), "");
+    }
+
+    #[test]
+    fn a_walled_source_is_switched_off_after_three_connection_failures() {
+        // Distinct id so the process-global streak cannot collide with a real run.
+        let id = "test-walled-source";
+        let wall = "Connection reset by peer ---> SSL connection could not be established";
+        assert!(!is_connection_error("HTTP 404 from Jackett"));
+        assert_eq!(note_source_result(id, Some(wall)), None, "one is a blip");
+        assert_eq!(note_source_result(id, Some(wall)), None, "two is a bad day");
+        // A success in between clears the streak — only CONSECUTIVE failures count.
+        assert_eq!(note_source_result(id, None), None);
+        assert_eq!(note_source_result(id, Some(wall)), None);
+        assert_eq!(note_source_result(id, Some(wall)), None);
+        assert_eq!(
+            note_source_result(id, Some(wall)),
+            Some(id.to_string()),
+            "the third in a row is what flips it off"
+        );
+        // Only once: later failures must not re-disable or re-notify.
+        assert_eq!(note_source_result(id, Some(wall)), None);
+        // A non-transport error never counts toward the streak.
+        let other = "test-non-transport";
+        for _ in 0..5 {
+            assert_eq!(
+                note_source_result(other, Some("HTTP 500 from Jackett")),
+                None
+            );
+        }
+    }
+
+    #[test]
     fn fan_out_records_which_indexer_failed() {
         use super::start_search;
         use std::io::{Read, Write};
@@ -2203,6 +2396,8 @@ mod tests {
             Arc::new(AtomicU64::new(1)),
             Arc::new(AtomicUsize::new(0)),
             Arc::clone(&failed),
+            Arc::new(Mutex::new(Vec::new())),
+            Arc::new(Mutex::new(Vec::new())),
             false,
             1,
         );
@@ -2269,6 +2464,8 @@ mod tests {
             Arc::clone(&count),
             Arc::clone(&epoch),
             Arc::clone(&answered),
+            Arc::new(Mutex::new(Vec::new())),
+            Arc::new(Mutex::new(Vec::new())),
             Arc::new(Mutex::new(Vec::new())),
             false,
             1,

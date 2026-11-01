@@ -329,6 +329,15 @@ impl App {
                 .clicked()
             {
                 self.net.idx_open = !self.net.idx_open;
+                // A picker that shows yesterday's indexers is worse than a slow
+                // one: re-ask when the cached list is older than the tolerance
+                // (removing an indexer in Jackett used to need a manual cache
+                // delete before the list agreed).
+                if self.net.idx_open
+                    && crate::jackett::catalogue_stale(&self.cfg.jackett_url, &self.cfg.api_key)
+                {
+                    self.refresh_indexers();
+                }
             }
             let mut open = self.net.idx_open;
             let mut esc = false;
@@ -483,6 +492,16 @@ impl App {
                             }
                         }
                         ui.separator();
+                        // A definition that will not parse is invisible otherwise:
+                        // the source simply never appears, which reads as "my file
+                        // was ignored for no reason".
+                        for why in crate::indexers::load_errors().iter().take(3) {
+                            ui.label(
+                                RichText::new(format!("def ignored — {why}"))
+                                    .font(FontId::proportional(fs - 2.0))
+                                    .color(self.pal.red),
+                            );
+                        }
                         for idx in &all_idx {
                             let mut enabled = !self.cfg.disabled_indexers.iter().any(|d| d == idx);
                             let tag = crate::sources::origin_tag(idx);

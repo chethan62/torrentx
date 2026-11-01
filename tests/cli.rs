@@ -28,10 +28,22 @@ fn help_lists_every_flag() {
     let out = Command::new(BIN).arg("--help").output().expect("spawn");
     assert!(out.status.success(), "--help exited {}", out.status);
     let text = String::from_utf8_lossy(&out.stdout);
-    for flag in ["--config", "--minimized", "--help", "--version"] {
+    for flag in ["--config", "--minimized", "--search", "--help", "--version"] {
         assert!(
             text.contains(flag),
             "--help does not mention {flag}: {text}"
         );
     }
+}
+
+#[test]
+fn search_without_a_query_fails_fast() {
+    // Exits before any network or config work, so this stays a sub-second test.
+    let out = Command::new(BIN).arg("--search").output().expect("spawn");
+    assert_eq!(out.status.code(), Some(2), "--search alone should exit 2");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("--search"),
+        "error should name the flag: {err}"
+    );
 }
