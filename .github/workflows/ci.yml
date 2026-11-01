@@ -56,6 +56,13 @@ jobs:
       - name: Build
         run: cargo build --all-targets
 
+      # End-to-end fan-out against two mock indexers on localhost: no network,
+      # no display. The GUI cannot be scripted (egui under Wayland publishes no
+      # accessibility tree and no X window), so `--search` is the only automated
+      # check of the search path itself.
+      - name: Smoke — headless fan-out
+        run: ./scripts/smoke-search.sh
+
       # Doc-only commits must arrive through a PR (CONTRIBUTING.md). Runs first:
       # it is seconds of API calls, and a doc push that skipped review should fail
       # before the toolchain spends two minutes on a build.

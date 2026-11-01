@@ -1039,6 +1039,13 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
             "--indexer" | "-i" => indexer = it.next().cloned().unwrap_or_default(),
             "--cat" | "-c" => cat = it.next().cloned().unwrap_or_else(|| "All".into()),
             "--timeout" => timeout = it.next().and_then(|v| v.parse().ok()),
+            // Same override the GUI has; the smoke test points this at a mock
+            // Jackett so the fan-out can be exercised with no network.
+            "--config" => {
+                if let Some(p) = it.next() {
+                    config::set_config_override(std::path::PathBuf::from(p));
+                }
+            }
             "--json" => {}
             "--help" | "-h" => {
                 println!("{CLI_USAGE}");
