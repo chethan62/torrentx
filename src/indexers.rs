@@ -118,13 +118,25 @@ fn parsed(json: &str) -> Option<Def> {
     valid_id(&def.id).then_some(def)
 }
 
+/// Files that did not load, as `name: why`, so a typo in a definition is
+/// visible in the picker instead of silently leaving the source missing.
+static LOAD_ERRORS: std::sync::LazyLock<std::sync::Mutex<Vec<String>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
+
+/// The reasons from the last [`load`] — empty when every definition parsed.
+pub(crate) fn load_errors() -> Vec<String> {
+    crate::lock_or_recover(&LOAD_ERRORS).clone()
+}
+
 /// Bundled first, then `~/.config/torrentx/indexers/*.json`; a later definition
 /// with the same id replaces an earlier one. Unreadable or invalid files are
-/// skipped rather than guessed at.
+/// skipped rather than guessed at — but the reason is kept for the UI.
 pub(crate) fn load() -> Vec<Def> {
     let mut out: Vec<Def> = parsed(BUNDLED).into_iter().collect();
+    let mut errors: Vec<String> = Vec::new();
     let dir = dir();
     let Ok(entries) = std::fs::read_dir(&dir) else {
+        *crate::lock_or_recover(&LOAD_ERRORS) = errors;
         return out;
     };
     let mut files: Vec<PathBuf> = entries
@@ -134,10 +146,24 @@ pub(crate) fn load() -> Vec<Def> {
         .collect();
     files.sort();
     for f in files {
-        let Ok(raw) = std::fs::read_to_string(&f) else {
+        let Some(name) = f.file_name().map(|n| n.to_string_lossy().to_string()) else {
             continue;
         };
+        let raw = match std::fs::read_to_string(&f) {
+            Ok(r) => r,
+            Err(e) => {
+                errors.push(format!("{name}: {e}"));
+                continue;
+            }
+        };
         let Some(def) = parsed(&raw) else {
+            // Say which end it failed at: valid JSON with a bad id reads very
+            // differently from a truncated file.
+            let why = match serde_json::from_str::<Def>(&raw) {
+                Ok(d) => format!("bad id `{}` (letters, digits, - and _ only)", d.id),
+                Err(e) => e.to_string(),
+            };
+            errors.push(format!("{name}: {why}"));
             continue;
         };
         match out.iter_mut().find(|d| d.id == def.id) {
@@ -145,6 +171,7 @@ pub(crate) fn load() -> Vec<Def> {
             None => out.push(def),
         }
     }
+    *crate::lock_or_recover(&LOAD_ERRORS) = errors;
     out
 }
 

@@ -118,6 +118,9 @@ impl eframe::App for App {
         let _ = UI_CTX.set(ctx.clone());
         self.apply_theme(&ctx);
         self.apply_ui_scale(&ctx);
+        // Sources that keep failing to connect get switched off here, on the
+        // thread that owns the config, not in the fan-out worker.
+        self.apply_auto_disables();
         let state = self.cur_state();
 
         // --minimized. `with_visible(false)` alone does not hold on X11 (winit
@@ -548,10 +551,15 @@ impl eframe::App for App {
                                 &lock_or_recover(&self.search.failed),
                                 narrow(bar_w),
                             );
+                            // Which source is thin or dead: the total alone never
+                            // said whether 4 results meant four trackers or one.
+                            let per = crate::jackett::per_source_note(&lock_or_recover(
+                                &self.search.per_source,
+                            ));
                             lbl(
                                 ui,
                                 &format!(
-                                    "Searching \"{}\" — {} so far{}{}{failed}",
+                                    "Searching \"{}\" — {} so far{}{}{per}{failed}",
                                     self.search.last_query, n, el, idx_note
                                 ),
                                 self.pal.accent,
@@ -581,10 +589,23 @@ impl eframe::App for App {
                                 &lock_or_recover(&self.search.failed),
                                 narrow(bar_w),
                             );
+                            let per = crate::jackett::per_source_note(&lock_or_recover(
+                                &self.search.per_source,
+                            ));
+                            // Who was switched off for us, and why — silent
+                            // self-disabling would look like a lost indexer.
+                            let auto = if self.search.auto_disabled.is_empty() {
+                                String::new()
+                            } else {
+                                format!(
+                                    "  ·  disabled after repeated errors: {}",
+                                    self.search.auto_disabled.join(", ")
+                                )
+                            };
                             lbl(
                                 ui,
                                 &format!(
-                                    "{n} results for \"{}\"{}{idx_note}{failed}",
+                                    "{n} results for \"{}\"{}{idx_note}{per}{failed}{auto}",
                                     self.search.last_query, e
                                 ),
                                 self.pal.green,

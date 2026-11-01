@@ -578,6 +578,13 @@ pub(crate) struct SearchUi {
     /// in the status line: a tracker that cannot be reached used to vanish into
     /// the answered/targets count and look like "no results".
     pub(crate) failed: Arc<std::sync::Mutex<Vec<String>>>,
+    /// Rows each source returned in the current search, for the status line.
+    pub(crate) per_source: Arc<Mutex<Vec<(String, usize)>>>,
+    /// Sources that crossed the connection-failure threshold; the UI thread owns
+    /// the config, so it does the disabling and then empties this.
+    pub(crate) to_disable: Arc<Mutex<Vec<String>>>,
+    /// Names switched off automatically, shown until the next search.
+    pub(crate) auto_disabled: Vec<String>,
     pub(crate) last_query: String,
     pub(crate) page: usize,
 }
@@ -603,6 +610,9 @@ impl Default for SearchUi {
             answered: Arc::new(AtomicUsize::new(0)),
             targets: Arc::new(AtomicUsize::new(0)),
             failed: Arc::new(std::sync::Mutex::new(Vec::new())),
+            per_source: Arc::new(Mutex::new(Vec::new())),
+            to_disable: Arc::new(Mutex::new(Vec::new())),
+            auto_disabled: Vec::new(),
             last_query: String::new(),
             page: 0,
         }
@@ -1033,6 +1043,9 @@ impl App {
         );
         self.search.targets.store(targets.len(), Ordering::Relaxed);
         lock_or_recover(&self.search.failed).clear();
+        lock_or_recover(&self.search.per_source).clear();
+        lock_or_recover(&self.search.to_disable).clear();
+        self.search.auto_disabled.clear();
         start_search(
             self.cfg.jackett_url.clone(),
             self.cfg.api_key.clone(),
@@ -1046,9 +1059,34 @@ impl App {
             Arc::clone(&self.search.epoch),
             Arc::clone(&self.search.answered),
             Arc::clone(&self.search.failed),
+            Arc::clone(&self.search.per_source),
+            Arc::clone(&self.search.to_disable),
             self.cfg.dedupe,
             generation,
         );
+    }
+
+    /// Switch off sources that keep failing to connect, once each, and remember
+    /// the names so the status line can say who was dropped.
+    pub(crate) fn apply_auto_disables(&mut self) {
+        let due = {
+            let mut d = lock_or_recover(&self.search.to_disable);
+            if d.is_empty() {
+                return;
+            }
+            std::mem::take(&mut *d)
+        };
+        let mut changed = false;
+        for id in due {
+            if !self.cfg.disabled_indexers.contains(&id) {
+                self.cfg.disabled_indexers.push(id.clone());
+                self.search.auto_disabled.push(id);
+                changed = true;
+            }
+        }
+        if changed {
+            let _ = crate::config::save_cfg(&self.cfg);
+        }
     }
 
     /// Copy all magnet links from the batch-selected rows (one per line).
