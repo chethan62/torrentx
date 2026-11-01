@@ -16,7 +16,19 @@ use std::time::Duration;
 pub(crate) const NATIVE: [&str; 2] = ["apibay", "knaben"];
 
 pub(crate) fn is_native(id: &str) -> bool {
-    NATIVE.iter().any(|n| n.eq_ignore_ascii_case(id))
+    NATIVE.iter().any(|n| n.eq_ignore_ascii_case(id)) || crate::indexers::find(id).is_some()
+}
+
+/// What the picker writes beside a source that needs no Jackett, so "where did
+/// this row come from" is answerable without opening three config files.
+pub(crate) fn origin_tag(id: &str) -> Option<&'static str> {
+    if NATIVE.iter().any(|n| n.eq_ignore_ascii_case(id)) {
+        Some("built-in")
+    } else if crate::indexers::find(id).is_some() {
+        Some("local def")
+    } else {
+        None
+    }
 }
 
 /// Native ids as owned strings — the seed value for `App::net.indexers`, so the
@@ -340,6 +352,21 @@ pub(crate) fn parse_knaben(body: &str) -> Result<Vec<TorrentResult>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn origin_tag_separates_builtin_from_jackett() {
+        // The two native sources ship in the binary …
+        assert_eq!(origin_tag("apibay"), Some("built-in"));
+        assert_eq!(origin_tag("KNABEN"), Some("built-in"));
+        // … a JSON definition is the user's own file …
+        for id in crate::indexers::ids() {
+            assert_eq!(origin_tag(&id), Some("local def"), "{id}");
+        }
+        // … and a Jackett-configured indexer is neither.
+        assert_eq!(origin_tag("thepiratebay"), None);
+        assert!(is_native("apibay") && is_native("knaben"));
+        assert!(!is_native("yts-please-do-not-exist"));
+    }
 
     #[test]
     fn apibay_maps_rows_and_drops_the_no_results_sentinel() {
