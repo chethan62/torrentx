@@ -1153,6 +1153,7 @@ fn run() -> eframe::Result<()> {
              OPTIONS:\n  \
              --config <path>   Use an alternate config file (default: ~/.config/torrentx/config.json)\n  \
              --minimized       Start without a window (tray icon only; used by At login)\n  \
+             --search <query>  Search every configured source headless; prints JSON, no window\n  \
              -h, --help        Print this help and exit\n  \
              -V, --version     Print the version and exit\n",
             env!("CARGO_PKG_VERSION")
