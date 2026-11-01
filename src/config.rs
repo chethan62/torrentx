@@ -8,6 +8,9 @@ pub(crate) const ROW_HEIGHT_NORMAL: f32 = 44.0;
 pub(crate) const ROW_HEIGHT_ROOMY: f32 = 56.0;
 
 #[derive(Serialize, Deserialize, Clone)]
+// Struct-level default: a hand-written or test config may name only the fields it
+// changes, and everything else comes from `Default for Config`.
+#[serde(default)]
 pub(crate) struct Config {
     pub(crate) jackett_url: String,
     pub(crate) api_key: String,
