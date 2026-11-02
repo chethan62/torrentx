@@ -12,6 +12,7 @@ cargo test --all-targets
 cargo clippy --all-targets --all-features -- -D warnings
 ./scripts/ui-standards.sh                              # must print: ui-standards: ok
 ./scripts/smoke-search.sh                              # CLI end to end against a local mock (no Jackett)
+./scripts/smoke-unproductive.sh                        # slow-and-empty demotion, ~28 s by design
 cargo deny --all-features check licenses advisories bans sources
 cargo audit
 ```

@@ -1224,6 +1224,27 @@ static SOURCE_FAILS: LazyLock<Mutex<HashMap<String, u8>>> =
 /// How many connection failures in a row switch a source off.
 pub(crate) const DISABLE_AFTER_FAILS: u8 = 3;
 
+/// A source that spends at least this long and returns nothing costs the user
+/// the whole search: the fan-out ends when its slowest source does, so 19 s for
+/// zero rows is 19 s of somebody's life (measured on `anisource` for "ubuntu").
+pub(crate) const UNPRODUCTIVE_MS: u64 = 8_000;
+
+/// Count a slow, empty run toward the same streak a connection failure uses —
+/// one counter, one threshold, one persistence path, and the id comes back the
+/// first time it crosses so the caller disables exactly once.
+pub(crate) fn note_unproductive(idx: &str) -> Option<String> {
+    let mut m = lock_or_recover(&SOURCE_FAILS);
+    let n = m.entry(idx.to_string()).or_insert(0);
+    *n = n.saturating_add(1);
+    (*n == DISABLE_AFTER_FAILS).then(|| idx.to_string())
+}
+
+/// Should this result count as unproductive? Empty and slow, not merely empty:
+/// a fast empty answer is a cheap "no".
+pub(crate) fn is_unproductive(rows: usize, ms: u64) -> bool {
+    rows == 0 && ms >= UNPRODUCTIVE_MS
+}
+
 /// Is this the site being unreachable or walled, rather than a bad reply? Only
 /// transport-shaped errors count: a parse error or a 4xx says nothing about the
 /// next search.
@@ -1401,7 +1422,20 @@ fn record_source(
     match r {
         Ok(n) => {
             lock_or_recover(per_source).push((idx.to_string(), *n, ms));
-            note_source_result(idx, None);
+            // A slow empty answer is not a success: it keeps the streak alive so
+            // the source can be dropped after the third one.
+            let crossed = if is_unproductive(*n, ms) {
+                note_unproductive(idx)
+            } else {
+                note_source_result(idx, None);
+                None
+            };
+            if let Some(id) = crossed {
+                let mut d = lock_or_recover(to_disable);
+                if !d.contains(&id) {
+                    d.push(id);
+                }
+            }
         }
         Err(e) => {
             if let Some(id) = note_source_result(idx, Some(e)) {
@@ -2618,6 +2652,27 @@ mod tests {
         // A newline inside an exception must not break the one-line-per-source shape.
         assert!(tip.lines().all(|l| !l.trim().is_empty()));
         assert_eq!(super::failed_tooltip(&[]), "");
+    }
+
+    #[test]
+    fn a_slow_empty_source_earns_the_same_streak_as_a_dead_one() {
+        // Distinct ids: the streak map is process-global.
+        assert!(
+            !super::is_unproductive(5, 20_000),
+            "rows mean it was productive"
+        );
+        assert!(!super::is_unproductive(0, 500), "a fast 'no' is cheap");
+        assert!(super::is_unproductive(0, 19_000));
+
+        let id = "test-unproductive";
+        super::note_source_result(id, None);
+        assert_eq!(super::note_unproductive(id), None);
+        assert_eq!(super::note_unproductive(id), None);
+        // Third in a row crosses the threshold, exactly like three dead connections.
+        assert_eq!(super::note_unproductive(id).as_deref(), Some(id));
+        // A productive run resets it.
+        super::note_source_result(id, None);
+        assert!(!super::source_fails_snapshot().contains_key(id));
     }
 
     #[test]
