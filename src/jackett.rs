@@ -1099,10 +1099,11 @@ pub(crate) fn failed_note(failed: &[(String, String)]) -> String {
         .iter()
         .take(3)
         .map(|(id, why)| {
-            if why.is_empty() {
+            let brief = short_reason(why);
+            if brief.is_empty() {
                 id.clone()
             } else {
-                format!("{id} ({why})")
+                format!("{id} ({brief})")
             }
         })
         .collect();
@@ -1122,6 +1123,23 @@ pub(crate) fn failed_note_short(failed: &[(String, String)]) -> String {
     } else {
         format!("  ·  {} failed", failed.len())
     }
+}
+
+/// Hover text for the failed note: the whole reason per source, one per line.
+/// The status bar cannot fit it, and a name alone leaves nothing to act on.
+pub(crate) fn failed_tooltip(failed: &[(String, String)]) -> String {
+    failed
+        .iter()
+        .map(|(id, why)| {
+            let one = why.trim().replace(['\n', '\r'], " ");
+            if one.is_empty() {
+                id.clone()
+            } else {
+                format!("{id}: {one}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// One line of a Jackett exception, no key, short enough for a status bar.
@@ -1483,7 +1501,9 @@ pub(crate) fn start_search(
                         // Keep the id AND the reason: "2 indexers failed" without
                         // names says nothing, and a name without a reason says
                         // only that something happened.
-                        let why = short_reason(&e);
+                        // Full text here; `failed_note` shortens for the status
+                        // bar and the hover tooltip shows the whole thing.
+                        let why = scrub_indexer_error(&e);
                         let mut f = lock_or_recover(&failed);
                         if !f.iter().any(|(i, _)| i == &idx) {
                             f.push((idx.clone(), why));
@@ -2540,6 +2560,26 @@ mod tests {
         let rows = fetch_rows(&ctx, "therarbg").expect("retry should recover");
         assert_eq!(rows.len(), 1);
         assert_eq!(hits.load(Ordering::SeqCst), 2, "one retry, not a loop");
+    }
+
+    #[test]
+    fn the_failed_tooltip_keeps_the_whole_reason() {
+        let long = "Jackett.Common.IndexerException: Exception (therarbg): Connection reset by peer ---> System.Net.Http.HttpRequestException: The SSL connection could not be established\n   at System.Net.Http";
+        let tip = super::failed_tooltip(&[
+            ("therarbg".to_string(), long.to_string()),
+            ("eztv".to_string(), "HTTP 403 from Jackett".to_string()),
+        ]);
+        // Every source on its own line, in full, never truncated with an ellipsis.
+        assert_eq!(tip.lines().count(), 2, "{tip}");
+        assert!(
+            tip.contains("The SSL connection could not be established"),
+            "{tip}"
+        );
+        assert!(tip.contains("eztv: HTTP 403 from Jackett"), "{tip}");
+        assert!(!tip.contains('…'), "tooltip truncated: {tip}");
+        // A newline inside an exception must not break the one-line-per-source shape.
+        assert!(tip.lines().all(|l| !l.trim().is_empty()));
+        assert_eq!(super::failed_tooltip(&[]), "");
     }
 
     #[test]
