@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.9.2] — 2026-11-02
+
 ### Added
 - **A source that answers nothing, slowly, is dropped like a dead one.** The
   fan-out ends when its slowest source does, so 19 s for zero rows (measured:
@@ -1214,6 +1216,7 @@ versions follow [SemVer](https://semver.org/).
 - First public release: Jackett/Torznab search, 19 themes, filters, sorting,
   favorites, RSS feeds, batch magnets, CSV export, tray, update checker
 
+[18.9.2]: https://github.com/chethan62/torrentx/releases/tag/v18.9.2
 [18.9.1]: https://github.com/chethan62/torrentx/releases/tag/v18.9.1
 [18.9.0]: https://github.com/chethan62/torrentx/releases/tag/v18.9.0
 [18.8.0]: https://github.com/chethan62/torrentx/releases/tag/v18.8.0
