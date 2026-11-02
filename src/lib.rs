@@ -1019,10 +1019,12 @@ pub(crate) fn android_data_dir() -> Option<std::path::PathBuf> {
 const CLI_USAGE: &str = "\
 torrentx — search every configured source without opening the window
 
-  torrentx --search <query> [--indexer <id>] [--cat <name>] [--timeout <secs>] [--limit <n>]
+  torrentx --search <query> [--indexer <id>] [--cat <name>] [--timeout <secs>]
+                            [--limit <n>] [--json]
   torrentx --sources        List what a search will hit, and where each comes from
 
-Prints one JSON array of rows on stdout; per-source counts go to stderr.
+--json prints one array of rows on stdout, otherwise a one-line summary.
+Per-source rows, timings and full failure reasons go to stderr.
 Exit code 2 means the search itself failed (bad flag, no source answered).";
 
 /// The headless search path: same sources and fan-out rules as the GUI, one JSON
@@ -1096,6 +1098,7 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
     // the SLOWEST source rather than the sum (measured: 3.07 s sequential against
     // 1.9 s for the slowest one alone). Rows are still appended in target order,
     // so the output stays deterministic for a script.
+    let fanout_t0 = std::time::Instant::now();
     let mut handles = Vec::new();
     for idx in &targets {
         let ctx = ctx.clone();
@@ -1109,7 +1112,8 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
     let mut rows: Vec<jackett::TorrentResult> = Vec::new();
     let mut counts: Vec<jackett::SourceStat> = Vec::new();
     let mut failed: Vec<(String, String)> = Vec::new();
-    for h in handles {
+    let mut handles = handles;
+    for h in handles.drain(..) {
         let Ok((idx, r, ms)) = h.join() else { continue };
         match r {
             Ok(mut rr) => {
@@ -1182,6 +1186,8 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
     if trimmed {
         eprintln!("(limited to {} row(s) by --limit)", rows.len());
     }
+    // The number worth comparing against: the slowest source, not the sum.
+    eprintln!("fan-out: {:.2}s", fanout_t0.elapsed().as_secs_f64());
     // Which source was slow: the fan-out's duration is the slowest one's.
     eprintln!("{}", jackett::per_source_tooltip(&counts));
     // The summary above is built for a status bar; this is the whole reason.
@@ -1271,7 +1277,11 @@ fn run() -> eframe::Result<()> {
              OPTIONS:\n  \
              --config <path>   Use an alternate config file (default: ~/.config/torrentx/config.json)\n  \
              --minimized       Start without a window (tray icon only; used by At login)\n  \
-             --search <query>  Search every configured source headless; prints JSON, no window\n  \
+             --search <query>  Search every configured source without a window\n  \
+             --sources         List the sources a search will hit, with origin tags\n  \
+             --json            Rows as one array on stdout (else a one-line summary)\n  \
+             --indexer <id>    Restrict --search to one source (repeatable)\n  \
+             --limit <n>       Keep the first n rows after dedupe\n  \
              -h, --help        Print this help and exit\n  \
              -V, --version     Print the version and exit\n",
             env!("CARGO_PKG_VERSION")
