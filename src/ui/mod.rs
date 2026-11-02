@@ -67,7 +67,7 @@ pub(crate) fn narrow(width: f32) -> bool {
 
 /// Failed-indexer note for the status bar: named on a desktop, counted on a
 /// phone, where three indexer names alone overran the line.
-pub(crate) fn status_failed_note(failed: &[String], phone: bool) -> String {
+pub(crate) fn status_failed_note(failed: &[(String, String)], phone: bool) -> String {
     if phone {
         crate::jackett::failed_note_short(failed)
     } else {

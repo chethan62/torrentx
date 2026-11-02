@@ -1014,6 +1014,7 @@ const CLI_USAGE: &str = "\
 torrentx — search every configured source without opening the window
 
   torrentx --search <query> [--indexer <id>] [--cat <name>] [--timeout <secs>]
+  torrentx --sources        List what a search will hit, and where each comes from
 
 Prints one JSON array of rows on stdout; per-source counts go to stderr.
 Exit code 2 means the search itself failed (bad flag, no source answered).";
@@ -1032,6 +1033,7 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
         "All".to_string(),
         None::<u64>,
     );
+    let mut want_sources = false;
     let mut it = argv.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -1047,12 +1049,16 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
                 }
             }
             "--json" => {}
+            "--sources" => want_sources = true,
             "--help" | "-h" => {
                 println!("{CLI_USAGE}");
                 return Ok(());
             }
             other => return Err(format!("unknown argument `{other}`\n\n{CLI_USAGE}")),
         }
+    }
+    if want_sources {
+        return print_sources();
     }
     let query = query.ok_or_else(|| format!("--search <query> is required\n\n{CLI_USAGE}"))?;
     if query.trim().is_empty() {
@@ -1080,14 +1086,14 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
 
     let mut rows: Vec<jackett::TorrentResult> = Vec::new();
     let mut counts: Vec<(String, usize)> = Vec::new();
-    let mut failed: Vec<String> = Vec::new();
+    let mut failed: Vec<(String, String)> = Vec::new();
     for idx in &targets {
         match jackett::fetch_rows(&ctx, idx) {
             Ok(mut r) => {
                 counts.push((idx.clone(), r.len()));
                 rows.append(&mut r);
             }
-            Err(e) => failed.push(format!("{idx}: {e}")),
+            Err(e) => failed.push((idx.clone(), jackett::short_reason(&e))),
         }
     }
     if rows.is_empty() {
@@ -1096,7 +1102,18 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
             if failed.is_empty() {
                 String::new()
             } else {
-                format!(" — {}", failed.join("; "))
+                format!(
+                    " — {}",
+                    failed
+                        .iter()
+                        .map(|(id, why)| if why.is_empty() {
+                            id.clone()
+                        } else {
+                            format!("{id} ({why})")
+                        })
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                )
             }
         ));
     }
@@ -1128,6 +1145,56 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
         jackett::per_source_note(&counts),
         jackett::failed_note(&failed)
     );
+    Ok(())
+}
+
+/// `--sources`: what a search will fan out over, and where each id comes from —
+/// Jackett, the app itself, or one of your JSON definitions. Answering "what
+/// runs when I press Search" should not need the picker or a grep.
+fn print_sources() -> Result<(), String> {
+    let cfg = config::load_cfg();
+    let configured = jackett::fetch_indexers(&cfg.jackett_url, &cfg.api_key).map(|c| c.configured);
+    let mut rows: Vec<(String, &'static str, bool)> = Vec::new();
+    let off = |id: &str| cfg.disabled_indexers.iter().any(|d| d == id);
+
+    for id in sources::NATIVE {
+        rows.push((id.to_string(), "built-in", off(id)));
+    }
+    for id in crate::indexers::ids() {
+        if !sources::NATIVE.iter().any(|n| n.eq_ignore_ascii_case(&id)) {
+            let disabled = off(&id);
+            rows.push((id, "local def", disabled));
+        }
+    }
+    match &configured {
+        Some(list) => {
+            for id in list {
+                if !rows.iter().any(|(i, _, _)| i.eq_ignore_ascii_case(id)) {
+                    rows.push((id.clone(), "jackett", off(id)));
+                }
+            }
+        }
+        None => eprintln!(
+            "jackett unreachable at {} — showing only the sources that do not need it",
+            cfg.jackett_url
+        ),
+    }
+    let width = rows
+        .iter()
+        .map(|(i, _, _)| i.len())
+        .max()
+        .unwrap_or(4)
+        .min(28);
+    for (id, origin, disabled) in &rows {
+        println!(
+            "{id:<width$}  {origin}{}",
+            if *disabled { "  (disabled)" } else { "" }
+        );
+    }
+    for why in crate::indexers::load_errors() {
+        eprintln!("ignored def — {why}");
+    }
+    eprintln!("{} source(s)", rows.len());
     Ok(())
 }
 

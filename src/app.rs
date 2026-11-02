@@ -577,7 +577,9 @@ pub(crate) struct SearchUi {
     /// Indexers that answered with an error in the current fan-out, by id. Shown
     /// in the status line: a tracker that cannot be reached used to vanish into
     /// the answered/targets count and look like "no results".
-    pub(crate) failed: Arc<std::sync::Mutex<Vec<String>>>,
+    /// (id, short reason) per failed source — the reason is what makes the note
+    /// actionable ("therarbg (TooManyRequests)" rather than just a name).
+    pub(crate) failed: Arc<std::sync::Mutex<Vec<(String, String)>>>,
     /// Rows each source returned in the current search, for the status line.
     pub(crate) per_source: Arc<Mutex<Vec<(String, usize)>>>,
     /// Sources that crossed the connection-failure threshold; the UI thread owns
@@ -883,6 +885,8 @@ impl Default for App {
         // are never reused (webtorrent re-verifies them, which then stalls Play).
         crate::player::prune_stream_cache();
         let cfg = crate::config::load_cfg();
+        // A source that was one failure from being switched off still is.
+        crate::jackett::seed_source_fails(&cfg.source_fails);
         let pal = Pal::from(&cfg.theme, cfg.accent);
         let tokens = VisualTokens::default();
         let rss = RssUi::new(&cfg.rss_feeds);
@@ -1083,6 +1087,14 @@ impl App {
                 self.search.auto_disabled.push(id);
                 changed = true;
             }
+        }
+        // Streaks move on every search, disable or not: keep the file in step so a
+        // restart resumes them. One comparison per frame, and a write only when
+        // something actually changed.
+        let live = crate::jackett::source_fails_snapshot();
+        if live != self.cfg.source_fails {
+            self.cfg.source_fails = live;
+            changed = true;
         }
         if changed {
             let _ = crate::config::save_cfg(&self.cfg);

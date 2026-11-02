@@ -398,7 +398,58 @@ pub(crate) fn start_rss_fetch(
 
 #[cfg(test)]
 mod tests {
-    use super::{RssFeedConfig, build_rss_url, parse_torznab_xml};
+    use super::{RssFeedConfig, build_rss_url, fetch_rss, parse_torznab_xml};
+
+    /// Wire-level: a real HTTP response → body checks → parse → rows. The parser
+    /// tests above feed it `&str` directly, which cannot catch a status check or
+    /// the "not a feed" guard rejecting a valid feed.
+    #[test]
+    fn fetch_rss_parses_a_feed_off_a_socket() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let body = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
+  <channel>
+    <title>Feed</title>
+    <item>
+      <title>Show S01E01 1080p</title>
+      <guid>abc-123</guid>
+      <link>magnet:?xt=urn:btih:aaaa1111</link>
+      <torznab:attr name="seeders" value="42"/>
+      <torznab:attr name="peers" value="7"/>
+      <torznab:attr name="size" value="1500000000"/>
+    </item>
+    <item>
+      <title>Show S01E02 1080p</title>
+      <guid>abc-124</guid>
+      <link>magnet:?xt=urn:btih:bbbb2222</link>
+    </item>
+  </channel>
+</rss>"#;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        std::thread::spawn(move || {
+            if let Ok((mut sock, _)) = listener.accept() {
+                let mut buf = [0u8; 512];
+                let _ = sock.read(&mut buf);
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = sock.write_all(resp.as_bytes());
+            }
+        });
+
+        let items = fetch_rss(&format!("http://{addr}/feed?apikey=k"), 5).expect("fetch");
+        assert_eq!(items.len(), 2, "both items parsed: {items:?}");
+        assert_eq!(items[0].title, "Show S01E01 1080p");
+        assert_eq!(items[0].seeders, Some(42));
+        assert_eq!(items[0].guid.as_deref(), Some("abc-123"));
+        assert!(items[0].magnet.is_some() || items[0].link.is_some());
+    }
 
     const SAMPLE: &str = r#"<?xml version="1.0"?>
 <rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
@@ -535,14 +586,18 @@ mod tests {
             it("Show S02E08 1080p WEBRip", 9, None),
             it("Show S02E07 2160p BluRay", 50, None),
         ]);
+        // Three rows: the two 1080p/2160p encodes are different downloads, and the
+        // neighbouring episode is separate content. Same-resolution duplicates
+        // would still collapse — the key is shared with the search path.
         assert_eq!(
             out.len(),
-            2,
+            3,
             "{:?}",
             out.iter().map(|i| &i.title).collect::<Vec<_>>()
         );
         assert!(out.iter().any(|i| i.title == "Show S02E08 1080p WEBRip"));
         assert!(out.iter().any(|i| i.title == "Show S02E07 2160p BluRay"));
+        assert!(out.iter().any(|i| i.title == "Show S02E07 1080p WEBRip"));
         // Two different films whose first four words match: the old
         // `normalize` key merged them; content markers keep them apart.
         let out = dedupe_items(vec![
