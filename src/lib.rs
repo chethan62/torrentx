@@ -1107,7 +1107,7 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
         return Err("--search needs a non-empty query".into());
     }
 
-    let cfg = config::load_cfg();
+    let mut cfg = config::load_cfg();
     let timeout_s = timeout.unwrap_or(cfg.timeout_secs);
 
     // Configured indexers come from Jackett; when it is unreachable the native
@@ -1116,6 +1116,10 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
         .map(|c| c.configured)
         .unwrap_or_else(sources::native_ids);
     let targets = jackett::search_targets(&indexer, &configured, &cfg.disabled_indexers);
+    // Streaks are process-global, so a headless run must inherit them or "three
+    // in a row" can never happen across invocations: each process would start at
+    // zero and pay the slow source's full timeout every time.
+    jackett::seed_source_fails(&cfg.source_fails);
 
     let ctx = jackett::SearchCtx::new(
         &cfg.jackett_url,
@@ -1144,17 +1148,60 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
     let mut rows: Vec<jackett::TorrentResult> = Vec::new();
     let mut counts: Vec<jackett::SourceStat> = Vec::new();
     let mut failed: Vec<(String, String)> = Vec::new();
+    let mut demoted: Vec<String> = Vec::new();
     let mut handles = handles;
     for h in handles.drain(..) {
         let Ok((idx, r, ms)) = h.join() else { continue };
         match r {
             Ok(mut rr) => {
-                counts.push((idx, rr.len(), ms));
+                let n = rr.len();
+                counts.push((idx.clone(), n, ms));
                 rows.append(&mut rr);
+                // Same bookkeeping as the GUI: a slow empty source earns the
+                // streak, and the third one switches it off for good — otherwise
+                // every --search pays its full timeout for nothing.
+                let crossed = if jackett::is_unproductive(n, ms) {
+                    jackett::note_unproductive(&idx)
+                } else {
+                    jackett::note_source_result(&idx, None);
+                    None
+                };
+                if let Some(id) = crossed {
+                    demoted.push(id);
+                }
             }
             // The full text, key-scrubbed: the status line truncates to 40 chars,
             // but stderr is where someone debugging a dead indexer looks.
-            Err(e) => failed.push((idx, jackett::scrub_indexer_error(&e))),
+            Err(e) => {
+                if let Some(id) = jackett::note_source_result(&idx, Some(&e)) {
+                    demoted.push(id);
+                }
+                failed.push((idx, jackett::scrub_indexer_error(&e)));
+            }
+        }
+    }
+    // Persist the streaks whether or not a demotion fired — the next run counts
+    // from here.
+    let live = jackett::source_fails_snapshot();
+    if live != cfg.source_fails {
+        cfg.source_fails = live;
+        if let Err(e) = crate::config::save_cfg(&cfg) {
+            eprintln!("could not save the failure streaks: {e}");
+        }
+    }
+    // Persist the demotion, or the next run pays for it again.
+    if !demoted.is_empty() {
+        for id in &demoted {
+            if !cfg.disabled_indexers.contains(id) {
+                cfg.disabled_indexers.push(id.clone());
+            }
+            eprintln!(
+                "disabled {id}: three runs in a row that either failed or answered \
+                 nothing slowly — re-enable it in the picker"
+            );
+        }
+        if let Err(e) = crate::config::save_cfg(&cfg) {
+            eprintln!("could not save the demotion to the config: {e}");
         }
     }
     if rows.is_empty() {

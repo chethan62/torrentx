@@ -63,6 +63,11 @@ jobs:
       - name: Smoke — headless fan-out
         run: ./scripts/smoke-search.sh
 
+      # ~28 s by design: it waits out three 9-second runs to prove that a slow,
+      # empty source stops costing the wall time once it is demoted.
+      - name: Smoke — slow-and-empty demotion
+        run: ./scripts/smoke-unproductive.sh
+
       # Doc-only commits must arrive through a PR (CONTRIBUTING.md). Runs first:
       # it is seconds of API calls, and a doc push that skipped review should fail
       # before the toolchain spends two minutes on a build.

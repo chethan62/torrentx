@@ -6,6 +6,20 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **A source that answers nothing, slowly, is dropped like a dead one.** The
+  fan-out ends when its slowest source does, so 19 s for zero rows (measured:
+  `anisource` on "ubuntu") is 19 s of somebody's life. Three consecutive runs
+  that either fail to connect or spend at least 8 s returning nothing count
+  toward the same streak, and the third switches the source off — persisted, so
+  the next launch skips it. `scripts/smoke-unproductive.sh` pins the whole
+  chain: 3 runs at ~9 s, demoted, next run 83 ms.
+
+### Fixed
+- The headless run never seeded the failure streaks from the config, so "three
+  in a row" could not happen across invocations: each `--search` started from
+  zero and paid the slow source's full timeout every time.
+
 ## [18.9.1] — 2026-11-02
 
 ### Added
