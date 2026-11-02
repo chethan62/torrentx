@@ -15,6 +15,17 @@ versions follow [SemVer](https://semver.org/).
   the next launch skips it. `scripts/smoke-unproductive.sh` pins the whole
   chain: 3 runs at ~9 s, demoted, next run 83 ms.
 
+- **`--sources` says why a source is off**: `(disabled — 3 bad run(s) in a row)`
+  when the app gave up on it, plain `(disabled)` when you switched it off
+  yourself. The distinction is the whole point: one is yours to re-enable, the
+  other is a symptom.
+- **A release is checked for completeness before it is called done.** 18.9.1's
+  first run published without the `.dmg` (macOS job cancelled with zero steps
+  executed) and `bump the cask` was merely skipped — nothing failed.
+  `scripts/check-release-assets.sh` asserts all nine artefacts are on the
+  release, runs `if: always()`, and `bump-cask` now waits on it, so a half
+  release never reaches `brew`.
+
 ### Fixed
 - The headless run never seeded the failure streaks from the config, so "three
   in a row" could not happen across invocations: each `--search` started from
