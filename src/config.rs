@@ -90,6 +90,10 @@ pub(crate) struct Config {
     /// `player::PLAYERS`; never interpolated into a command line.
     #[serde(default = "default_player")]
     pub(crate) player: String,
+    /// The query the box had last session. Prefilled on launch, never re-run
+    /// automatically — a search costs a fan-out and the user may not want one.
+    #[serde(default)]
+    pub(crate) last_query: String,
     /// Tab shown at startup ("Search" | "Favorites" | "Rss" | "About").
     #[serde(default)]
     pub(crate) last_tab: Option<String>,
@@ -137,6 +141,7 @@ impl Default for Config {
             android_inset_bottom: default_android_inset_bottom(),
             check_updates: true,
             player: default_player(),
+            last_query: String::new(),
             last_tab: None,
             win_size: None,
             install_id: String::new(),
@@ -558,6 +563,7 @@ mod tests {
         let c = Config {
             check_updates: false,
             last_tab: Some("Rss".into()),
+            last_query: "slow horses".into(),
             win_size: Some([1280.0, 720.0]),
             ..Config::default()
         };
@@ -565,6 +571,9 @@ mod tests {
         let back: Config = serde_json::from_str(&j).unwrap();
         assert!(!back.check_updates);
         assert_eq!(back.last_tab.as_deref(), Some("Rss"));
+        // The prefilled query must survive a save/load round trip, or launching
+        // restores an empty box.
+        assert_eq!(back.last_query, "slow horses");
         assert_eq!(back.win_size, Some([1280.0, 720.0]));
     }
 

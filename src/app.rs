@@ -900,12 +900,21 @@ impl Default for App {
             tab,
             ..UiState::default()
         };
+        // Prefill the box with last session's query; the search itself is the
+        // user's call (window size and tab already restore without running code).
+        let mut seed_query = None;
+        if !cfg.last_query.trim().is_empty() {
+            seed_query = Some(cfg.last_query.clone());
+        }
         let mut app = Self {
             cfg,
             pal,
             tokens,
             base_ppp: 0.0,
-            search: SearchUi::default(),
+            search: SearchUi {
+                query: seed_query.unwrap_or_default(),
+                ..SearchUi::default()
+            },
             view_cache: ViewCache::default(),
             net: NetState::default(),
             ui,
@@ -1022,6 +1031,7 @@ impl App {
         self.cfg.history.retain(|h| h != &q);
         self.cfg.history.insert(0, q.clone());
         self.cfg.history.truncate(20);
+        self.cfg.last_query = q.clone();
         let _ = save_cfg(&self.cfg);
         self.close_detail();
         self.ui.detail_row = None; // drop cached detail from previous search

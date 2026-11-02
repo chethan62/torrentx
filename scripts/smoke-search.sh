@@ -99,6 +99,13 @@ JSON
 rc=$?
 [ "$rc" -eq 0 ] || { echo "smoke: CLI exited $rc" >&2; cat "$TMP/err.txt" >&2; exit 1; }
 
+# --limit trims AFTER dedupe, and says so.
+"$BIN" --config "$TMP/config.json" --search dune --limit 1 >"$TMP/lim.json" 2>"$TMP/lim.err"
+[ "$(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1]))))' "$TMP/lim.json")" = 1 ] \
+    || { echo "smoke: --limit 1 did not trim to one row" >&2; exit 1; }
+grep -q 'limited to 1 row' "$TMP/lim.err" \
+    || { echo "smoke: --limit gave no notice" >&2; cat "$TMP/lim.err" >&2; exit 1; }
+
 python3 - "$TMP/out.json" "$TMP/err.txt" <<'PY'
 import json, sys
 
