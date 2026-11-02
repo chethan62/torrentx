@@ -1036,6 +1036,10 @@ fn append_results(
 /// 120 s) was the worst case. A single-indexer search still honours the setting.
 const INDEXER_DEADLINE_SECS: u64 = 20;
 
+/// Pause before the single retry of a rate-limited/5xx source. Long enough to
+/// clear a burst limiter, short enough to stay inside one fan-out's budget.
+const RETRY_DELAY: Duration = Duration::from_millis(400);
+
 /// How long the fan-out waits before reporting Done on the rows it already has.
 /// The quick indexers answer in ~1-2 s; this is the grace for a merely slow one.
 const EARLY_DONE_SECS: u64 = 3;
@@ -1269,24 +1273,44 @@ pub(crate) fn fetch_rows(ctx: &SearchCtx, idx: &str) -> Result<Vec<TorrentResult
     if crate::sources::is_native(idx) {
         return crate::sources::fetch(idx, &ctx.query, &ctx.cat, ctx.timeout);
     }
+    // Exactly one retry, and only when the failure says "later": trackers answer
+    // 429 under load, and Jackett wraps that case inside a 200 body. Without this
+    // a source's contribution depended on luck (measured: therarbg returned
+    // "Status=TooManyRequests" mid-fan-out).
+    match fetch_once(ctx, idx) {
+        Err((_, true)) => {
+            thread::sleep(RETRY_DELAY);
+            fetch_once(ctx, idx).map_err(|(msg, _)| msg)
+        }
+        Ok(rows) => Ok(rows),
+        Err((msg, false)) => Err(msg),
+    }
+}
+
+/// One request against Jackett. The flag says whether retrying could help.
+fn fetch_once(ctx: &SearchCtx, idx: &str) -> Result<Vec<TorrentResult>, (String, bool)> {
     let ep = search_url(&ctx.url, &ctx.key, &ctx.query, &ctx.cat, idx);
     let resp = shared_client()
         .get(&ep)
         .timeout(Duration::from_secs(ctx.timeout))
         .send()
-        .map_err(|e| request_error(e, ctx.timeout, &ctx.url))?;
+        .map_err(|e| (request_error(e, ctx.timeout, &ctx.url), false))?;
     let st = resp.status();
     if !st.is_success() {
-        return Err(status_error(st));
+        let retryable = matches!(st.as_u16(), 429 | 502 | 503 | 504);
+        return Err((status_error(st), retryable));
     }
     let data = resp.json::<JackettResponse>().map_err(|e| {
         // reqwest's Display appends " for url (…?apikey=…)" — the Jackett API key
         // must never reach the screen, a screenshot, or a pasted bug report.
         // Without the URL the rest ("expected value at line 1 column 1") still
         // says what happened, and the hint names the usual cause.
-        format!(
-            "Unexpected response from Jackett ({}) — check the URL in Settings",
-            e.without_url()
+        (
+            format!(
+                "Unexpected response from Jackett ({}) — check the URL in Settings",
+                e.without_url()
+            ),
+            false,
         )
     })?;
     if data.results.is_empty()
@@ -1297,11 +1321,16 @@ pub(crate) fn fetch_rows(ctx: &SearchCtx, idx: &str) -> Result<Vec<TorrentResult
     {
         let msg = scrub_indexer_error(bad.error.as_deref().unwrap_or(""));
         let id = bad.id.as_deref().unwrap_or("");
-        return Err(if id.is_empty() || id == idx {
-            msg
-        } else {
-            format!("{id}: {msg}")
-        });
+        let retryable = msg.to_lowercase().contains("toomanyrequests")
+            || msg.to_lowercase().contains("status=503");
+        return Err((
+            if id.is_empty() || id == idx {
+                msg
+            } else {
+                format!("{id}: {msg}")
+            },
+            retryable,
+        ));
     }
     Ok(data.results)
 }
@@ -2425,6 +2454,92 @@ mod tests {
                 None
             );
         }
+    }
+
+    #[test]
+    fn a_rate_limited_source_is_retried_once() {
+        use super::{SearchCtx, fetch_rows};
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        // First request: 429. Second: 200 with a row. A third would fail the test.
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let hits = std::sync::Arc::new(AtomicUsize::new(0));
+        let counter = std::sync::Arc::clone(&hits);
+        std::thread::spawn(move || {
+            for _ in 0..3 {
+                let Ok((mut sock, _)) = listener.accept() else {
+                    return;
+                };
+                let mut buf = [0u8; 1024];
+                let _ = sock.read(&mut buf);
+                let n = counter.fetch_add(1, Ordering::SeqCst);
+                let resp = if n == 0 {
+                    "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()
+                } else {
+                    let body = r#"{"Results":[{"Title":"x","Seeders":5}]}"#;
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    )
+                };
+                let _ = sock.write_all(resp.as_bytes());
+            }
+        });
+
+        let ctx = SearchCtx::new(&format!("http://{addr}"), "k", "q", "All", 5, false);
+        let rows = fetch_rows(&ctx, "alpha").expect("retry should have produced rows");
+        assert_eq!(rows.len(), 1, "the retried request's rows");
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            2,
+            "exactly one retry — a third attempt would hammer the tracker"
+        );
+    }
+
+    /// The case actually seen in the wild: Jackett answers 200 and puts the
+    /// rate-limit inside the body (`Status=TooManyRequests`), so an HTTP-status
+    /// check alone would never retry it.
+    #[test]
+    fn a_rate_limit_inside_a_200_body_is_retried_once() {
+        use super::{SearchCtx, fetch_rows};
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let hits = std::sync::Arc::new(AtomicUsize::new(0));
+        let counter = std::sync::Arc::clone(&hits);
+        std::thread::spawn(move || {
+            for _ in 0..3 {
+                let Ok((mut sock, _)) = listener.accept() else {
+                    return;
+                };
+                let mut buf = [0u8; 1024];
+                let _ = sock.read(&mut buf);
+                let n = counter.fetch_add(1, Ordering::SeqCst);
+                let body = if n == 0 {
+                    r#"{"Results":[],"Indexers":[{"ID":"therarbg","Error":"Error Parsing Json Response: Status=TooManyRequests"}]}"#.to_string()
+                } else {
+                    r#"{"Results":[{"Title":"x","Seeders":5}]}"#.to_string()
+                };
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = sock.write_all(resp.as_bytes());
+            }
+        });
+
+        let ctx = SearchCtx::new(&format!("http://{addr}"), "k", "q", "All", 5, false);
+        let rows = fetch_rows(&ctx, "therarbg").expect("retry should recover");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(hits.load(Ordering::SeqCst), 2, "one retry, not a loop");
     }
 
     #[test]
