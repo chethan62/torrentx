@@ -31,6 +31,11 @@ pub(crate) struct Config {
     /// time, and the merge keeps the best-seeded copy.
     #[serde(default = "default_true")]
     pub(crate) dedupe: bool,
+    /// Consecutive connection failures per source, so a walled indexer does not
+    /// get re-probed from scratch after every launch. Cleared per source on the
+    /// first success.
+    #[serde(default)]
+    pub(crate) source_fails: std::collections::BTreeMap<String, u8>,
     /// Indexers the user switched off. A search fans out over every other
     /// configured indexer; the name is kept so the choice survives restarts.
     #[serde(default)]
@@ -110,6 +115,7 @@ impl Default for Config {
             theme: Theme::TokyoNight,
             timeout_secs: 30,
             dedupe: true,
+            source_fails: std::collections::BTreeMap::new(),
             disabled_indexers: Vec::new(),
             col_widths: std::collections::BTreeMap::new(),
             page_size: 50,

@@ -13,7 +13,7 @@ fn main() -> eframe::Result<()> {
     if argv
         .iter()
         .skip(1)
-        .any(|a| matches!(a.as_str(), "--search" | "-s"))
+        .any(|a| matches!(a.as_str(), "--search" | "-s" | "--sources" | "--json"))
     {
         match torrentx::run_cli(argv) {
             Ok(()) => return Ok(()),

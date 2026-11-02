@@ -474,11 +474,33 @@ fn content_markers(t: &str) -> Vec<String> {
 /// still collapse.
 pub(crate) fn dedupe_key(t: &str) -> String {
     let marks = content_markers(t);
-    if marks.is_empty() {
-        normalize(t)
-    } else {
-        format!("{}|{}", normalize(t), marks.join(","))
-    }
+    let quality = quality_markers(t);
+    format!("{}|{}|{}", normalize(t), marks.join(","), quality.join(","))
+}
+
+/// Quality/encode tags that make two rows DIFFERENT downloads.
+///
+/// `normalize` deliberately strips these, which used to mean a 2160p copy was
+/// "the same release" as a 1080p one and vanished into it: over one live `dune`
+/// search, 419 rows became 290 and 69 4K rows became 36. Same-release-different-
+/// tracker rows still merge because they carry the same tags.
+fn quality_markers(t: &str) -> Vec<String> {
+    // Resolution, source and HDR: what makes two rows different downloads.
+    // Codec (x264/x265/HEVC) is deliberately NOT here — it is the same picture
+    // at the same size, and splitting on it multiplied rows for no user gain.
+    const QUALITY: [&str; 18] = [
+        "2160p", "1080p", "720p", "480p", "576p", "4k", "uhd", "8k", "hdr", "dv", "remux",
+        "bluray", "blu-ray", "bdrip", "brrip", "webrip", "web-dl", "webdl",
+    ];
+    let low = t.to_lowercase();
+    let mut out: Vec<String> = QUALITY
+        .iter()
+        .filter(|q| low.contains(**q))
+        .map(|q| q.to_string())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// Keep one row per title — the best-seeded one.
@@ -1060,14 +1082,26 @@ impl SearchCtx {
 
 /// Status-line suffix naming the indexers that failed this search, capped so a
 /// total outage cannot fill the status bar with 600 names.
-pub(crate) fn failed_note(failed: &[String]) -> String {
+pub(crate) fn failed_note(failed: &[(String, String)]) -> String {
     if failed.is_empty() {
         return String::new();
     }
-    let mut sorted: Vec<&str> = failed.iter().map(String::as_str).collect();
-    sorted.sort_unstable();
+    let mut sorted: Vec<&(String, String)> = failed.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
     let n = sorted.len();
-    let shown: Vec<&str> = sorted.iter().take(3).copied().collect();
+    // The reason, not just the id: "1 failed: therarbg" says nothing a user can
+    // act on, while "(TooManyRequests)" says "try again later".
+    let shown: Vec<String> = sorted
+        .iter()
+        .take(3)
+        .map(|(id, why)| {
+            if why.is_empty() {
+                id.clone()
+            } else {
+                format!("{id} ({why})")
+            }
+        })
+        .collect();
     let more = if n > shown.len() {
         format!(" +{}", n - shown.len())
     } else {
@@ -1078,11 +1112,40 @@ pub(crate) fn failed_note(failed: &[String]) -> String {
 
 /// Phone-width status bar: the count only. The named list is what pushes the
 /// line past 360 px, and a label clipped mid-word reads as a broken app.
-pub(crate) fn failed_note_short(failed: &[String]) -> String {
+pub(crate) fn failed_note_short(failed: &[(String, String)]) -> String {
     if failed.is_empty() {
         String::new()
     } else {
         format!("  ·  {} failed", failed.len())
+    }
+}
+
+/// One line of a Jackett exception, no key, short enough for a status bar.
+pub(crate) fn short_reason(raw: &str) -> String {
+    let s = scrub_indexer_error(raw);
+    // Jackett prefixes every failure with `Jackett.Common.IndexerException:
+    // Exception (id): ` — pure noise in a status bar. The LAST "): " is the end
+    // of that preamble, whichever shape the inner message took.
+    let s = match s.rfind("): ") {
+        Some(j) => s[j + 3..].to_string(),
+        None => s,
+    };
+    // Also drop a bare `SomeException: ` prefix — not every path has the parens.
+    let s = match s.find("Exception: ") {
+        Some(i) => s[i + "Exception: ".len()..].to_string(),
+        None => s,
+    };
+    let s = s.as_str();
+    let s = s
+        .split([',', '(', '[', '\n'])
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if s.chars().count() > 40 {
+        s.chars().take(39).collect::<String>() + "…"
+    } else {
+        s
     }
 }
 
@@ -1156,6 +1219,24 @@ pub(crate) fn note_source_result(idx: &str, error: Option<&str>) -> Option<Strin
             None
         }
     }
+}
+
+/// Streaks carried over from the config, so a walled source starts where it left
+/// off instead of earning its three failures again on every launch.
+pub(crate) fn seed_source_fails(prev: &std::collections::BTreeMap<String, u8>) {
+    let mut m = lock_or_recover(&SOURCE_FAILS);
+    m.clear();
+    for (id, n) in prev {
+        m.insert(id.clone(), *n);
+    }
+}
+
+/// The streaks as they stand, for persisting.
+pub(crate) fn source_fails_snapshot() -> std::collections::BTreeMap<String, u8> {
+    lock_or_recover(&SOURCE_FAILS)
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect()
 }
 
 /// How stale the cached catalogue may be before opening the picker re-fetches.
@@ -1277,7 +1358,7 @@ pub(crate) fn start_search(
     count: Arc<Mutex<usize>>,
     epoch: Arc<AtomicU64>,
     answered: Arc<AtomicUsize>,
-    failed: Arc<Mutex<Vec<String>>>,
+    failed: Arc<Mutex<Vec<(String, String)>>>,
     // Rows per source, for the status line (which source is thin or dead).
     per_source: Arc<Mutex<Vec<(String, usize)>>>,
     // Sources that just crossed the failure threshold; the UI thread, which owns
@@ -1370,11 +1451,13 @@ pub(crate) fn start_search(
                 match r {
                     Ok(_) => ok_count += 1,
                     Err(e) => {
-                        // Keep the id: "2 indexers failed" without names is the
-                        // same silent failure in a new costume.
+                        // Keep the id AND the reason: "2 indexers failed" without
+                        // names says nothing, and a name without a reason says
+                        // only that something happened.
+                        let why = short_reason(&e);
                         let mut f = lock_or_recover(&failed);
-                        if !f.contains(&idx) {
-                            f.push(idx);
+                        if !f.iter().any(|(i, _)| i == &idx) {
+                            f.push((idx.clone(), why));
                         }
                         drop(f);
                         first_err.get_or_insert(e);
@@ -2345,6 +2428,26 @@ mod tests {
     }
 
     #[test]
+    fn failure_streaks_are_snapshotted_so_a_restart_resumes_them() {
+        let id = "test-streak-snapshot";
+        let wall = "connection reset by peer";
+        assert_eq!(super::note_source_result(id, Some(wall)), None);
+        assert_eq!(super::note_source_result(id, Some(wall)), None);
+        assert_eq!(
+            super::source_fails_snapshot().get(id),
+            Some(&2),
+            "two failures must be visible to the persister"
+        );
+        // Persisting must not move the threshold.
+        assert_eq!(
+            super::note_source_result(id, Some(wall)),
+            Some(id.to_string()),
+            "third in a row still switches it off"
+        );
+        super::note_source_result(id, None);
+    }
+
+    #[test]
     fn fan_out_records_which_indexer_failed() {
         use super::start_search;
         use std::io::{Read, Write};
@@ -2382,7 +2485,7 @@ mod tests {
             }
         });
 
-        let failed: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+        let failed: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(vec![]));
         start_search(
             format!("http://{addr}"),
             "key".to_string(),
@@ -2407,11 +2510,10 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         let f = failed.lock().unwrap().clone();
-        assert_eq!(
-            f,
-            vec!["slow".to_string()],
-            "failed indexers were not named"
-        );
+        assert_eq!(f.len(), 1, "failed indexers were not named: {f:?}");
+        assert_eq!(f[0].0, "slow", "wrong indexer named: {f:?}");
+        // A reason rides along — an id alone is what made the note unactionable.
+        assert!(!f[0].1.is_empty(), "no reason recorded: {f:?}");
     }
 
     #[test]
@@ -2559,14 +2661,21 @@ mod tests {
         );
     }
 
-    /// The other half of the deal: the same release in different encodings must STILL
-    /// collapse, or dedupe stops doing anything useful.
+    /// The other half of the deal: the same release at the same resolution must
+    /// still collapse, or dedupe stops doing anything useful.
     #[test]
     fn dedupe_key_still_merges_the_same_release() {
         let k = dedupe_key;
+        // Codec/bit-depth differences alone are the same download at the same size.
         assert_eq!(
-            k("ONE PIECE 2023 S02E03 1080p WEBRip HDR10 10bit DDP5 1 HEVC-d3g"),
-            k("ONE PIECE 2023 S02E03 720p HEVC x265-MeGusta")
+            k("ONE PIECE 2023 S02E03 1080p WEBRip 10bit HEVC-d3g"),
+            k("ONE PIECE 2023 S02E03 1080p WEBRip x265-MeGusta")
+        );
+        // …but a different resolution is a different download: 2160p must not be
+        // swallowed by its 1080p sibling (measured: 69 → 36 four-K rows on "dune").
+        assert_ne!(
+            k("ONE PIECE 2023 S02E03 1080p WEBRip HEVC"),
+            k("ONE PIECE 2023 S02E03 2160p WEBRip HEVC")
         );
         // Resolutions and codec numbers are encoding, not content.
         assert_eq!(
@@ -2684,20 +2793,40 @@ mod tests {
     /// search must not print 600 ids into one label.
     #[test]
     fn failed_note_names_up_to_three_indexers() {
+        let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
         assert_eq!(failed_note(&[]), "");
         assert_eq!(
-            failed_note(&["eztv".into(), "1337x".into()]),
+            failed_note(&[pair("eztv", ""), pair("1337x", "")]),
             "  ·  2 failed: 1337x, eztv"
+        );
+        // A reason, when there is one, rides along in parentheses — that is what
+        // turns "1 failed: therarbg" into something a user can act on.
+        assert_eq!(
+            failed_note(&[pair("therarbg", "TooManyRequests")]),
+            "  ·  1 failed: therarbg (TooManyRequests)"
         );
         assert_eq!(super::failed_note_short(&[]), "");
         assert_eq!(
-            super::failed_note_short(&["eztv".into(), "1337x".into()]),
+            super::failed_note_short(&[pair("eztv", "x"), pair("1337x", "y")]),
             "  ·  2 failed"
         );
         assert_eq!(
-            failed_note(&["d".into(), "c".into(), "b".into(), "a".into(), "e".into()]),
+            failed_note(&[
+                pair("d", ""),
+                pair("c", ""),
+                pair("b", ""),
+                pair("a", ""),
+                pair("e", ""),
+            ]),
             "  ·  5 failed: a, b, c +2"
         );
+        // Jackett's exception text is long and machine-shaped; the note keeps one
+        // short reason, stripped of the class name.
+        let r = super::short_reason(
+            "Jackett.Common.IndexerException: Exception (therarbg): Error Parsing Json Response: Status=TooManyRequests Response=<html>",
+        );
+        assert!(r.chars().count() <= 40, "reason not shortened: {r:?}");
+        assert!(!r.contains("Exception ("), "class noise kept: {r:?}");
     }
 
     /// The catalogue cache is keyed by url+key, never by a name that could leak

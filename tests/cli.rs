@@ -47,3 +47,36 @@ fn search_without_a_query_fails_fast() {
         "error should name the flag: {err}"
     );
 }
+
+#[test]
+fn sources_lists_origins_even_with_jackett_down() {
+    // Point at a port nothing listens on: the command must still describe the
+    // sources that do not need Jackett, and say so on stderr.
+    let dir = std::env::temp_dir().join(format!("tx-cli-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("tmp");
+    let cfg = dir.join("config.json");
+    std::fs::write(
+        &cfg,
+        r#"{"jackett_url": "http://127.0.0.1:1", "api_key": "x", "timeout_secs": 1}"#,
+    )
+    .expect("write cfg");
+
+    let out = Command::new(BIN)
+        .args(["--config", cfg.to_str().unwrap(), "--sources"])
+        .output()
+        .expect("spawn");
+    let text = String::from_utf8_lossy(&out.stdout);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "--sources exited {}: {err}",
+        out.status
+    );
+    assert!(
+        text.contains("apibay") && text.contains("built-in"),
+        "{text}"
+    );
+    assert!(text.contains("local def"), "JSON defs not labelled: {text}");
+    assert!(err.contains("jackett unreachable"), "no warning: {err}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
