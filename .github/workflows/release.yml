@@ -266,10 +266,28 @@ jobs:
   # exists — this fires right after the release is published. The tap also polls
   # hourly, which catches a dispatch that never lands; this is only the fast path.
   # Needs TAP_TOKEN: a token with write access to chethan62/homebrew-tap.
+  # A cancelled build job (the runner never starting is a thing that happens) can
+  # publish a release page that is missing an artefact, and nothing fails. This
+  # runs even when a build job did not report success, and refuses to call such a
+  # release done — `bump-cask` waits on it, so brew never gets a half release.
+  check-release:
+    name: every artefact is on the release
+    needs: [build-linux, build-windows, build-macos]
+    if: always() && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Release is complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: ./scripts/check-release-assets.sh
+
   bump-cask:
     name: bump the cask
-    needs: [build-macos]
-    if: startsWith(github.ref, 'refs/tags/v') && needs.build-macos.result == 'success'
+    needs: [check-release]
+    if: startsWith(github.ref, 'refs/tags/v') && needs.check-release.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Ask the tap to re-pin

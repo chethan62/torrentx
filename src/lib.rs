@@ -1315,10 +1315,17 @@ fn print_sources() -> Result<(), String> {
         .unwrap_or(4)
         .min(28);
     for (id, origin, disabled) in &rows {
-        println!(
-            "{id:<width$}  {origin}{}",
-            if *disabled { "  (disabled)" } else { "" }
-        );
+        // Why it is off: "(disabled)" alone leaves you guessing whether you did
+        // it yourself or the app gave up on it after three bad runs.
+        let streak = cfg.source_fails.get(id.as_str()).copied().unwrap_or(0);
+        let why = if !*disabled {
+            String::new()
+        } else if streak > 0 {
+            format!("  (disabled — {streak} bad run(s) in a row)")
+        } else {
+            "  (disabled)".to_string()
+        };
+        println!("{id:<width$}  {origin}{why}");
     }
     for why in crate::indexers::load_errors() {
         eprintln!("ignored def — {why}");
