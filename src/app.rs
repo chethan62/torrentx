@@ -581,7 +581,7 @@ pub(crate) struct SearchUi {
     /// actionable ("therarbg (TooManyRequests)" rather than just a name).
     pub(crate) failed: Arc<std::sync::Mutex<Vec<(String, String)>>>,
     /// Rows each source returned in the current search, for the status line.
-    pub(crate) per_source: Arc<Mutex<Vec<(String, usize)>>>,
+    pub(crate) per_source: crate::jackett::PerSource,
     /// Sources that crossed the connection-failure threshold; the UI thread owns
     /// the config, so it does the disabling and then empties this.
     pub(crate) to_disable: Arc<Mutex<Vec<String>>>,

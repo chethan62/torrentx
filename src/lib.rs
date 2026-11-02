@@ -1091,12 +1091,13 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
     );
 
     let mut rows: Vec<jackett::TorrentResult> = Vec::new();
-    let mut counts: Vec<(String, usize)> = Vec::new();
+    let mut counts: Vec<jackett::SourceStat> = Vec::new();
     let mut failed: Vec<(String, String)> = Vec::new();
     for idx in &targets {
+        let t0 = std::time::Instant::now();
         match jackett::fetch_rows(&ctx, idx) {
             Ok(mut r) => {
-                counts.push((idx.clone(), r.len()));
+                counts.push((idx.clone(), r.len(), t0.elapsed().as_millis() as u64));
                 rows.append(&mut r);
             }
             // The full text, key-scrubbed: the status line truncates to 40 chars,
@@ -1157,6 +1158,8 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
         jackett::per_source_note(&counts),
         jackett::failed_note(&brief)
     );
+    // Which source was slow: the fan-out's duration is the slowest one's.
+    eprintln!("{}", jackett::per_source_tooltip(&counts));
     // The summary above is built for a status bar; this is the whole reason.
     for (id, why) in &failed {
         let one_line = why.trim().replace(['\n', '\r'], " ");

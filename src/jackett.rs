@@ -1173,22 +1173,43 @@ pub(crate) fn short_reason(raw: &str) -> String {
 
 /// Per-source row counts, biggest first, capped like the failed note — the
 /// status line has room for three names and then a "+n".
-pub(crate) fn per_source_note(counts: &[(String, usize)]) -> String {
+pub(crate) fn per_source_note(counts: &[SourceStat]) -> String {
     if counts.is_empty() {
         return String::new();
     }
-    let mut v: Vec<&(String, usize)> = counts.iter().filter(|(_, n)| *n > 0).collect();
+    let mut v: Vec<&SourceStat> = counts.iter().filter(|(_, n, _)| *n > 0).collect();
     if v.is_empty() {
         return String::new();
     }
     v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    let shown: Vec<String> = v.iter().take(3).map(|(i, n)| format!("{i} {n}")).collect();
+    let shown: Vec<String> = v
+        .iter()
+        .take(3)
+        .map(|(i, n, _)| format!("{i} {n}"))
+        .collect();
     let more = if v.len() > shown.len() {
         format!(" +{}", v.len() - shown.len())
     } else {
         String::new()
     };
     format!("  ·  {}{more}", shown.join(", "))
+}
+
+/// One source's result: id, rows, milliseconds.
+pub(crate) type SourceStat = (String, usize, u64);
+/// Shared, appended by each fan-out worker: the status line reads it live.
+pub(crate) type PerSource = Arc<Mutex<Vec<SourceStat>>>;
+
+/// Hover text for the status note: every source with its row count and how long
+/// it took. A fan-out's total is set by the slowest source, and nothing said
+/// which one that was.
+pub(crate) fn per_source_tooltip(counts: &[SourceStat]) -> String {
+    let mut v: Vec<&SourceStat> = counts.iter().collect();
+    v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+    v.iter()
+        .map(|(id, n, ms)| format!("{id}: {n} row(s) · {:.1}s", *ms as f64 / 1000.0))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Consecutive connection failures per source, so a walled indexer stops costing
@@ -1371,14 +1392,15 @@ fn fetch_into(
 /// Per-source bookkeeping for one finished source: the row count the status line
 /// shows, and the failure streak that switches a walled indexer off.
 fn record_source(
-    per_source: &Arc<Mutex<Vec<(String, usize)>>>,
+    per_source: &PerSource,
     to_disable: &Arc<Mutex<Vec<String>>>,
     idx: &str,
     r: &Result<usize, String>,
+    ms: u64,
 ) {
     match r {
         Ok(n) => {
-            lock_or_recover(per_source).push((idx.to_string(), *n));
+            lock_or_recover(per_source).push((idx.to_string(), *n, ms));
             note_source_result(idx, None);
         }
         Err(e) => {
@@ -1407,7 +1429,7 @@ pub(crate) fn start_search(
     answered: Arc<AtomicUsize>,
     failed: Arc<Mutex<Vec<(String, String)>>>,
     // Rows per source, for the status line (which source is thin or dead).
-    per_source: Arc<Mutex<Vec<(String, usize)>>>,
+    per_source: PerSource,
     // Sources that just crossed the failure threshold; the UI thread, which owns
     // the config, does the switching off.
     to_disable: Arc<Mutex<Vec<String>>>,
@@ -1435,8 +1457,15 @@ pub(crate) fn start_search(
         // One indexer: the plain request, same as before.
         if targets.len() <= 1 {
             let idx = targets.first().map(String::as_str).unwrap_or("all");
+            let t0 = std::time::Instant::now();
             let r = fetch_into(&ctx, idx, &results, &count);
-            record_source(&per_source, &to_disable, idx, &r);
+            record_source(
+                &per_source,
+                &to_disable,
+                idx,
+                &r,
+                t0.elapsed().as_millis() as u64,
+            );
             match &r {
                 Ok(_) if live() => {
                     *lock_or_recover(&state) = SearchState::Done;
@@ -1484,17 +1513,19 @@ pub(crate) fn start_search(
             let count = Arc::clone(&count);
             let answered = Arc::clone(&answered);
             handles.push(thread::spawn(move || {
+                let t0 = std::time::Instant::now();
                 let r = fetch_into(&ctx, &idx, &results, &count);
+                let ms = t0.elapsed().as_millis() as u64;
                 answered.fetch_add(1, Ordering::Relaxed);
                 crate::wake_ui();
-                (idx, r)
+                (idx, r, ms)
             }));
         }
         let (mut ok_count, mut first_err) = (0usize, None::<String>);
         for h in handles {
             // A panicking worker is not a source result: it has no id to report.
-            if let Ok((idx, r)) = h.join() {
-                record_source(&per_source, &to_disable, &idx, &r);
+            if let Ok((idx, r, ms)) = h.join() {
+                record_source(&per_source, &to_disable, &idx, &r, ms);
                 match r {
                     Ok(_) => ok_count += 1,
                     Err(e) => {
@@ -2432,11 +2463,11 @@ mod tests {
     #[test]
     fn per_source_note_names_the_biggest_three_then_counts_the_rest() {
         let counts = vec![
-            ("knaben".to_string(), 69),
-            ("thepiratebay".to_string(), 100),
-            ("nyaasi".to_string(), 1),
-            ("empty".to_string(), 0),
-            ("yts".to_string(), 16),
+            ("knaben".to_string(), 69, 900),
+            ("thepiratebay".to_string(), 100, 1200),
+            ("nyaasi".to_string(), 1, 300),
+            ("empty".to_string(), 0, 20),
+            ("yts".to_string(), 16, 150),
         ];
         // 0-row sources are noise on a status line, so they are not listed.
         assert_eq!(
@@ -2444,7 +2475,14 @@ mod tests {
             "  ·  thepiratebay 100, knaben 69, yts 16 +1"
         );
         assert_eq!(per_source_note(&[]), "");
-        assert_eq!(per_source_note(&[("dead".to_string(), 0)]), "");
+        assert_eq!(per_source_note(&[("dead".to_string(), 0, 5)]), "");
+        // The tooltip is the other half: every source, with its timing, and the
+        // slow one named even when it returned nothing.
+        let tip = super::per_source_tooltip(&counts);
+        assert!(tip.contains("knaben: 69 row(s) · 0.9s"), "{tip}");
+        assert!(tip.contains("empty: 0 row(s) · 0.0s"), "{tip}");
+        let first = tip.lines().next().unwrap_or("");
+        assert!(first.starts_with("thepiratebay: 100"), "{tip}");
     }
 
     #[test]

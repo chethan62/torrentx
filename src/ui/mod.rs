@@ -75,6 +75,23 @@ pub(crate) fn status_failed_note(failed: &[(String, String)], phone: bool) -> St
     }
 }
 
+/// Hover text for the status line: per-source rows and timing, then the full
+/// reason for each failure. Either half may be empty.
+pub(crate) fn status_tooltip(
+    per_source: &[crate::jackett::SourceStat],
+    failed: &[(String, String)],
+) -> String {
+    let mut out = crate::jackett::per_source_tooltip(per_source);
+    let reasons = crate::jackett::failed_tooltip(failed);
+    if !reasons.is_empty() {
+        if !out.is_empty() {
+            out.push_str("\n\n");
+        }
+        out.push_str(&reasons);
+    }
+    out
+}
+
 /// Width for a floating window: the screen minus its own side margins, capped
 /// at `max`. A window that opens wider than the screen loses its right edge,
 /// including the close button, on every phone.
@@ -554,10 +571,13 @@ impl eframe::App for App {
                             let per = crate::jackett::per_source_note(&lock_or_recover(
                                 &self.search.per_source,
                             ));
-                            // The line shows a 40-character reason; the hover has the
-                            // whole exception text, which is the only place it exists
-                            // in the GUI.
-                            let tip = crate::jackett::failed_tooltip(&failed_list);
+                            // The hover carries what the line cannot: every source
+                            // with its timing (the fan-out's duration IS the slowest
+                            // one), then the whole exception text per failure.
+                            let tip = status_tooltip(
+                                &lock_or_recover(&self.search.per_source),
+                                &failed_list,
+                            );
                             let resp = lbl(
                                 ui,
                                 &format!(
@@ -605,7 +625,10 @@ impl eframe::App for App {
                                     self.search.auto_disabled.join(", ")
                                 )
                             };
-                            let tip = crate::jackett::failed_tooltip(&failed_list);
+                            let tip = status_tooltip(
+                                &lock_or_recover(&self.search.per_source),
+                                &failed_list,
+                            );
                             let resp = lbl(
                                 ui,
                                 &format!(
