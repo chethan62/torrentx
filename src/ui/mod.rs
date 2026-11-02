@@ -547,16 +547,18 @@ impl eframe::App for App {
                             } else {
                                 String::new()
                             };
-                            let failed = status_failed_note(
-                                &lock_or_recover(&self.search.failed),
-                                narrow(bar_w),
-                            );
+                            let failed_list = lock_or_recover(&self.search.failed);
+                            let failed = status_failed_note(&failed_list, narrow(bar_w));
                             // Which source is thin or dead: the total alone never
                             // said whether 4 results meant four trackers or one.
                             let per = crate::jackett::per_source_note(&lock_or_recover(
                                 &self.search.per_source,
                             ));
-                            lbl(
+                            // The line shows a 40-character reason; the hover has the
+                            // whole exception text, which is the only place it exists
+                            // in the GUI.
+                            let tip = crate::jackett::failed_tooltip(&failed_list);
+                            let resp = lbl(
                                 ui,
                                 &format!(
                                     "Searching \"{}\" — {} so far{}{}{per}{failed}",
@@ -565,6 +567,9 @@ impl eframe::App for App {
                                 self.pal.accent,
                                 12.0,
                             );
+                            if !tip.is_empty() {
+                                resp.on_hover_text(tip);
+                            }
                         }
                         SearchState::Done => {
                             let n = self.total_count();
@@ -585,10 +590,8 @@ impl eframe::App for App {
                             } else {
                                 String::new()
                             };
-                            let failed = status_failed_note(
-                                &lock_or_recover(&self.search.failed),
-                                narrow(bar_w),
-                            );
+                            let failed_list = lock_or_recover(&self.search.failed);
+                            let failed = status_failed_note(&failed_list, narrow(bar_w));
                             let per = crate::jackett::per_source_note(&lock_or_recover(
                                 &self.search.per_source,
                             ));
@@ -602,7 +605,8 @@ impl eframe::App for App {
                                     self.search.auto_disabled.join(", ")
                                 )
                             };
-                            lbl(
+                            let tip = crate::jackett::failed_tooltip(&failed_list);
+                            let resp = lbl(
                                 ui,
                                 &format!(
                                     "{n} results for \"{}\"{}{idx_note}{per}{failed}{auto}",
@@ -611,6 +615,9 @@ impl eframe::App for App {
                                 self.pal.green,
                                 12.0,
                             );
+                            if !tip.is_empty() {
+                                resp.on_hover_text(tip);
+                            }
                         }
                         SearchState::Error(e) => {
                             svg_icon(ui, SvgIcon::Close, ICON_SM, self.pal.red);

@@ -630,12 +630,12 @@ pub(crate) fn outline_icon_btn(
     resp.clicked()
 }
 
-pub(crate) fn lbl(ui: &mut egui::Ui, text: &str, color: Color32, fs: f32) {
+pub(crate) fn lbl(ui: &mut egui::Ui, text: &str, color: Color32, fs: f32) -> egui::Response {
     ui.label(
         RichText::new(text)
             .font(FontId::proportional(fs))
             .color(color),
-    );
+    )
 }
 
 /// A labeled single-line input: `Label: [input]` on one row.
