@@ -1019,7 +1019,7 @@ pub(crate) fn android_data_dir() -> Option<std::path::PathBuf> {
 const CLI_USAGE: &str = "\
 torrentx — search every configured source without opening the window
 
-  torrentx --search <query> [--indexer <id>] [--cat <name>] [--timeout <secs>]
+  torrentx --search <query> [--indexer <id>] [--cat <name>] [--timeout <secs>] [--limit <n>]
   torrentx --sources        List what a search will hit, and where each comes from
 
 Prints one JSON array of rows on stdout; per-source counts go to stderr.
@@ -1040,6 +1040,7 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
         None::<u64>,
     );
     let mut want_sources = false;
+    let mut limit: Option<usize> = None;
     let mut it = argv.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -1047,6 +1048,7 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
             "--indexer" | "-i" => indexer = it.next().cloned().unwrap_or_default(),
             "--cat" | "-c" => cat = it.next().cloned().unwrap_or_else(|| "All".into()),
             "--timeout" => timeout = it.next().and_then(|v| v.parse().ok()),
+            "--limit" => limit = it.next().and_then(|v| v.parse().ok()),
             // Same override the GUI has; the smoke test points this at a mock
             // Jackett so the fan-out can be exercised with no network.
             "--config" => {
@@ -1090,19 +1092,33 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
         cfg.dedupe,
     );
 
+    // Same fan-out shape as the GUI: one thread per source, so the wall time is
+    // the SLOWEST source rather than the sum (measured: 3.07 s sequential against
+    // 1.9 s for the slowest one alone). Rows are still appended in target order,
+    // so the output stays deterministic for a script.
+    let mut handles = Vec::new();
+    for idx in &targets {
+        let ctx = ctx.clone();
+        let idx = idx.clone();
+        handles.push(std::thread::spawn(move || {
+            let t0 = std::time::Instant::now();
+            let r = jackett::fetch_rows(&ctx, &idx);
+            (idx, r, t0.elapsed().as_millis() as u64)
+        }));
+    }
     let mut rows: Vec<jackett::TorrentResult> = Vec::new();
     let mut counts: Vec<jackett::SourceStat> = Vec::new();
     let mut failed: Vec<(String, String)> = Vec::new();
-    for idx in &targets {
-        let t0 = std::time::Instant::now();
-        match jackett::fetch_rows(&ctx, idx) {
-            Ok(mut r) => {
-                counts.push((idx.clone(), r.len(), t0.elapsed().as_millis() as u64));
-                rows.append(&mut r);
+    for h in handles {
+        let Ok((idx, r, ms)) = h.join() else { continue };
+        match r {
+            Ok(mut rr) => {
+                counts.push((idx, rr.len(), ms));
+                rows.append(&mut rr);
             }
             // The full text, key-scrubbed: the status line truncates to 40 chars,
             // but stderr is where someone debugging a dead indexer looks.
-            Err(e) => failed.push((idx.clone(), jackett::scrub_indexer_error(&e))),
+            Err(e) => failed.push((idx, jackett::scrub_indexer_error(&e))),
         }
     }
     if rows.is_empty() {
@@ -1129,6 +1145,11 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
     if cfg.dedupe {
         rows = jackett::group_by_infohash(rows);
         rows = jackett::dedupe_best_seeded(rows);
+    }
+    // After dedupe, so `--limit 10` means "ten rows to use", not "ten fetched".
+    let trimmed = limit.is_some_and(|n| rows.len() > n);
+    if let Some(n) = limit {
+        rows.truncate(n);
     }
 
     let out: Vec<serde_json::Value> = rows
@@ -1158,6 +1179,9 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
         jackett::per_source_note(&counts),
         jackett::failed_note(&brief)
     );
+    if trimmed {
+        eprintln!("(limited to {} row(s) by --limit)", rows.len());
+    }
     // Which source was slow: the fan-out's duration is the slowest one's.
     eprintln!("{}", jackett::per_source_tooltip(&counts));
     // The summary above is built for a status bar; this is the whole reason.
