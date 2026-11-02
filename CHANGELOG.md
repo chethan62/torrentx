@@ -6,6 +6,47 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **A headless mode: `torrentx --search "slow horses"`.** Same sources, same
+  fan-out rules, no window — and the only honest end-to-end hook, because the
+  egui window publishes no accessibility tree and ignores injected clicks on
+  Wayland. `--json` prints rows, `--sources` lists what a search will hit with
+  where each one comes from (`built-in` / `local def` / `jackett`), and
+  `--indexer`, `--cat`, `--timeout` and `--limit` narrow it. stderr carries
+  per-source rows, per-source timings, `fan-out: 1.28s`, and the **full** failure
+  reason — the status line only has room for 40 characters.
+- **The status line says who was thin or dead.** Per-source row counts, and a
+  hover with every source's rows and time plus each failure's whole exception.
+  A fan-out ends when its slowest source does, so the slow one is now nameable.
+- **One retry for a source that is merely rate-limited** — HTTP 429/502/503/504,
+  or `TooManyRequests` arriving inside a 200 body, which a status check alone
+  never sees. 401/403/404 never retry: a walled indexer still costs one attempt.
+- **Sources that keep failing switch themselves off** after three consecutive
+  connection errors, named in the status line. The streaks persist, so a walled
+  source does not earn its three failures again on every launch.
+
+### Changed
+- **Dedupe keeps quality variants.** The key carries resolution, source and HDR
+  (not codec), so `2160p` no longer collapses into `1080p`: one query went from
+  419 raw rows to 344 kept instead of 290.
+- **`--search` fans out in parallel**, like the app: 3.07 s → 1.49 s for `dune`,
+  where the slowest source alone is 1.9 s. Rows keep target order, so output
+  stays deterministic for a script.
+- **The search box remembers last session's query** (pre-filled, never re-run).
+- Clear button gets its full hit box and a hover fill; the Search button shows
+  busy and disabled states with reasons; the indexer picker tags each source
+  `built-in`, `local def` or `Jackett`.
+- RSS feed errors wrap, toasts wrap at 280 px and keep the whole message on
+  hover, and a refused open (no `magnet:` handler) says so instead of doing
+  nothing.
+
+### Fixed
+- Streak persistence sat below an early return, so it only ran when a source was
+  being switched off — a source that failed twice last session restarted at zero.
+- The indexer picker refetches Jackett's list when it opens (once per session)
+  instead of trusting the on-disk cache: removing an indexer used to need
+  `rm ~/.cache/torrentx/indexers-*.xml` and a relaunch before the picker agreed.
+
 ## [18.9.0] — 2026-10-30
 
 ### Added

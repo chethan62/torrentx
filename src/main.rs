@@ -5,6 +5,7 @@
 
 #[cfg(not(target_os = "android"))]
 fn main() -> eframe::Result<()> {
+    torrentx::install_panic_log();
     let argv: Vec<String> = std::env::args().collect();
     // `--search` runs the same sources with no window: the only scriptable way
     // in, since the egui window can't be driven on Wayland.
