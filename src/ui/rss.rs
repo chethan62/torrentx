@@ -459,7 +459,17 @@ impl App {
                 });
                 if let Some(e) = &err {
                     ui.add_space(SP2);
-                    lbl(ui, &format!("Error: {e}"), pal.red, fs - 1.0);
+                    // A feed error is a sentence; wrapping it keeps the whole reason
+                    // readable, and the hover still has it when the panel is narrow.
+                    let resp = ui.add(
+                        egui::Label::new(
+                            RichText::new(format!("Error: {e}"))
+                                .font(FontId::proportional(fs - 1.0))
+                                .color(pal.red),
+                        )
+                        .wrap(),
+                    );
+                    resp.on_hover_text(e);
                 }
             });
 

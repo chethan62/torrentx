@@ -314,7 +314,9 @@ impl App {
             }
             ui.add_space(SP2);
             if wide_icon_btn(ui, SvgIcon::Magnet, "Open Magnet", self.pal.accent) {
-                let _ = safe_open(mag);
+                if !safe_open(mag) {
+                    self.toast(crate::OPEN_FAILED, self.pal.red);
+                }
                 self.toast("Opening magnet…", self.pal.accent);
             }
             ui.add_space(SP2);
@@ -345,14 +347,16 @@ impl App {
         }
         if let Some(link) = r.link.clone() {
             if wide_icon_btn(ui, SvgIcon::Download, "Download .torrent", self.pal.green) {
-                let _ = safe_open(link);
+                if !safe_open(link) {
+                    self.toast(crate::OPEN_FAILED, self.pal.red);
+                }
                 self.toast("Downloading…", self.pal.green);
             }
             ui.add_space(SP2);
         }
         if let Some(det) = r.details.clone() {
-            if wide_icon_btn(ui, SvgIcon::Web, "Open in Browser", self.pal.sub) {
-                let _ = safe_open(det);
+            if wide_icon_btn(ui, SvgIcon::Web, "Open in Browser", self.pal.sub) && !safe_open(det) {
+                self.toast(crate::OPEN_FAILED, self.pal.red);
             }
             ui.add_space(SP2);
         }
