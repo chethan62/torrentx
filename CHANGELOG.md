@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [18.9.1] — 2026-11-02
+
 ### Added
 - **A headless mode: `torrentx --search "slow horses"`.** Same sources, same
   fan-out rules, no window — and the only honest end-to-end hook, because the
@@ -1187,6 +1189,7 @@ versions follow [SemVer](https://semver.org/).
 - First public release: Jackett/Torznab search, 19 themes, filters, sorting,
   favorites, RSS feeds, batch magnets, CSV export, tray, update checker
 
+[18.9.1]: https://github.com/chethan62/torrentx/releases/tag/v18.9.1
 [18.9.0]: https://github.com/chethan62/torrentx/releases/tag/v18.9.0
 [18.8.0]: https://github.com/chethan62/torrentx/releases/tag/v18.8.0
 [18.7.1]: https://github.com/chethan62/torrentx/releases/tag/v18.7.1
