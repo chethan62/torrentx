@@ -289,11 +289,20 @@ impl App {
                             color: rgba(0, 0, 0, 80),
                         })
                         .show(ui, |ui| {
-                            ui.label(
-                                RichText::new(&toast.msg)
-                                    .font(FontId::proportional(13.5))
-                                    .color(tint(toast.col, fade_a)),
+                            // Errors from qBittorrent are sentences, not labels:
+                            // without a width limit they ran off the 310 px area.
+                            ui.set_max_width(280.0);
+                            let resp = ui.add(
+                                egui::Label::new(
+                                    RichText::new(&toast.msg)
+                                        .font(FontId::proportional(13.5))
+                                        .color(tint(toast.col, fade_a)),
+                                )
+                                .wrap(),
                             );
+                            if !toast.msg.is_empty() {
+                                resp.on_hover_text(&toast.msg);
+                            }
                         });
                 });
             y -= 46.0;

@@ -196,6 +196,12 @@ pub(crate) fn unique_tmp(p: &std::path::Path) -> std::path::PathBuf {
     p.with_file_name(format!(".{name}.{}-{n}.tmp", std::process::id()))
 }
 
+/// What the user is told when `safe_open` gives up: the failure used to be
+/// dropped on the floor (`let _ =`), so a missing magnet handler looked like a
+/// dead button.
+pub(crate) const OPEN_FAILED: &str =
+    "Could not open it — no handler for magnet:/http links, or the scheme was refused";
+
 pub(crate) fn safe_open(s: impl AsRef<str>) -> bool {
     let t = s.as_ref().trim();
     if safe_scheme(t) {

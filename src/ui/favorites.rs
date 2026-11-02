@@ -202,11 +202,15 @@ impl App {
             let _ = save_cfg(&self.cfg);
         }
         if let Some(m) = open_mag {
-            let _ = safe_open(m);
+            if !safe_open(m) {
+                self.toast(crate::OPEN_FAILED, self.pal.red);
+            }
             self.toast("Opening magnet…", self.pal.accent);
         }
         if let Some(l) = open_link {
-            let _ = safe_open(l);
+            if !safe_open(l) {
+                self.toast(crate::OPEN_FAILED, self.pal.red);
+            }
             self.toast("Downloading…", self.pal.green);
         }
     }
