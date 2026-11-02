@@ -196,6 +196,38 @@ pub(crate) fn unique_tmp(p: &std::path::Path) -> std::path::PathBuf {
     p.with_file_name(format!(".{name}.{}-{n}.tmp", std::process::id()))
 }
 
+/// A panic in a GUI app closes the window and leaves nothing behind, so the next
+/// "it just vanished" has no evidence. Write it next to the config (same place,
+/// same permissions, works on Android too).
+pub fn install_panic_log() {
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let msg = info
+            .payload()
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| info.payload().downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("(no message)");
+        let path = crate::config::cfg_path().with_file_name("last-panic.log");
+        let _ = std::fs::write(
+            &path,
+            panic_report(msg, info.location().map(|l| l.to_string())),
+        );
+        eprintln!("torrentx: panic — details in {}", path.display());
+        prev(info);
+    }));
+}
+
+/// The report itself, separate so it can be asserted without a panicking thread.
+fn panic_report(msg: &str, loc: Option<String>) -> String {
+    format!(
+        "TorrentX {}\n{}\n{}\n\nRe-run with RUST_BACKTRACE=1 for a backtrace.\n",
+        env!("CARGO_PKG_VERSION"),
+        loc.unwrap_or_else(|| "at an unknown place".to_string()),
+        msg
+    )
+}
+
 /// What the user is told when `safe_open` gives up: the failure used to be
 /// dropped on the floor (`let _ =`), so a missing magnet handler looked like a
 /// dead button.
@@ -1364,8 +1396,8 @@ fn run() -> eframe::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        csv_esc, csv_safe, desktop_entry, next_visible, safe_scheme, should_start_hidden,
-        viewport_for,
+        csv_esc, csv_safe, desktop_entry, next_visible, panic_report, safe_scheme,
+        should_start_hidden, viewport_for,
     };
 
     #[test]
@@ -1388,6 +1420,19 @@ mod tests {
         assert_eq!(csv_safe("-2"), "\"'-2\"");
         assert_eq!(csv_safe("@SUM(1)"), "\"'@SUM(1)\"");
         assert_eq!(csv_safe("\tTab"), "\"'\tTab\"");
+    }
+
+    #[test]
+    fn a_panic_report_says_what_and_where() {
+        let r = panic_report("index out of bounds", Some("src/app.rs:12:5".into()));
+        assert!(r.starts_with("TorrentX "), "{r}");
+        assert!(r.contains(env!("CARGO_PKG_VERSION")), "{r}");
+        assert!(
+            r.contains("src/app.rs:12:5") && r.contains("index out of bounds"),
+            "{r}"
+        );
+        assert!(r.contains("RUST_BACKTRACE=1"), "{r}");
+        assert!(panic_report("boom", None).contains("unknown place"));
     }
 
     #[test]
