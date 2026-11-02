@@ -1083,13 +1083,7 @@ impl App {
     /// Switch off sources that keep failing to connect, once each, and remember
     /// the names so the status line can say who was dropped.
     pub(crate) fn apply_auto_disables(&mut self) {
-        let due = {
-            let mut d = lock_or_recover(&self.search.to_disable);
-            if d.is_empty() {
-                return;
-            }
-            std::mem::take(&mut *d)
-        };
+        let due = std::mem::take(&mut *lock_or_recover(&self.search.to_disable));
         let mut changed = false;
         for id in due {
             if !self.cfg.disabled_indexers.contains(&id) {
@@ -1098,13 +1092,19 @@ impl App {
                 changed = true;
             }
         }
-        // Streaks move on every search, disable or not: keep the file in step so a
-        // restart resumes them. One comparison per frame, and a write only when
-        // something actually changed.
-        let live = crate::jackett::source_fails_snapshot();
-        if live != self.cfg.source_fails {
-            self.cfg.source_fails = live;
-            changed = true;
+        // Streaks move as every source answers, so writing them mid-fan-out would
+        // mean a config write per search. Persist once the fan-out is over — and
+        // immediately when a source was just switched off.
+        let searching = matches!(
+            *lock_or_recover(&self.search.state),
+            crate::jackett::SearchState::Searching
+        );
+        if changed || !searching {
+            let live = crate::jackett::source_fails_snapshot();
+            if live != self.cfg.source_fails {
+                self.cfg.source_fails = live;
+                changed = true;
+            }
         }
         if changed {
             let _ = crate::config::save_cfg(&self.cfg);

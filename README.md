@@ -238,6 +238,31 @@ troubleshooting and privacy notes.
 5. **Come back later** — Favorites and RSS are their own tabs; `Esc` closes the panel and `Ctrl+R`
    re-runs the last search.
 
+### Headless mode
+
+The same fan-out, no window — the only way to drive a search from a script (the
+window is egui on Wayland: no accessibility tree, no injected clicks).
+
+```bash
+torrentx --search "slow horses" --json --limit 20   # rows as JSON on stdout
+torrentx --search "dune" --indexer knaben           # one source
+torrentx --sources                                  # what a search will hit
+```
+
+| Flag | Does |
+| --- | --- |
+| `-s, --search <query>` | search every enabled source, print rows |
+| `--sources` | list sources with origin tag (`built-in` / `local def` / `jackett`) and disabled state |
+| `--indexer <id>` | restrict to one source id (repeatable) |
+| `--cat <name>` | category, as the picker names it |
+| `--timeout <secs>` | per-request timeout |
+| `--limit <n>` | keep the first n rows, applied after dedupe |
+| `--json` | one array on stdout; without it, a one-line summary |
+
+Per-source rows, timings and the **full** failure reason go to stderr, ending
+with `fan-out: 1.28s` — the wall time to compare against, since a fan-out ends
+when its slowest source does. Exit code 2 means the search itself failed.
+
 | Key | Does |
 | --- | --- |
 | `↑` `↓` | Move the selection |
