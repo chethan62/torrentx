@@ -1093,7 +1093,9 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
                 counts.push((idx.clone(), r.len()));
                 rows.append(&mut r);
             }
-            Err(e) => failed.push((idx.clone(), jackett::short_reason(&e))),
+            // The full text, key-scrubbed: the status line truncates to 40 chars,
+            // but stderr is where someone debugging a dead indexer looks.
+            Err(e) => failed.push((idx.clone(), jackett::scrub_indexer_error(&e))),
         }
     }
     if rows.is_empty() {
@@ -1139,12 +1141,21 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
         .collect();
     let json = serde_json::to_string_pretty(&out).map_err(|e| format!("serialise: {e}"))?;
     println!("{json}");
+    let brief: Vec<(String, String)> = failed
+        .iter()
+        .map(|(id, why)| (id.clone(), jackett::short_reason(why)))
+        .collect();
     eprintln!(
         "{} rows{}{}",
         rows.len(),
         jackett::per_source_note(&counts),
-        jackett::failed_note(&failed)
+        jackett::failed_note(&brief)
     );
+    // The summary above is built for a status bar; this is the whole reason.
+    for (id, why) in &failed {
+        let one_line = why.trim().replace(['\n', '\r'], " ");
+        eprintln!("failed {id}: {one_line}");
+    }
     Ok(())
 }
 

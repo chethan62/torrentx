@@ -120,6 +120,15 @@ for frag in ("alpha 2", "beta 1"):
 # 4. The indexer that errored inside a 200 is named, and the search still exits 0.
 assert "broken" in err and "failed" in err, f"failure note missing: {err!r}"
 
+# 4b. The summary line is truncated for a status bar, and the FULL reason is on
+#     its own stderr line — that split is the whole point of this output.
+summary = [l for l in err.splitlines() if l.strip().endswith(")") or "…" in l]
+assert any("…" in l for l in summary), f"summary not shortened: {err!r}"
+full = [l for l in err.splitlines() if l.startswith("failed broken:")]
+assert full, f"no full-reason line: {err!r}"
+assert "403" in full[0], f"full reason truncated: {full[0]!r}"
+assert "…" not in full[0], f"full reason still shortened: {full[0]!r}"
+
 # 5. Every row carries a magnet — nothing is reported that cannot be played.
 assert all(r.get("magnet") for r in rows), f"row without a magnet: {rows}"
 
