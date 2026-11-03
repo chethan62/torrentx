@@ -6,6 +6,17 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **A dead runner heals itself.** Three releases in a row lost their macOS job to
+  the queue: assigned, not one step executed, cancelled at 15 minutes. Two halves
+  now cover it — a `heal` job inside `release.yml` re-runs the failed jobs
+  immediately (once: a second failure is a real problem and fails loudly), and a
+  cron watchdog (`release-watchdog.yml`, every 30 min) re-runs *stalled* release
+  runs as a backstop. Both refuse to retry a genuine build failure: only a job
+  cancelled with zero steps counts. `scripts/test-release-watchdog.sh` pins the
+  decision over eight stalling shapes with a stub `gh` — removing the zero-steps
+  guard makes it report a third candidate and fail.
+
 ## [18.9.2] — 2026-11-02
 
 ### Added
@@ -28,13 +39,6 @@ versions follow [SemVer](https://semver.org/).
   release, runs `if: always()`, and `bump-cask` now waits on it, so a half
   release never reaches `brew`.
 
-- **A dead runner heals itself.** Three releases in a row lost their macOS job to
-  the queue: assigned, not one step executed, cancelled at 15 minutes. Two halves
-  now cover it — a `heal` job inside `release.yml` re-runs the failed jobs
-  immediately (once: a second failure is a real problem and fails loudly), and a
-  cron watchdog (`release-watchdog.yml`, every 30 min) re-runs *stalled* release
-  runs as a backstop. Both refuse to retry a genuine build failure: only a job
-  cancelled with zero steps counts.
 
 ### Fixed
 - The headless run never seeded the failure streaks from the config, so "three
