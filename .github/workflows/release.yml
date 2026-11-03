@@ -284,6 +284,30 @@ jobs:
           REPO: ${{ github.repository }}
         run: ./scripts/check-release-assets.sh
 
+  # The instant half of the watchdog: when `check-release` says an artefact is
+  # missing, press re-run on this very run instead of waiting for the cron. The
+  # flake is a runner that never starts, so a re-run usually lands on another one.
+  # `run_attempt` bounds it: a second failure is a real problem and must be seen.
+  heal:
+    name: re-run a job a dead runner killed
+    needs: [check-release]
+    if: always() && startsWith(github.ref, 'refs/tags/v') && needs.check-release.result != 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-run the failed jobs once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          if [ "$ATTEMPT" -ge 2 ]; then
+            echo "::error::release still incomplete on attempt $ATTEMPT — this is not a dead runner, look at the jobs"
+            exit 1
+          fi
+          echo "attempt $ATTEMPT: re-running the failed jobs of $RUN_ID"
+          gh run rerun "$RUN_ID" -R "$REPO" --failed
+
   bump-cask:
     name: bump the cask
     needs: [check-release]

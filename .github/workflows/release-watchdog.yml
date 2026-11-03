@@ -1,0 +1,27 @@
+name: release watchdog
+
+# A release run can lose a runner to the queue: the job is assigned, no step runs,
+# and the job is cancelled at 15 minutes. `check-release` catches the resulting
+# incomplete release, but a human still has to press re-run. This presses it once
+# (the script refuses anything past its first attempt, so a repeat flake shouts
+# instead of looping).
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write   # gh run rerun
+  contents: read
+
+jobs:
+  rerun:
+    name: re-run a release run a dead runner killed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Re-run stalled release runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: ./scripts/rerun-stalled-releases.sh
