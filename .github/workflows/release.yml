@@ -293,6 +293,11 @@ jobs:
     needs: [check-release]
     if: always() && startsWith(github.ref, 'refs/tags/v') && needs.check-release.result != 'success'
     runs-on: ubuntu-latest
+    # `gh run rerun` is an Actions write; the workflow only grants contents: write,
+    # so without this the heal job 403s and the re-run it exists for never happens.
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Re-run the failed jobs once
         env:
