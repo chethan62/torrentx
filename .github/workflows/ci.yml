@@ -68,6 +68,11 @@ jobs:
       - name: Smoke — slow-and-empty demotion
         run: ./scripts/smoke-unproductive.sh
 
+      # Fixture-driven: no network, no timers. Proves the release watchdog only
+      # re-runs a job that was cancelled with zero steps, never a real failure.
+      - name: Release watchdog fixtures
+        run: ./scripts/test-release-watchdog.sh
+
       # Doc-only commits must arrive through a PR (CONTRIBUTING.md). Runs first:
       # it is seconds of API calls, and a doc push that skipped review should fail
       # before the toolchain spends two minutes on a build.
