@@ -14,6 +14,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 ./scripts/smoke-search.sh                              # CLI end to end against a local mock (no Jackett)
 ./scripts/smoke-unproductive.sh                        # slow-and-empty demotion, ~28 s by design
 ./scripts/test-release-watchdog.sh                     # stale-release re-run decisions, stubbed gh
+./scripts/test-check-release-assets.sh                 # incomplete-release rejection, stubbed gh
 cargo deny --all-features check licenses advisories bans sources
 cargo audit
 ```

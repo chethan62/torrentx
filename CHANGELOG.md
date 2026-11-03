@@ -15,7 +15,10 @@ versions follow [SemVer](https://semver.org/).
   runs as a backstop. Both refuse to retry a genuine build failure: only a job
   cancelled with zero steps counts. `scripts/test-release-watchdog.sh` pins the
   decision over eight stalling shapes with a stub `gh` — removing the zero-steps
-  guard makes it report a third candidate and fail.
+  guard makes it report a third candidate and fail. `scripts/test-check-release-assets.sh`
+  does the same for the completeness gate: a full release passes, a release
+  missing the dmg and its checksum is rejected by name, and a tag with no release
+  fails instead of passing quietly.
 
 ## [18.9.2] — 2026-11-02
 
@@ -41,6 +44,10 @@ versions follow [SemVer](https://semver.org/).
 
 
 ### Fixed
+- **The release `heal` job could not re-run anything.** `release.yml` grants only
+  `contents: write`, and `gh run rerun` is an Actions write, so the job that
+  exists to recover a dead-runner release would itself have failed with a 403.
+  It now carries `permissions: actions: write` (job-scoped, not workflow-wide).
 - The headless run never seeded the failure streaks from the config, so "three
   in a row" could not happen across invocations: each `--search` started from
   zero and paid the slow source's full timeout every time.
