@@ -82,6 +82,7 @@ impl App {
             // a 14 px glyph read as a speck and was hard to hit (the hit target
             // IS the box, so its size is the whole fix).
             let clear_box = ROW1_H - SP3;
+            let field_font = FontId::proportional(fs + 2.0);
             if std::mem::take(&mut self.ui.select_all_next) {
                 queue_select_all(ui, field_id);
             }
@@ -90,7 +91,7 @@ impl App {
                     .id(field_id)
                     .desired_width(field_w)
                     .hint_text(hint)
-                    .font(FontId::proportional(fs + 2.0))
+                    .font(field_font.clone())
                     // Room for the in-field clear button (always reserved, or the
                     // field would change height the moment text appears).
                     .margin(egui::Margin {
@@ -101,6 +102,11 @@ impl App {
                     }),
             );
             bar_rect = resp.rect;
+            // The text is laid out from the field's top margin, so its line sits
+            // above the widget rect's centre (the rect is a fixed ROW1_H tall, the
+            // text line is not). Centring the clear button on the rect dropped the
+            // × ~8 px below the text it belongs to — align it to the text line.
+            let text_cy = text_line_centre(ui, resp.rect, &field_font);
             self.search_field_menu(&resp, field_id);
             if resp.gained_focus() && !self.cfg.history.is_empty() {
                 self.ui.show_hist = true;
@@ -132,10 +138,7 @@ impl App {
             // is `available - 505`) and wrapped onto a second line.
             if !self.search.query.is_empty() {
                 let clear_rect = egui::Rect::from_center_size(
-                    egui::pos2(
-                        resp.rect.right() - SP3 - clear_box * 0.5,
-                        resp.rect.center().y,
-                    ),
+                    egui::pos2(resp.rect.right() - SP3 - clear_box * 0.5, text_cy),
                     Vec2::splat(clear_box),
                 );
                 // A filled square on hover: an unframed glyph gave no feedback at
@@ -970,6 +973,15 @@ impl App {
         ui.add_space((1.0 - eased) * 8.0); // slight downward settle
         egui::ScrollArea::vertical().show(ui, |ui| self.draw_detail(ui, r));
     }
+}
+
+/// Vertical centre of the text line inside a single-line field: `rect.top()` is
+/// already inside the field's own margin and the text is top-aligned in a rect that
+/// is taller than its line, so half a row below the top is the text's middle —
+/// `rect.center().y` sits ~8 px lower and drops the clear button under the text.
+fn text_line_centre(ui: &egui::Ui, rect: egui::Rect, font: &FontId) -> f32 {
+    let row_h = ui.ctx().fonts_mut(|f| f.row_height(font));
+    rect.top() + row_h * 0.5
 }
 
 /// Push the queued Ctrl+A into this frame's input *before* the field draws: an
