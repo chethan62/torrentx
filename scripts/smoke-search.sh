@@ -95,6 +95,17 @@ cat > "$TMP/config.json" <<JSON
 {"jackett_url": "http://127.0.0.1:$PORT", "api_key": "smoke", "timeout_secs": 5}
 JSON
 
+# A search fans out over the mock's indexers AND the native/local ones (that is
+# the set the GUI searches too), so a hermetic run has to switch the latter off.
+# Ask the binary which ids those are — a hardcoded list rots the moment a bundled
+# definition is added.
+NATIVE=$( "$BIN" --config "$TMP/config.json" --sources 2>/dev/null \
+    | awk '$2 == "built-in" || $2 == "local" {print $1}' | paste -sd, - )
+DISABLED=$(printf '%s' "$NATIVE" | python3 -c 'import json,sys;print(json.dumps([i for i in sys.stdin.read().split(",") if i]))')
+cat > "$TMP/config.json" <<JSON
+{"jackett_url": "http://127.0.0.1:$PORT", "api_key": "smoke", "timeout_secs": 5, "disabled_indexers": $DISABLED}
+JSON
+
 "$BIN" --config "$TMP/config.json" --search dune >"$TMP/out.json" 2>"$TMP/err.txt"
 rc=$?
 [ "$rc" -eq 0 ] || { echo "smoke: CLI exited $rc" >&2; cat "$TMP/err.txt" >&2; exit 1; }
