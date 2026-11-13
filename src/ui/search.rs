@@ -1000,7 +1000,7 @@ mod tests {
         let ctx = egui::Context::default();
         let id = egui::Id::unique("q");
         let mut text = String::from("dune 2021");
-        let mut frame = |text: &mut String, push: bool| {
+        let frame = |text: &mut String, push: bool| {
             let mut out = None;
             let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 120.0));
             let mut full = ctx.run_ui(
