@@ -132,15 +132,11 @@ impl App {
             (SvgIcon::Info, "About", "About TorrentX", Tab::About),
         ] {
             let active = self.ui.tab == tab;
+            // Favorites carries a count because it is a saved set you act on.
+            // Search used to repeat its result count here too — that number is
+            // already in the summary row and the status line, so it was noise.
             let badge = if tab == Tab::Favorites && !self.cfg.favorites.is_empty() {
                 format!(" {}", self.cfg.favorites.len())
-            } else if tab == Tab::Search {
-                let n = *lock_or_recover(&self.search.count);
-                if n > 0 {
-                    format!(" {n}")
-                } else {
-                    String::new()
-                }
             } else {
                 String::new()
             };

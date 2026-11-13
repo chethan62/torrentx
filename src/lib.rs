@@ -1110,11 +1110,15 @@ pub fn run_cli(argv: Vec<String>) -> Result<(), String> {
     let mut cfg = config::load_cfg();
     let timeout_s = timeout.unwrap_or(cfg.timeout_secs);
 
-    // Configured indexers come from Jackett; when it is unreachable the native
-    // sources still answer, which is exactly what the GUI does.
-    let configured = jackett::fetch_indexers(&cfg.jackett_url, &cfg.api_key)
-        .map(|c| c.configured)
-        .unwrap_or_else(sources::native_ids);
+    // Same target list the GUI searches: Jackett's configured indexers merged
+    // with the native/local ones. Taking only `configured` when Jackett answers
+    // silently dropped apibay, eztv-api and every user-defined JSON source, so a
+    // headless run covered fewer sources than the window it was verifying.
+    let configured = sources::with_native(
+        &jackett::fetch_indexers(&cfg.jackett_url, &cfg.api_key)
+            .map(|c| c.configured)
+            .unwrap_or_default(),
+    );
     let targets = jackett::search_targets(&indexer, &configured, &cfg.disabled_indexers);
     // Streaks are process-global, so a headless run must inherit them or "three
     // in a row" can never happen across invocations: each process would start at

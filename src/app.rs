@@ -716,6 +716,9 @@ pub(crate) struct UiState {
     /// is itself a focus loss, and hiding it in that same frame swallowed the
     /// click (nothing happened when a past search was picked).
     pub(crate) hist_rect: Option<egui::Rect>,
+    /// Right-click → "Select all" was picked: the Ctrl+A is queued and replayed
+    /// before the query field draws on the next frame.
+    pub(crate) select_all_next: bool,
     /// Column widths for the results table, in the order the columns are shown.
     /// The table is built from these (`Column::exact`), so a drag changes exactly
     /// one column and the view scrolls horizontally instead of squeezing a
@@ -811,6 +814,7 @@ impl Default for UiState {
             detail_width: 295.0,
             show_hist: false,
             hist_rect: None,
+            select_all_next: false,
             col_w: Vec::new(),
             col_w_sig: None,
             col_drag: None,

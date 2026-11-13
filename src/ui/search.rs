@@ -77,22 +77,37 @@ impl App {
             ui.spacing_mut().interact_size.y = ROW1_H;
             ui.add_space(SP4);
             let field_w = (ui.available_width() - btn_w - SP3 - SP4).max(140.0);
+            let field_id = egui::Id::unique("q");
+            // The clear button fills the field's inner height: a 18 px box around
+            // a 14 px glyph read as a speck and was hard to hit (the hit target
+            // IS the box, so its size is the whole fix).
+            let clear_box = ROW1_H - SP3;
+            let field_font = FontId::proportional(fs + 2.0);
+            if std::mem::take(&mut self.ui.select_all_next) {
+                queue_select_all(ui, field_id);
+            }
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.search.query)
-                    .id(egui::Id::unique("q"))
+                    .id(field_id)
                     .desired_width(field_w)
                     .hint_text(hint)
-                    .font(FontId::proportional(fs + 2.0))
+                    .font(field_font.clone())
                     // Room for the in-field clear button (always reserved, or the
                     // field would change height the moment text appears).
                     .margin(egui::Margin {
                         left: SP3 as i8,
-                        right: (ICON_MD + SP3) as i8,
+                        right: (clear_box + SP3) as i8,
                         top: SP2 as i8,
                         bottom: SP2 as i8,
                     }),
             );
             bar_rect = resp.rect;
+            // The text is laid out from the field's top margin, so its line sits
+            // above the widget rect's centre (the rect is a fixed ROW1_H tall, the
+            // text line is not). Centring the clear button on the rect dropped the
+            // × ~8 px below the text it belongs to — align it to the text line.
+            let text_cy = text_line_centre(ui, resp.rect, &field_font);
+            self.search_field_menu(&resp, field_id);
             if resp.gained_focus() && !self.cfg.history.is_empty() {
                 self.ui.show_hist = true;
             }
@@ -122,24 +137,20 @@ impl App {
             // does it. After the Search button it overflowed the row (field width
             // is `available - 505`) and wrapped onto a second line.
             if !self.search.query.is_empty() {
-                let box_side = ICON_MD + SP2;
                 let clear_rect = egui::Rect::from_center_size(
-                    egui::pos2(
-                        resp.rect.right() - SP3 - box_side * 0.5,
-                        resp.rect.center().y,
-                    ),
-                    Vec2::splat(box_side),
+                    egui::pos2(resp.rect.right() - SP3 - clear_box * 0.5, text_cy),
+                    Vec2::splat(clear_box),
                 );
                 // A filled square on hover: an unframed glyph gave no feedback at
                 // all, so a click that missed the 10 px icon looked like a dead
-                // button. The whole box_side square is the hit target either way.
+                // button. The whole box square is the hit target either way.
                 let hot = ui.rect_contains_pointer(clear_rect);
                 let hit = ui
                     .put(
                         clear_rect,
                         egui::Button::new(svg_image(
                             SvgIcon::Close,
-                            ICON_SM,
+                            ICON_MD,
                             if hot { self.pal.text } else { self.pal.sub },
                         ))
                         .fill(if hot {
@@ -149,7 +160,7 @@ impl App {
                         })
                         .frame(hot)
                         .corner_radius(R_SM)
-                        .min_size(Vec2::splat(box_side)),
+                        .min_size(Vec2::splat(clear_box)),
                     )
                     .on_hover_text("Clear search (Esc)");
                 if hit.clicked() {
@@ -192,6 +203,48 @@ impl App {
                 .on_disabled_hover_text("A search is already running");
         });
         bar_rect
+    }
+
+    /// Right-click menu on the query field: Cut / Copy / Paste / Select all / Clear.
+    ///
+    /// The clipboard rows go through the platform clipboard: winit turns those
+    /// viewport commands into the same `Event::Copy`/`Cut`/`Paste` a keypress would,
+    /// so TextEdit applies them to the selection it computed itself. Reading the
+    /// range out of `TextEditState` here does not work — by the time a popup draws,
+    /// that state has been reduced to a caret.
+    fn search_field_menu(&mut self, resp: &egui::Response, id: egui::Id) {
+        let mut select_all = false;
+        let mut clear = false;
+        resp.context_menu(|ui| {
+            for (label, cmd) in [
+                ("Cut", egui::ViewportCommand::RequestCut),
+                ("Copy", egui::ViewportCommand::RequestCopy),
+                ("Paste", egui::ViewportCommand::RequestPaste),
+            ] {
+                if ui.button(label).clicked() {
+                    ui.ctx().memory_mut(|m| m.request_focus(id));
+                    ui.ctx().send_viewport_cmd(cmd);
+                    ui.close();
+                }
+            }
+            if ui.button("Select all").clicked() {
+                select_all = true;
+                ui.close();
+            }
+            if ui.button("Clear").clicked() {
+                clear = true;
+                ui.close();
+            }
+        });
+        if select_all {
+            // No viewport command exists for this one, so queue the Ctrl+A the
+            // keyboard sends — it has to reach the field before it draws again.
+            self.ui.select_all_next = true;
+            resp.ctx.request_repaint();
+        }
+        if clear {
+            self.clear_search();
+        }
     }
 
     /// Row 2: category/indexer scope, the indexer picker, and the window that
@@ -919,5 +972,80 @@ impl App {
         ui.set_opacity(eased);
         ui.add_space((1.0 - eased) * 8.0); // slight downward settle
         egui::ScrollArea::vertical().show(ui, |ui| self.draw_detail(ui, r));
+    }
+}
+
+/// Vertical centre of the text line inside a single-line field: `rect.top()` is
+/// already inside the field's own margin and the text is top-aligned in a rect that
+/// is taller than its line, so half a row below the top is the text's middle —
+/// `rect.center().y` sits ~8 px lower and drops the clear button under the text.
+fn text_line_centre(ui: &egui::Ui, rect: egui::Rect, font: &FontId) -> f32 {
+    let row_h = ui.ctx().fonts_mut(|f| f.row_height(font));
+    rect.top() + row_h * 0.5
+}
+
+/// Push the queued Ctrl+A into this frame's input *before* the field draws: an
+/// egui widget only sees events already in `InputState` when its turn comes, and a
+/// popup runs after the field — so the key has to be replayed one frame later.
+fn queue_select_all(ui: &egui::Ui, id: egui::Id) {
+    ui.ctx().memory_mut(|m| m.request_focus(id));
+    ui.ctx().input_mut(|i| {
+        i.events.push(egui::Event::Key {
+            key: egui::Key::A,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        });
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The right-click "Select all" rests entirely on egui turning one synthetic
+    /// Ctrl+A into a full selection. If that contract changes, this fails instead
+    /// of the menu item silently doing nothing.
+    #[test]
+    fn a_queued_ctrl_a_selects_the_whole_query() {
+        let ctx = egui::Context::default();
+        let id = egui::Id::unique("q");
+        let mut text = String::from("dune 2021");
+        let frame = |text: &mut String, push: bool| {
+            let mut out = None;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 120.0));
+            let mut full = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        if push {
+                            queue_select_all(ui, id);
+                        }
+                        ui.add(egui::TextEdit::singleline(text).id(id));
+                        out = egui::TextEdit::load_state(ui.ctx(), id)
+                            .and_then(|s| s.cursor.char_range());
+                    });
+                },
+            );
+            full.textures_delta.clear(); // the drop assert wants these consumed
+            out
+        };
+        // Two frames to focus and settle before the queued key goes in.
+        frame(&mut text, false);
+        frame(&mut text, false);
+        let range = frame(&mut text, true).expect("a cursor range after Ctrl+A");
+        let (a, b) = (
+            usize::from(range.primary.index),
+            usize::from(range.secondary.index),
+        );
+        assert_eq!(
+            (a.min(b), a.max(b)),
+            (0, text.chars().count()),
+            "Ctrl+A did not select the whole query"
+        );
     }
 }
