@@ -9,6 +9,7 @@ consistent — the rules below are enforced, not suggestions.
 cargo fmt --all --check
 cargo build --all-targets
 cargo test --all-targets
+cargo test --test cli                                  # CLI surface + fan-out = native + Jackett, against a mock server
 cargo clippy --all-targets --all-features -- -D warnings
 ./scripts/ui-standards.sh                              # must print: ui-standards: ok
 ./scripts/smoke-search.sh                              # CLI end to end against a local mock (no Jackett)
