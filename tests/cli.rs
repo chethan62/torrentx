@@ -80,3 +80,69 @@ fn sources_lists_origins_even_with_jackett_down() {
     assert!(err.contains("jackett unreachable"), "no warning: {err}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Minimal stand-in for a Jackett server: the indexers endpoint answers the given
+/// `<indexer …/>` entries, every results endpoint answers an empty feed. Enough to
+/// prove which sources a `--search` actually fans out over.
+fn mock_jackett(indexers: &'static str) -> String {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind mock jackett");
+    let url = format!("http://{}", listener.local_addr().expect("addr"));
+    std::thread::spawn(move || {
+        for conn in listener.incoming() {
+            let Ok(mut c) = conn else { break };
+            let mut buf = [0u8; 4096];
+            let n = c.read(&mut buf).unwrap_or(0);
+            let req = String::from_utf8_lossy(&buf[..n]);
+            let body = if req.contains("t=indexers") {
+                format!("<?xml version=\"1.0\"?><indexers>{indexers}</indexers>")
+            } else {
+                "<?xml version=\"1.0\"?><rss version=\"2.0\"><channel><title>mock</title></channel></rss>"
+                    .to_string()
+            };
+            let _ = write!(
+                c,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+        }
+    });
+    url
+}
+
+/// The fan-out is Jackett's configured list **merged with the native ones**. The
+/// CLI used to take Jackett's list alone whenever the server answered, so a
+/// headless search silently covered fewer sources than the GUI and then reported
+/// "N of M" — this pins the merge, and the id Jackett never returns (`apibay`) is
+/// the assertion that fails if it regresses.
+#[test]
+fn search_fans_out_over_native_sources_and_jacketts_configured_ones() {
+    let url = mock_jackett(r#"<indexer id="zzzjackett" configured="true"/>"#);
+    let dir = std::env::temp_dir().join(format!("tx-cli-merge-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("tmp");
+    let cfg = dir.join("config.json");
+    // timeout_secs 1: the native sources will reach for their real hosts, which is
+    // fine — a failure prints the same `failed <id>:` line a success prints rows for.
+    std::fs::write(
+        &cfg,
+        format!(
+            r#"{{"jackett_url": "{url}", "api_key": "x", "timeout_secs": 1, "dedupe": false}}"#
+        ),
+    )
+    .expect("write cfg");
+
+    let out = Command::new(BIN)
+        .args(["--config", cfg.to_str().unwrap(), "--search", "dune"])
+        .output()
+        .expect("spawn");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("zzzjackett"),
+        "Jackett's configured indexer never got searched:\n{err}"
+    );
+    assert!(
+        err.contains("apibay"),
+        "native sources were dropped from the fan-out:\n{err}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
