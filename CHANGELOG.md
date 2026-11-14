@@ -20,6 +20,39 @@ versions follow [SemVer](https://semver.org/).
   missing the dmg and its checksum is rejected by name, and a tag with no release
   fails instead of passing quietly.
 
+## [18.10.0] — 2026-11-14
+
+- **Right-click the query field: Cut / Copy / Paste / Select all / Clear.** The
+  clipboard rows go through the platform clipboard (`RequestCut`/`RequestCopy`/
+  `RequestPaste`), so TextEdit applies them to the selection it computed itself —
+  the saved cursor state is already a caret by the time a popup draws, which is
+  why reading it out copied nothing. Select all replays a Ctrl+A one frame before
+  the field draws; a unit test pins that contract.
+- **The CLI searches the same sources as the window.** `--search` took Jackett's
+  configured list alone whenever the server answered — 7 sources out of 11 — while
+  the GUI merged the native/local ones in. `sources::with_native` now feeds both.
+  `tests/cli.rs` spawns the binary against a std-only mock Jackett and fails on the
+  `apibay` assertion if that regresses (proven by reverting the one-line fix), and
+  `scripts/smoke-search.sh` reads the native ids out of `--sources` and disables
+  them so its mock stays hermetic — otherwise three mock indexers drowned in ~190
+  real rows from the internet.
+
+### Changed
+- **The in-field clear button is 28 px (was 18) and sits on the text line** instead
+  of the widget rect, which put the × about 8 px low: measured text ink y 78–93
+  against × ink y 81–90, a 0.0 px centre delta, on the installed build.
+- **Less chrome**: the result count on the Search tab (the summary row and the
+  status line already say it) and the status bar's `Keys:` strip (documented in
+  About) are gone.
+
+### Security
+- `cargo deny` failed on yanked `async-executor 1.14.0`; `cargo audit` on
+  `quinn-proto 0.11.18` (RUSTSEC-2026-0523, RUSTSEC-2026-0524) and `rustix 1.1.4`
+  (RUSTSEC-2026-0486, xattr unsoundness). Patch-bumped to 1.14.1, 0.11.19 (+
+  `quinn-udp` 0.5.16) and 1.1.6. Four `unmaintained` advisories remain —
+  ttf-parser, zbus_names, zvariant, zvariant_derive — with no patched version
+  upstream.
+
 ## [18.9.2] — 2026-11-02
 
 ### Added
@@ -1235,6 +1268,7 @@ versions follow [SemVer](https://semver.org/).
 - First public release: Jackett/Torznab search, 19 themes, filters, sorting,
   favorites, RSS feeds, batch magnets, CSV export, tray, update checker
 
+[18.10.0]: https://github.com/chethan62/torrentx/releases/tag/v18.10.0
 [18.9.2]: https://github.com/chethan62/torrentx/releases/tag/v18.9.2
 [18.9.1]: https://github.com/chethan62/torrentx/releases/tag/v18.9.1
 [18.9.0]: https://github.com/chethan62/torrentx/releases/tag/v18.9.0
