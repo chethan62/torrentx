@@ -45,6 +45,12 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="18.10.0" date="2026-11-14">
+      <description>
+        <p>A right-click menu on the query field: cut, copy, paste, select all, clear.</p>
+        <p>The headless CLI now searches the same sources as the window, and the in-field clear button sits on the text line at a usable size.</p>
+      </description>
+    </release>
     <release version="18.8.0" date="2026-10-29">
       <description>
         <p>Results grouped by infohash: the same torrent from several indexers is one row, and the Tracker cell names the others.</p>
