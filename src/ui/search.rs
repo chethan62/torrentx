@@ -84,6 +84,12 @@ impl App {
             // IS the box, so its size is the whole fix).
             let clear_box = ROW1_H - SP3;
             let field_font = FontId::proportional(fs + 2.0);
+            // The field is a fixed ROW1_H tall but its text line is not, and egui
+            // lays text out from the top: the old fixed SP2 margin left ~7 px of
+            // dead space under the query, which read as the text (and the clear
+            // button pinned to it) sitting high in the box. Centre the line.
+            let row_h = ui.ctx().fonts_mut(|f| f.row_height(&field_font));
+            let v_pad = (((ROW1_H - row_h) / 2.0).max(0.0)).round() as i8;
             if std::mem::take(&mut self.ui.select_all_next) {
                 queue_select_all(ui, field_id);
             }
@@ -98,16 +104,14 @@ impl App {
                     .margin(egui::Margin {
                         left: SP3 as i8,
                         right: (clear_box + SP3) as i8,
-                        top: SP2 as i8,
-                        bottom: SP2 as i8,
+                        top: v_pad,
+                        bottom: v_pad,
                     }),
             );
             bar_rect = resp.rect;
-            // The text is laid out from the field's top margin, so its line sits
-            // above the widget rect's centre (the rect is a fixed ROW1_H tall, the
-            // text line is not). Centring the clear button on the rect dropped the
-            // × ~8 px below the text it belongs to — align it to the text line.
-            let text_cy = text_line_centre(ui, resp.rect, &field_font);
+            // With the line centred (v_pad above), the text line's middle *is* the
+            // field's middle, so the clear button agrees with both readings.
+            let text_cy = resp.rect.center().y;
             self.search_field_menu(&resp, field_id);
             if resp.gained_focus() && !self.cfg.history.is_empty() {
                 self.ui.show_hist = true;
@@ -960,15 +964,6 @@ impl App {
         ui.add_space((1.0 - eased) * 8.0); // slight downward settle
         egui::ScrollArea::vertical().show(ui, |ui| self.draw_detail(ui, r));
     }
-}
-
-/// Vertical centre of the text line inside a single-line field: `rect.top()` is
-/// already inside the field's own margin and the text is top-aligned in a rect that
-/// is taller than its line, so half a row below the top is the text's middle —
-/// `rect.center().y` sits ~8 px lower and drops the clear button under the text.
-fn text_line_centre(ui: &egui::Ui, rect: egui::Rect, font: &FontId) -> f32 {
-    let row_h = ui.ctx().fonts_mut(|f| f.row_height(font));
-    rect.top() + row_h * 0.5
 }
 
 /// Push the queued Ctrl+A into this frame's input *before* the field draws: an
