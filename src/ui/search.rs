@@ -8,6 +8,8 @@ use crate::app::App;
 /// Width of the Search button. Fixed, so the field's width is derived rather than
 /// guessed from a chrome total that grows every time a control is added.
 const SEARCH_BTN_W: f32 = 132.0;
+/// Phone-width slot: the 132 px button would eat the room the field needs.
+const SEARCH_BTN_W_TIGHT: f32 = 96.0;
 /// One height per row: every control in a row must be the same box, or the row
 /// looks hand-assembled (the Search button used to stand 4 px taller than the
 /// field it sits next to).
@@ -19,6 +21,30 @@ const COMBO_W: f32 = 120.0;
 /// fits the longest common label in this list ("The Pirate Bay" is clipped by
 /// the combo's own ellipsis, and the tooltip keeps it readable).
 const COMBO_W_NARROW: f32 = 96.0;
+
+/// Width of the Search button.
+///
+/// `min_size` is only a floor — egui grows a button to fit its label — so a fixed
+/// slot overflows as soon as the font grows: at 125 % font "Scanning…" needed more
+/// than the 96 px phone slot and the button ran into the window edge. Reserve what
+/// the wider of the two labels needs instead, so the field gives way, not the row.
+fn search_btn_w(ctx: &egui::Context, fs: f32, tight: bool) -> f32 {
+    let floor = if tight {
+        SEARCH_BTN_W_TIGHT
+    } else {
+        SEARCH_BTN_W
+    };
+    floor.max(label_w(ctx, fs, "Search").max(label_w(ctx, fs, "Scanning…")) + 2.0 * SP3)
+}
+
+/// Advance width of `s` at the button's font — the number the layout must reserve.
+fn label_w(ctx: &egui::Context, fs: f32, s: &str) -> f32 {
+    ctx.fonts_mut(|f| {
+        f.layout_no_wrap(s.to_owned(), FontId::proportional(fs), Color32::WHITE)
+            .size()
+            .x
+    })
+}
 
 impl App {
     pub(crate) fn draw_search(
@@ -64,18 +90,7 @@ impl App {
         // Phone width: the long placeholder truncates mid-word, and a 132 px
         // button eats the room the field needs, so both give way.
         let tight = narrow(ui.available_width());
-        // `min_size` is only a floor — egui grows a button to fit its label. At
-        // 125 % font "Scanning…" needed more than the 96 px phone slot and pushed
-        // the button past the window edge, so reserve what the wider label needs.
-        let label_w = |s: &str| {
-            ui.ctx().fonts_mut(|f| {
-                f.layout_no_wrap(s.to_owned(), FontId::proportional(fs), Color32::WHITE)
-                    .size()
-                    .x
-            })
-        };
-        let btn_w = (if tight { 96.0 } else { SEARCH_BTN_W })
-            .max(label_w("Search").max(label_w("Scanning…")) + 2.0 * SP3);
+        let btn_w = search_btn_w(ui.ctx(), fs, tight);
         let hint = if tight {
             "Search torrents…"
         } else {
@@ -996,6 +1011,40 @@ fn queue_select_all(ui: &egui::Ui, id: egui::Id) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The button must never be narrower than its own label: `min_size` is a floor,
+    /// so a too-small slot is silently overrun by the label — which at 125 % font
+    /// pushed the button past the window edge (measured right margin 0).
+    #[test]
+    fn search_button_reserves_the_wider_label() {
+        let ctx = egui::Context::default();
+        let mut full = ctx.run_ui(egui::RawInput::default(), |_| {});
+        full.textures_delta.clear(); // the drop assert wants these consumed
+
+        for fs in [14.0, 16.0, 20.0, 24.0] {
+            for tight in [false, true] {
+                let w = search_btn_w(&ctx, fs, tight);
+                let busy = label_w(&ctx, fs, "Scanning…");
+                assert!(
+                    w >= busy + 2.0 * SP3,
+                    "fs {fs} tight {tight}: slot {w} cannot hold the busy label ({busy} + padding)"
+                );
+                let floor = if tight {
+                    SEARCH_BTN_W_TIGHT
+                } else {
+                    SEARCH_BTN_W
+                };
+                assert!(
+                    w >= floor,
+                    "fs {fs} tight {tight}: {w} under the {floor} floor"
+                );
+            }
+        }
+        // The desktop slot keeps its designed width at the default font …
+        assert_eq!(search_btn_w(&ctx, 16.0, false), SEARCH_BTN_W);
+        // … and the phone slot grows rather than clipping when the font does.
+        assert!(search_btn_w(&ctx, 20.0, true) > SEARCH_BTN_W_TIGHT);
+    }
 
     /// The right-click "Select all" rests entirely on egui turning one synthetic
     /// Ctrl+A into a full selection. If that contract changes, this fails instead
