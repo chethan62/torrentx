@@ -181,9 +181,7 @@ impl App {
                                 .font(FontId::proportional(fs - 1.0))
                                 .color(self.pal.sub),
                         )
-                        .fill(Color32::TRANSPARENT)
-                        .stroke(Stroke::new(1.0_f32, self.pal.border))
-                        .corner_radius(R_SM),
+                        .with_class(button_theme::OUTLINE),
                     )
                     .clicked()
             {

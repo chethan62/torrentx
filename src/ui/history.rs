@@ -53,8 +53,7 @@ impl App {
                                                         .size(11.0)
                                                         .color(self.pal.dim),
                                                 )
-                                                .fill(Color32::TRANSPARENT)
-                                                .frame(false),
+                                                .with_class(button_theme::GHOST),
                                             )
                                             .clicked()
                                         {
@@ -87,8 +86,7 @@ impl App {
                                                             .font(FontId::proportional(fs))
                                                             .color(self.pal.text),
                                                     )
-                                                    .fill(Color32::TRANSPARENT)
-                                                    .frame(false)
+                                                    .with_class(button_theme::GHOST)
                                                     .min_size(egui::vec2(bw, 24.0)),
                                                 )
                                                 .clicked()
@@ -102,8 +100,7 @@ impl App {
                                                         10.0,
                                                         self.pal.dim,
                                                     ))
-                                                    .fill(Color32::TRANSPARENT)
-                                                    .frame(false)
+                                                    .with_class(button_theme::GHOST)
                                                     .min_size(egui::vec2(18.0, 18.0)),
                                                 )
                                                 .on_hover_text("Remove")

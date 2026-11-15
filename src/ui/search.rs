@@ -154,13 +154,7 @@ impl App {
                             ICON_MD,
                             if hot { self.pal.text } else { self.pal.sub },
                         ))
-                        .fill(if hot {
-                            self.pal.surface2
-                        } else {
-                            Color32::TRANSPARENT
-                        })
-                        .frame(hot)
-                        .corner_radius(R_SM)
+                        .with_class(button_theme::ICON_GHOST)
                         .min_size(Vec2::splat(clear_box)),
                     )
                     .on_hover_text("Clear search (Esc)");
@@ -465,15 +459,10 @@ impl App {
                                 }
                                 let selected = self.net.cat_group == Some(gi);
                                 let text = RichText::new(format!("{label} {}", entries.len()))
-                                    .font(FontId::proportional(fs - 1.0))
-                                    .color(if selected { self.pal.bg } else { self.pal.text });
-                                let btn = egui::Button::new(text)
-                                    .fill(if selected {
-                                        self.pal.accent
-                                    } else {
-                                        self.pal.surface2
-                                    })
-                                    .corner_radius(R_MD);
+                                    .font(FontId::proportional(fs - 1.0));
+                                let mut btn =
+                                    egui::Button::new(text).with_class(button_theme::CHIP);
+                                btn.set_class(egui::Button::CLASS_SELECTED, selected);
                                 if ui.add(btn).clicked() {
                                     self.net.cat_group = if selected { None } else { Some(gi) };
                                     self.net.cat_query.clear();

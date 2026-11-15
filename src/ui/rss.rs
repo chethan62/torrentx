@@ -206,9 +206,7 @@ impl App {
                                             .font(FontId::proportional(fs - 1.5))
                                             .color(sub),
                                     )
-                                    .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::new(1.0_f32, pal.border))
-                                    .corner_radius(R_SM),
+                                    .with_class(button_theme::OUTLINE),
                                 )
                                 .on_hover_text("Refresh all feeds")
                                 .clicked()
@@ -767,8 +765,7 @@ impl App {
                         if ui
                             .add(
                                 egui::Button::new(svg_image(SvgIcon::Close, ICON_MD, pal.sub))
-                                    .fill(Color32::TRANSPARENT)
-                                    .corner_radius(R_SM),
+                                    .with_class(button_theme::GHOST),
                             )
                             .on_hover_text("Close")
                             .clicked()

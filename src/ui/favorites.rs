@@ -56,8 +56,7 @@ impl App {
                 && ui
                     .add(
                         egui::Button::new(svg_image(SvgIcon::Close, ICON_SM, self.pal.sub))
-                            .fill(Color32::TRANSPARENT)
-                            .frame(false),
+                            .with_class(button_theme::GHOST),
                     )
                     .clicked()
             {

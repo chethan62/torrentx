@@ -47,8 +47,7 @@ impl App {
                 if ui
                     .add(
                         egui::Button::new(svg_image(SvgIcon::Close, ICON_MD, self.pal.sub))
-                            .fill(Color32::TRANSPARENT)
-                            .corner_radius(R_SM),
+                            .with_class(button_theme::GHOST),
                     )
                     .on_hover_text("Close")
                     .clicked()
