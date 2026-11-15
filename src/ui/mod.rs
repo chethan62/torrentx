@@ -3,6 +3,7 @@
 //! and helper widgets re-exported here so submodules can `use super::*;`.
 
 mod about;
+pub(crate) mod button_theme;
 mod detail;
 mod favorites;
 mod filters;

@@ -21,7 +21,7 @@ path = "src/main.rs"
 # `default-features = false` (its default accesskit conflicts with the
 # native-activity backend), and a shared declaration would unify the features
 # back on.
-egui = "0.37"
+egui = { version = "0.37", features = ["experimental"] }
 egui_extras = { version = "0.37", features = ["default", "svg"] }
 # rustls, not native-tls: the Android build cross-compiles without a system
 # OpenSSL to link against, and one TLS stack for both targets is one less

@@ -1,6 +1,7 @@
 //! search drawing methods.
 
 use super::*;
+use eframe::egui::class::HasClasses as _;
 
 use crate::app::App;
 
@@ -173,6 +174,7 @@ impl App {
             }
 
             ui.add_space(SP4);
+            // Paint comes from the class (ui::button_theme); only the width is local.
             let search_btn = ui.add_enabled(
                 !busy,
                 egui::Button::new(
@@ -182,15 +184,13 @@ impl App {
                         "    Search    "
                     })
                     .font(FontId::proportional(fs))
-                    .strong()
-                    .color(Color32::WHITE),
+                    .strong(),
                 )
-                .fill(if busy {
-                    tint(self.pal.accent, 190)
+                .with_class(if busy {
+                    button_theme::PRIMARY_SOFT
                 } else {
-                    self.pal.accent
+                    button_theme::PRIMARY
                 })
-                .corner_radius(R_MD)
                 .min_size(Vec2::new(btn_w, ROW1_H)),
             );
             if search_btn.clicked() {

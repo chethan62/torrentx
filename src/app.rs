@@ -1579,6 +1579,12 @@ impl App {
         vis.widgets.hovered.corner_radius = rn;
         vis.widgets.active.corner_radius = rn;
         ctx.set_visuals(vis);
+        // Buttons resolve their visuals from their class (see ui::button_theme):
+        // re-registered on every theme change so the palette is the only input.
+        ctx.replace_widget_theme(crate::ui::button_theme::ButtonTheme {
+            pal: self.pal.clone(),
+            fs: self.cfg.font_size,
+        });
         // Labels must NOT be text-selectable: with the egui default
         // `selectable_labels = true`, every Label silently senses click+drag
         // over its text galley, which sits ON TOP of our row `ui.interact`
