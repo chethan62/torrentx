@@ -64,7 +64,18 @@ impl App {
         // Phone width: the long placeholder truncates mid-word, and a 132 px
         // button eats the room the field needs, so both give way.
         let tight = narrow(ui.available_width());
-        let btn_w = if tight { 96.0 } else { SEARCH_BTN_W };
+        // `min_size` is only a floor — egui grows a button to fit its label. At
+        // 125 % font "Scanning…" needed more than the 96 px phone slot and pushed
+        // the button past the window edge, so reserve what the wider label needs.
+        let label_w = |s: &str| {
+            ui.ctx().fonts_mut(|f| {
+                f.layout_no_wrap(s.to_owned(), FontId::proportional(fs), Color32::WHITE)
+                    .size()
+                    .x
+            })
+        };
+        let btn_w = (if tight { 96.0 } else { SEARCH_BTN_W })
+            .max(label_w("Search").max(label_w("Scanning…")) + 2.0 * SP3);
         let hint = if tight {
             "Search torrents…"
         } else {
