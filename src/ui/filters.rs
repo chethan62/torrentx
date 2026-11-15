@@ -177,7 +177,7 @@ impl App {
                 && ui
                     .add(
                         egui::Button::new(
-                            RichText::new("  Clear")
+                            RichText::new("Clear")
                                 .font(FontId::proportional(fs - 1.0))
                                 .color(self.pal.sub),
                         )
