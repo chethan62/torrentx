@@ -95,9 +95,8 @@ impl App {
                                                 .font(FontId::proportional(fs))
                                                 .color(self.pal.sub),
                                         )
-                                        .fill(self.pal.surface)
-                                        .stroke(Stroke::new(1.0_f32, self.pal.border))
-                                        .corner_radius(R_LG)
+                                        .with_class(button_theme::SURFACE)
+                                        .with_class(button_theme::RADIUS_LG)
                                         .min_size(egui::vec2(0.0, 28.0)),
                                     )
                                     .clicked()

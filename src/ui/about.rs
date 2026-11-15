@@ -71,8 +71,7 @@ impl App {
                                     .font(FontId::monospace(fs - 1.0))
                                     .color(self.pal.accent),
                             )
-                            .fill(Color32::TRANSPARENT)
-                            .frame(false),
+                            .with_class(button_theme::GHOST),
                         )
                         .on_hover_text("Click to copy this install's anonymous ID")
                         .clicked()
@@ -169,9 +168,8 @@ impl App {
                                     .font(FontId::proportional(fs))
                                     .color(self.pal.accent),
                             )
-                            .fill(self.pal.surface)
-                            .stroke(Stroke::new(1.0_f32, self.pal.border))
-                            .corner_radius(R_SM),
+                            .with_class(button_theme::SURFACE)
+                            .with_class(button_theme::RADIUS_SM),
                         );
                         ui.add_space(SP3);
                         lbl(ui, v, self.pal.sub, fs);

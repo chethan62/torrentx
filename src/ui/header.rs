@@ -756,14 +756,8 @@ impl App {
             ui.add_space(MARGIN_DEFAULT);
             if ui
                 .add(
-                    egui::Button::new(
-                        RichText::new("Save")
-                            .font(FontId::proportional(12.0))
-                            .color(self.pal.green),
-                    )
-                    .fill(tint(self.pal.green, 18))
-                    .stroke(Stroke::new(1.0_f32, tint(self.pal.green, 80)))
-                    .corner_radius(R_SM),
+                    egui::Button::new(RichText::new("Save").font(FontId::proportional(12.0)))
+                        .with_class(button_theme::TONE_GREEN),
                 )
                 .clicked()
             {

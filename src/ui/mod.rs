@@ -3,6 +3,7 @@
 //! and helper widgets re-exported here so submodules can `use super::*;`.
 
 mod about;
+pub(crate) mod button_theme;
 mod detail;
 mod favorites;
 mod filters;
@@ -28,6 +29,7 @@ pub(crate) use crate::{
     lbl, outline_btn, outline_icon_btn, safe_open, status_icon_pill, svg_btn, svg_icon, svg_image,
     v_checkbox, wide_btn, wide_icon_btn,
 };
+pub(crate) use eframe::egui::class::HasClasses as _;
 pub(crate) use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
 pub(crate) use egui_extras::{Column, TableBuilder};
 pub(crate) use tokens::*;
