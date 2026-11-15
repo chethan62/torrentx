@@ -168,17 +168,15 @@ impl App {
             }
 
             ui.add_space(SP4);
-            // Paint comes from the class (ui::button_theme); only the width is local.
+            // The label carries no padding of its own: the class owns the inner
+            // margin now, and the old "    Search    " spaces plus that margin
+            // pushed the button past its 132 px minimum (measured 154 px wide).
             let search_btn = ui.add_enabled(
                 !busy,
                 egui::Button::new(
-                    RichText::new(if busy {
-                        "  Scanning…  "
-                    } else {
-                        "    Search    "
-                    })
-                    .font(FontId::proportional(fs))
-                    .strong(),
+                    RichText::new(if busy { "Scanning…" } else { "Search" })
+                        .font(FontId::proportional(fs))
+                        .strong(),
                 )
                 .with_class(if busy {
                     button_theme::PRIMARY_SOFT
