@@ -197,7 +197,10 @@ impl Qbt {
         let status = login.status();
         // Take whatever cookie the login set, not a name we guessed: qBittorrent
         // 4.x calls it `SID`, 5.x `QBT_SID_<port>`. The whole `name=value` pair
-        // goes back verbatim.
+        // goes back verbatim. Read it before `text()` consumes the response, but
+        // do not *require* it yet: a wrong password answers `Fails.` with no
+        // cookie, and "did not return a session cookie" would blame the protocol
+        // for a bad password.
         let session = login
             .headers()
             .get_all(reqwest::header::SET_COOKIE)
@@ -206,8 +209,7 @@ impl Qbt {
             .filter_map(|c| c.split(';').next())
             .map(str::trim)
             .find(|c| !c.is_empty())
-            .map(str::to_string)
-            .ok_or_else(|| "qBittorrent did not return a session cookie".to_string())?;
+            .map(str::to_string);
         let body = login.text().unwrap_or_default();
         // 4.x answers 200 + "Ok."; 5.x answers 204 with no body. "Fails." is the
         // wrong-password answer in both, always with 200.
@@ -223,7 +225,7 @@ impl Qbt {
                 "qBittorrent login failed (check the user and password)".to_string()
             });
         }
-        Ok(session)
+        session.ok_or_else(|| "qBittorrent did not return a session cookie".to_string())
     }
 
     /// Hand the magnet to the client, authenticating however it allows.
@@ -270,6 +272,15 @@ mod tests {
     /// Minimal HTTP mock: answers the login with `Ok.` + a cookie, records every
     /// request (line, headers, body) so the test can assert what was sent.
     fn mock(reply_login: &'static str) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        mock_with(reply_login, true)
+    }
+
+    /// `cookie: false` reproduces qBittorrent's real wrong-password answer — 200
+    /// + `Fails.` and **no** `Set-Cookie` — which the cookie-always mock hides.
+    fn mock_with(
+        reply_login: &'static str,
+        cookie: bool,
+    ) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -305,7 +316,7 @@ mod tests {
                 let login = req.starts_with("POST /api/v2/auth/login");
                 log.lock().unwrap().push(req);
                 let body = if login { reply_login } else { "Ok." };
-                let cookie = if login {
+                let cookie = if login && cookie {
                     "set-cookie: SID=abc123; path=/\r\n"
                 } else {
                     ""
@@ -363,6 +374,18 @@ mod tests {
         let (base, seen) = mock("Fails.");
         let err = qbt(base).add_magnet("magnet:?xt=urn:btih:abc").unwrap_err();
         assert!(err.contains("login failed"), "{err}");
+        assert_eq!(seen.lock().unwrap().len(), 1, "no add after a failed login");
+    }
+
+    /// The real wrong-password answer is `200 Fails.` with **no** `Set-Cookie`.
+    /// The error must name the password, not blame the protocol for a missing
+    /// cookie — the cookie-always mock above cannot see this.
+    #[test]
+    fn a_wrong_password_without_a_cookie_still_names_the_password() {
+        let (base, seen) = mock_with("Fails.", false);
+        let err = qbt(base).add_magnet("magnet:?xt=urn:btih:abc").unwrap_err();
+        assert!(err.contains("login failed"), "{err}");
+        assert!(!err.contains("session cookie"), "{err}");
         assert_eq!(seen.lock().unwrap().len(), 1, "no add after a failed login");
     }
 
