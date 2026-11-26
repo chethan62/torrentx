@@ -116,10 +116,30 @@ jobs:
           tool: cargo-deny
 
       # deny.toml is the policy: permissive licence allow-list, no wildcards or
-      # git sources, and advisories blocking (4 unmaintained IDs are ignored
+      # git sources, and advisories blocking (5 unmaintained IDs are ignored
       # there with a reason, because no patched release exists).
       - name: Licences + advisories (cargo-deny)
         run: cargo deny --all-features check licenses advisories bans sources
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      # deny and audit disagree by design: deny treats `unsound` as a warn-level
+      # kind, so it prints "advisories ok" while audit calls the same advisory a
+      # vulnerability — a tokio `AsyncFd` unsoundness sat in the lock through
+      # green CI that way. The ignores mirror deny.toml exactly (unmaintained
+      # crates with no patched release); no `--deny warnings`, or those would
+      # fail the build with no fix available.
+      - name: Advisories (cargo-audit)
+        run: |
+          cargo audit \
+            --ignore RUSTSEC-2026-0192 \
+            --ignore RUSTSEC-2026-0370 \
+            --ignore RUSTSEC-2026-0371 \
+            --ignore RUSTSEC-2026-0372 \
+            --ignore RUSTSEC-2026-0543
 
   # Runs the suite 20x to catch the order-dependent, timing-sensitive tests that
   # a single green run cannot see. One test passed on every push and failed in
