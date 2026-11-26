@@ -326,6 +326,35 @@ impl App {
                 self.ui.key_vis = !self.ui.key_vis;
             }
         });
+        // What the empty URL actually resolved to. Without this the user cannot
+        // tell whether detection found anything — which is the whole feature.
+        if self.cfg.qbittorrent_url.trim().is_empty() {
+            ui.add_space(SP2);
+            ui.horizontal_wrapped(|ui| {
+                ui.add_space(SP1);
+                let (text, col) = match crate::qbittorrent::local() {
+                    Some(l) if !l.enabled => (
+                        "detected, but its Web UI is off — Tools → Options → Web UI".to_string(),
+                        self.pal.red,
+                    ),
+                    Some(l) => {
+                        let how = if l.api_key.is_some() {
+                            "API key"
+                        } else if !l.local_auth {
+                            "localhost auth"
+                        } else {
+                            "user + password"
+                        };
+                        (
+                            format!("detected http://localhost:{} — {how}", l.port),
+                            self.pal.green,
+                        )
+                    }
+                    None => ("no local qBittorrent found".to_string(), self.pal.sub),
+                };
+                lbl(ui, &text, col, 11.5);
+            });
+        }
         ui.add_space(SP4);
 
         lbl(ui, "CONNECTION", self.pal.sub, 12.0);
