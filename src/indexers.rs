@@ -91,6 +91,12 @@ pub(crate) struct Def {
     pub(crate) headers: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     pub(crate) rows: Option<String>,
+    /// The endpoint ignores `{q}` and answers with its newest rows whatever you
+    /// ask (EZTV's `get-torrents` does: the count is the same 1.1M for every
+    /// query). Without this, that source puts the same rows in every search.
+    /// With it, a row survives only if its title contains every query token.
+    #[serde(default)]
+    pub(crate) require_query_match: bool,
     pub(crate) fields: Fields,
 }
 
@@ -403,10 +409,26 @@ pub(crate) fn fetch(
             r.text()
                 .map_err(|e| format!("{}: {}", def.id, crate::sources::net_err(e, timeout)))
         })?;
-    Ok(parse(def, &body)
-        .into_iter()
+    Ok(keep(def, query, cat, parse(def, &body)))
+}
+
+/// Category + query filtering, split from [`fetch`] so it is testable without a
+/// network. `require_query_match` is the guard for endpoints that ignore `{q}`.
+fn keep(def: &Def, query: &str, cat: &str, rows: Vec<TorrentResult>) -> Vec<TorrentResult> {
+    let tokens: Vec<String> = if def.require_query_match {
+        query.split_whitespace().map(str::to_lowercase).collect()
+    } else {
+        Vec::new()
+    };
+    rows.into_iter()
         .filter(|r| crate::sources::matches_cat(cat, r.category_desc.as_deref()))
-        .collect())
+        .filter(|r| {
+            tokens.is_empty() || {
+                let title = r.title.to_lowercase();
+                tokens.iter().all(|tok| title.contains(tok.as_str()))
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -467,6 +489,36 @@ mod tests {
             "s3cret-${TX_TEST_KEY}"
         );
         assert_eq!(resolve("plain").unwrap(), "plain", "nothing to resolve");
+    }
+
+    /// EZTV's `get-torrents` ignores `q`/`query`/`search` — the same 1.1M newest
+    /// rows come back for every query, so without this flag every search showed
+    /// whatever TV episode was newest. `keep` is the wiring `fetch` uses.
+    #[test]
+    fn a_source_that_ignores_the_query_keeps_only_matching_titles() {
+        let body = r#"{"torrents":[
+          {"title":"Sweetpea S02E02 1080p","magnet_url":"magnet:?xt=urn:btih:AAA","seeds":9},
+          {"title":"Ubuntu 24.04 Desktop amd64","magnet_url":"magnet:?xt=urn:btih:BBB","seeds":3}
+        ]}"#;
+        let mut d = eztv();
+        assert!(d.require_query_match, "the bundled definition opts in");
+        let rows = parse(&d, body);
+        assert_eq!(rows.len(), 2, "parse itself never filters");
+        assert_eq!(keep(&d, "ubuntu", "All", rows.clone()).len(), 1);
+        assert_eq!(keep(&d, "sweetpea", "All", rows.clone()).len(), 1);
+        assert_eq!(
+            keep(&d, "sweetpea s02", "All", rows.clone()).len(),
+            1,
+            "every token must match"
+        );
+        assert_eq!(keep(&d, "ubuntu 24.04", "All", rows).len(), 1);
+
+        d.require_query_match = false;
+        assert_eq!(
+            keep(&d, "ubuntu", "All", parse(&d, body)).len(),
+            2,
+            "a real search endpoint is trusted, not filtered"
+        );
     }
 
     #[test]
