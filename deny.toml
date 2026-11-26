@@ -10,13 +10,17 @@
 # (via accesskit -> atspi). Denying would only force pinning old egui, so warn
 # here and revisit at the next egui/accesskit bump.
 unmaintained = "all"
-# Accepted: no patched release exists for these four. Bumping egui/accesskit is
+# Accepted: no patched release exists for these. Bumping egui/accesskit is
 # the only real fix (tracked as a known area in the README/CHANGELOG).
 ignore = [
     "RUSTSEC-2026-0192", # ttf-parser (egui -> owned_ttf_parser)
     "RUSTSEC-2026-0370", # zvariant (accesskit -> atspi)
     "RUSTSEC-2026-0371", # zbus_names
     "RUSTSEC-2026-0372", # zvariant_derive
+    # chrono is unmaintained in every version (no patched release). The real fix
+    # is a migration to jiff or time, not a bump; until then this is a warning
+    # we accept rather than a gate we churn.
+    "RUSTSEC-2026-0543", # chrono
 ]
 yanked = "deny"
 
