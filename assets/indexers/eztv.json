@@ -3,6 +3,7 @@
   "name": "EZTV (API)",
   "category": "TV",
   "url": "https://eztvx.to/api/get-torrents?limit=100&q={q}",
+  "require_query_match": true,
   "rows": "torrents",
   "fields": {
     "title": "title",
