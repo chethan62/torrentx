@@ -301,7 +301,7 @@ impl App {
             ui.add(
                 egui::TextEdit::singleline(&mut self.cfg.qbittorrent_url)
                     .desired_width(ui.available_width().clamp(SETTINGS_URL_MIN, SETTINGS_URL_W))
-                    .hint_text("http://localhost:8080 — empty hides Send to qBittorrent")
+                    .hint_text("http://localhost:8080 — empty auto-detects a local qBittorrent")
                     .font(FontId::monospace(12.0)),
             );
             ui.add_space(SP3);

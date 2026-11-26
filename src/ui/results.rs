@@ -867,7 +867,7 @@ impl App {
                                 crate::wake_ui();
                             });
                         } else if r.magnet_uri.is_some() {
-                            self.toast("Set a qBittorrent URL in Settings first", self.pal.sub);
+                            self.toast(&crate::qbittorrent::not_configured_hint(), self.pal.sub);
                         }
                     }
                     "copy" => {
